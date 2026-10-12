@@ -425,6 +425,7 @@ function setupPending() {
   const st = S.setup; if (!st) return [];
   const out = [];
   if (st.missing_env?.length) out.push(`variáveis ${st.missing_env.join(', ')} na Vercel`);
+  if (st.key_problem) out.push('chave do Supabase errada (use a secreta)');
   if (!st.ig_ready) out.push('app da Meta (Instagram)');
   if (st.cron_sql && !st.publisher_last_run) out.push('agendador automático');
   return out;
@@ -443,7 +444,8 @@ function viewSettings() {
       h('article', { class: 'card' },
         h('div', { class: 'eyebrow' }, 'Etapa 2 · App no ar'),
         h('h3', {}, 'Endereço e banco de dados'),
-        ok(!st.missing_env?.length, 'Banco de dados e senha configurados', `Faltam: ${(st.missing_env || []).join(', ')}`),
+        ok(!st.missing_env?.length && !st.key_problem, 'Banco de dados e senha configurados', st.key_problem ? 'Chave do Supabase errada' : `Faltam: ${(st.missing_env || []).join(', ')}`),
+        st.key_problem ? h('div', { class: 'errorbox' }, st.key_problem) : null,
         st.app_url ? h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, st.app_url), h('button', { class: 'btn sm', onclick: () => copyText(st.app_url, 'Endereço copiado.') }, 'Copiar')) : null),
       h('article', { class: 'card' },
         h('div', { class: 'eyebrow' }, 'Etapa 3 · Meta'),

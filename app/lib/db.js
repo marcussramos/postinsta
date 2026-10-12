@@ -1,13 +1,16 @@
 // Acesso ao Supabase pela API REST (PostgREST + Storage), usando a chave service_role.
 // Só roda no servidor: a chave nunca vai para o navegador.
-import { env, } from './env.js';
+import { env, supabaseKeyProblem } from './env.js';
 import { HttpError } from './http.js';
 
 const BUCKET = 'posts';
 
 function headers(extra = {}) {
-  const key = env('SUPABASE_SERVICE_KEY');
-  return { apikey: key, Authorization: `Bearer ${key}`, ...extra };
+  const key = env('SUPABASE_SERVICE_KEY').trim();
+  const problem = supabaseKeyProblem();
+  if (problem) throw Object.assign(new Error(problem), { status: 503, expose: true });
+  // Chaves novas (sb_secret_...) vão só no cabeçalho apikey; as antigas (JWT) também no Authorization.
+  return key.startsWith('sb_') ? { apikey: key, ...extra } : { apikey: key, Authorization: `Bearer ${key}`, ...extra };
 }
 
 async function call(path, init = {}) {

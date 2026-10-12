@@ -25,3 +25,15 @@ test('funciona só com as 3 variáveis obrigatórias', () => {
     Object.assign(process.env, saved);
   }
 });
+
+test('detecta chave pública do Supabase no lugar da secreta', async () => {
+  const { supabaseKeyProblem } = await import('../lib/env.js');
+  const jwt = (role) => `x.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.y`;
+  const saved = process.env.SUPABASE_SERVICE_KEY;
+  try {
+    process.env.SUPABASE_SERVICE_KEY = 'sb_publishable_abc'; assert.match(supabaseKeyProblem(), /PÚBLICA/);
+    process.env.SUPABASE_SERVICE_KEY = jwt('anon'); assert.match(supabaseKeyProblem(), /PÚBLICA/);
+    process.env.SUPABASE_SERVICE_KEY = jwt('service_role'); assert.equal(supabaseKeyProblem(), null);
+    process.env.SUPABASE_SERVICE_KEY = 'sb_secret_abc'; assert.equal(supabaseKeyProblem(), null);
+  } finally { process.env.SUPABASE_SERVICE_KEY = saved; }
+});

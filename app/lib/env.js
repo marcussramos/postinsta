@@ -38,6 +38,24 @@ const derive = (label) => crypto.createHmac('sha256', env('SUPABASE_SERVICE_KEY'
 export const sessionSecret = () => process.env.SESSION_SECRET || derive('session');
 export const cronSecret = () => process.env.CRON_SECRET || derive('cron');
 
+// Confere se a chave do Supabase é a SECRETA. A pública (anon/publishable) não grava nada
+// por causa da segurança das tabelas, e os erros ficariam confusos.
+export function supabaseKeyProblem() {
+  const k = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+  if (!k) return null; // ausência já é tratada em missingEnv
+  const wrong = 'A chave em SUPABASE_SERVICE_KEY é a chave PÚBLICA do Supabase. Troque pela chave SECRETA: "secret" (começa com sb_secret_) ou "service_role".';
+  if (k.startsWith('sb_publishable_')) return wrong;
+  if (k.startsWith('sb_secret_')) return null;
+  const parts = k.split('.');
+  if (parts.length === 3) {
+    try {
+      const role = JSON.parse(Buffer.from(parts[1], 'base64url').toString()).role;
+      if (role && role !== 'service_role') return wrong;
+    } catch { /* formato desconhecido: deixa o Supabase responder */ }
+  }
+  return null;
+}
+
 export const TIMEZONE = () => process.env.APP_TIMEZONE || 'America/Cuiaba';
 export const IG_API_VERSION = () => process.env.IG_API_VERSION || 'v25.0';
 export const missingEnv = () => REQUIRED.filter((k) => !process.env[k]);
