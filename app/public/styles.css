@@ -509,3 +509,5 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
   .tab { flex: 0 0 auto; padding: 7px 8px; }
 }
 .more-row { justify-self: start; }
+.pix-box { display: grid; gap: 12px; }
+.pix-qr { width: 220px; height: 220px; justify-self: center; image-rendering: pixelated; border-radius: 12px; background: #fff; padding: 8px; border: 1px solid var(--line); }

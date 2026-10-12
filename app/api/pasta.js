@@ -8,12 +8,13 @@ import reports, { publicReport } from '../lib/pasta/reports.js';
 import portal from '../lib/pasta/portal.js';
 import users from '../lib/pasta/users.js';
 import proposals, { publicProposal } from '../lib/pasta/proposals.js';
+import pix, { asaasWebhook } from '../lib/pasta/pix.js';
 import { deliveriesRoute, historyRoute, brandRoute, requestsRoute, feedRoute, besttimeRoute } from '../lib/pasta/extras.js';
 import { send } from '../lib/http.js';
 
-// "report", "portal" e "proposal" são públicos (abertos pelo link secreto do cliente); o resto exige login da agência
+// "report", "portal", "proposal" e "asaas" (aviso de pagamento, com código secreto) são públicos (abertos pelo link secreto do cliente); o resto exige login da agência
 const ROUTES = {
-  files, payments, settings, contract, reports, report: publicReport, portal, users, proposals, proposal: publicProposal,
+  files, payments, settings, contract, reports, report: publicReport, portal, users, proposals, proposal: publicProposal, pix, asaas: asaasWebhook,
   deliveries: deliveriesRoute, history: historyRoute, brand: brandRoute, requests: requestsRoute, feed: feedRoute, besttime: besttimeRoute,
 };
 

@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { route, send, query, need, redirect, readRaw, readJson } from '../http.js';
 import { deliveries } from '../deliveries.js';
 import { currentMonth } from '../reports.js';
+import { asaasReady, ensureCharge } from '../asaas.js';
 import { db, docs } from '../db.js';
 import { appUrl } from '../env.js';
 import { billingMonths } from '../billing.js';
@@ -45,7 +46,7 @@ export default route({
     const months = billingMonths(c, payments).map((m) => ({
       month: m.month, due: m.due, status: m.status, amount_cents: m.amount_cents, open_cents: m.open_cents, late_cents: m.late_cents,
       parcels: m.parcels.map((p) => ({
-        n: p.n, of: p.of, due: p.due, cents: p.cents, status: p.status, paid_at: p.payment?.paid_at || null,
+        n: p.n, of: p.of, due: p.due, cents: p.cents, status: p.status, paid_at: p.payment?.paid_at || null, receipt_url: p.payment?.receipt_url || null,
         receipt_id: p.payment?.file_id && files.some((f) => f.id === p.payment.file_id) ? p.payment.file_id : null,
       })),
     }));
@@ -60,6 +61,7 @@ export default route({
       history: events.map((e) => ({ type: e.type, note: e.note, at: e.created_at, title: e.snapshot?.title || null, caption: e.snapshot?.caption || '', scheduled_at: e.snapshot?.scheduled_at || null, media_type: e.snapshot?.media_type || 'IMAGE', image_url: e.snapshot?.image_url || null, permalink: e.snapshot?.permalink || null })),
       requests: requests.map((r) => ({ ...r, files: (r.file_ids || []).map((id) => files.find((f) => f.id === id)).filter(Boolean) })),
       deliveries: deliv[c.id] || null,
+      pix_enabled: asaasReady(),
     }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
   },
 
@@ -68,6 +70,12 @@ export default route({
   POST: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
+    if (q.pix) { // o cliente pede o Pix de uma parcela em aberto
+      need(asaasReady(), 404, 'Pagamento por Pix indisponível. Fale com a agência.');
+      const b = await readJson(req);
+      const out = await ensureCharge(c, String(b.month || ''), Number(b.n) || 1);
+      return send(res, 200, { payload: out.payload, image: out.image, value_cents: out.value_cents, due: out.due, label: out.label });
+    }
     if (q.upload) {
       const name = decodeURIComponent(String(req.headers['x-file-name'] || 'arquivo')).slice(0, 150);
       const ext = (name.split('.').pop() || '').toLowerCase();

@@ -940,6 +940,7 @@ function viewSettings() {
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
     ...settingsTeam(),
+    ...settingsPix(),
     ...settingsContract(),
   ];
 }
@@ -1195,7 +1196,9 @@ function folderFinance(c) {
       h('div', { class: 'muted parcel-sub' }, p.status === 'paid' ? `Pago${pay?.paid_at ? ` em ${fmtDay(pay.paid_at)}` : ''} · ${brl(p.cents)}`
         : p.status === 'waived' ? (pay?.note || 'Isento') : `Vence ${fmtDay(p.due)} · ${brl(p.cents)}`),
       h('div', { class: 'parcel-act' },
-        pay?.file_id && fileName(pay.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${pay.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(pay.file_id) }, '📎') : null,
+        pay?.file_id && fileName(pay.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${pay.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(pay.file_id) }, '📎')
+          : pay?.receipt_url ? h('a', { class: 'btn ghost sm', href: pay.receipt_url, target: '_blank', rel: 'noopener', title: 'Comprovante do Pix' }, '📎') : null,
+        S.setup?.asaas && ['open', 'late'].includes(p.status) ? h('button', { class: 'btn ghost sm', title: 'Gerar Pix com baixa automática', onclick: () => openPix(c, m, p) }, pay?.asaas_id ? 'Pix ✓' : 'Pix') : null,
         soon.has(`${m.month}#${p.n}`) ? chargeButton(c, m, p) : null,
         h('button', { class: `btn sm${p.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m, p) }, p.status === 'paid' || p.status === 'waived' ? 'Editar' : 'Registrar')));
   };
@@ -1246,7 +1249,8 @@ function chargeMessage(c, m, p) {
   const pix = S.settings?.agency?.pix;
   const what = p.of > 1 ? `a ${p.n}ª parcela (${brl(p.cents)}) da mensalidade de ${monthLabel(m.month).toLowerCase()}` : `a mensalidade de ${monthLabel(m.month).toLowerCase()} (${brl(p.cents)})`;
   const head = p.status === 'late' ? `Olá! Tudo bem? Passando para lembrar que ${what} venceu em ${fmtDay(p.due)} e ainda consta em aberto por aqui.` : `Olá! Tudo bem? Lembrete: ${what} vence em ${fmtDay(p.due)}.`;
-  return `${head}${pix ? `\n\nChave PIX: ${pix}` : ''}\n\nSe já pagou, pode desconsiderar e, se puder, me mande o comprovante. Obrigado! 🙂`;
+  const auto = S.setup?.asaas && c.portal_url ? `\n\nPague com Pix por aqui (a baixa é automática): ${c.portal_url}` : pix ? `\n\nChave PIX: ${pix}` : '';
+  return `${head}${auto}\n\nSe já pagou, pode desconsiderar${S.setup?.asaas ? '' : ' e, se puder, me mande o comprovante'}. Obrigado! 🙂`;
 }
 function chargeButton(c, m, p) {
   const msg = chargeMessage(c, m, p);
@@ -1948,4 +1952,58 @@ function openProposal(p = null) {
     h('p', { class: 'hint muted', style: 'margin:0' }, 'Quando o cliente aceitar, o app cria o cadastro com esses valores, a cota de entregas, as parcelas, os dados do contrato e o link da área do cliente.'),
   ], foot);
   name.focus();
+}
+
+// ───────────────────────── Pix automático (Asaas)
+function openPix(c, m, p) {
+  const box = h('div', { class: 'pix-box' }, h('p', { class: 'muted' }, 'Gerando o Pix…'));
+  drawer(`Pix · ${c.name}`, [box], []);
+  api('/api/pasta?r=pix', { method: 'POST', body: { client_id: c.id, month: m.month, n: p.n } }).then((r) => {
+    const msg = `Olá! Segue o Pix ${r.label.toLowerCase()} (${brl(r.value_cents)}), vencimento ${fmtDay(r.due)}.\n\nPix copia e cola:\n${r.payload}\n\nAssim que pagar, a baixa é automática por aqui. Obrigado! 🙂`;
+    box.replaceChildren(
+      h('div', { class: 'eyebrow' }, r.label),
+      h('div', { class: 'stat-v' }, brl(r.value_cents)),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, `Vencimento ${fmtDay(r.due)} · cobrança exclusiva desta parcela: quando o cliente pagar, ela é baixada sozinha e o comprovante fica no financeiro.`),
+      r.image ? h('img', { class: 'pix-qr', src: r.image, alt: 'QR Code do Pix' }) : null,
+      h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, r.payload), h('button', { class: 'btn sm', onclick: () => copyText(r.payload, 'Pix copia e cola copiado.') }, 'Copiar')),
+      h('div', { class: 'actions' },
+        c.contact_whatsapp ? h('a', { class: 'btn wa', href: waLink(c.contact_whatsapp, msg), target: '_blank', rel: 'noopener' }, 'Enviar no WhatsApp') : null,
+        h('button', { class: 'btn', onclick: () => copyText(msg, 'Mensagem copiada.') }, 'Copiar mensagem')));
+    const i = S.payments.findIndex((x) => x.client_id === c.id && x.ref_month === m.month && (x.installment || 1) === p.n);
+    const row = { client_id: c.id, ref_month: m.month, installment: p.n, status: 'pending', amount_cents: r.value_cents, asaas_id: r.asaas_id, pix_payload: r.payload };
+    if (i >= 0) S.payments[i] = { ...S.payments[i], ...row }; else S.payments.push(row);
+  }).catch((e) => box.replaceChildren(h('div', { class: 'errorbox' }, e.message)));
+}
+
+function settingsPix() {
+  const st = S.setup || {};
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Financeiro'), h('h2', { style: 'font-size:22px' }, 'Pix automático')));
+  if (!st.asaas) {
+    return [head, h('article', { class: 'card' },
+      h('span', { class: 'ig-warn' }, '• Desligado'),
+      h('span', { class: 'muted', style: 'font-size:14px' }, 'Com o Pix automático, cada parcela ganha um Pix exclusivo (QR Code e copia-e-cola). Quando o cliente paga, o app dá baixa sozinho e guarda o comprovante. Usa o Asaas como cobrador (o Nubank não tem integração de Pix): R$ 1,99 por Pix recebido (R$ 0,99 nos 3 primeiros meses), sem custo para gerar.'),
+      h('ol', { style: 'margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px' },
+        h('li', {}, 'Crie a conta PJ no asaas.com com o CNPJ da agência e cadastre uma chave Pix dentro do Asaas.'),
+        h('li', {}, 'No Asaas, ative a transferência automática do saldo para a sua conta Nubank (assim o dinheiro chega lá sozinho).'),
+        h('li', {}, 'Em Integrações → Chave de API, gere a chave e copie.'),
+        h('li', {}, 'Na Vercel, adicione a variável ASAAS_API_KEY com essa chave e faça Redeploy. Volte aqui para ligar o aviso automático.')),
+      h('span', { class: 'hint muted' }, 'Quer testar antes sem dinheiro de verdade? Use uma chave do sandbox do Asaas (começa com $aact_hmlg_). Depois troque pela de produção.'))];
+  }
+  if (S.pixStatus === undefined) { S.pixStatus = null; api('/api/pasta?r=pix').then((v) => { S.pixStatus = v; }).catch((e) => { S.pixStatus = { error: e.message }; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const ps = S.pixStatus;
+  const email = h('input', { type: 'email', id: 'asaas-mail', value: S.settings?.agency?.email || '', placeholder: 'e-mail para avisos de falha' });
+  const hookOk = ps?.webhook?.enabled && !ps.webhook.interrupted;
+  return [head, h('article', { class: 'card' },
+    ps === null ? h('span', { class: 'muted' }, 'Verificando a conexão com o Asaas…')
+      : ps.error ? h('div', { class: 'errorbox' }, h('b', {}, 'Asaas: '), ps.error)
+      : h('span', { class: 'ig-ok' }, `✓ Conectado ao Asaas (${st.asaas.env === 'sandbox' ? 'modo teste/sandbox' : 'produção'})${ps.account?.balance != null ? ` · saldo ${brl(Math.round(ps.account.balance * 100))}` : ''}`),
+    ps && !ps.error ? (hookOk ? h('span', { class: 'ig-ok' }, '✓ Baixa automática ligada') : h('span', { class: 'ig-warn' }, ps.webhook?.interrupted ? '• Aviso automático pausado pelo Asaas (falhas seguidas) — ligue de novo' : '• Baixa automática ainda não ligada')) : null,
+    h('div', { class: 'field' }, h('label', { for: 'asaas-mail' }, 'E-mail para o Asaas avisar se algo falhar'), email),
+    h('div', { class: 'actions' },
+      h('button', { class: `btn ${hookOk ? '' : 'primary'} sm`, onclick: async (e) => {
+        e.target.disabled = true;
+        try { await api('/api/pasta?r=pix&setup=1', { method: 'POST', body: { email: email.value } }); S.pixStatus = undefined; toast('Baixa automática ligada.'); render(); }
+        catch (err) { toast(err.message, true); e.target.disabled = false; }
+      } }, hookOk ? 'Reconfigurar aviso' : 'Ligar baixa automática')),
+    h('span', { class: 'muted', style: 'font-size:13px' }, 'Como usar: no Financeiro de cada cliente aparece o botão "Pix" nas parcelas em aberto; na área do cliente aparece "Pagar com Pix". As mensagens de cobrança já levam o link. Se você der baixa manual numa parcela com Pix gerado, o app cancela a cobrança no Asaas.'))];
 }

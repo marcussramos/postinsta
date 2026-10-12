@@ -2,6 +2,7 @@
 import { route, send, readJson, query, need } from '../http.js';
 import { requireAdmin } from '../auth.js';
 import { db } from '../db.js';
+import { cancelCharge } from '../asaas.js';
 
 const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '');
 
@@ -42,6 +43,9 @@ export default route({
       paid_at: b.paid_at || null, file_id: b.file_id || null, note: b.note ? String(b.note).slice(0, 500) : null,
       updated_at: new Date().toISOString(),
     };
+    // Tinha um Pix automático em aberto e a agência deu baixa na mão: cancela a cobrança no Asaas
+    const prev = await db.one('payments', { select: '*', client_id: `eq.${b.client_id}`, ref_month: `eq.${b.ref_month}`, ...(b.installment != null ? { installment: `eq.${n}` } : {}) }).catch(() => null);
+    if (prev?.asaas_id && prev.status === 'pending') { await cancelCharge(prev.asaas_id); Object.assign(row, { asaas_id: null, pix_payload: null, pix_url: null }); }
     if (n > 1) row.installment = n; // parcela 1 = padrão (funciona também antes da atualização 6 do banco)
     else if (b.installment != null) row.installment = 1;
     await db.upsert('payments', row);
@@ -54,7 +58,8 @@ export default route({
     need(client && isMonth(month), 400, 'Informe cliente e mês.');
     const f = { client_id: `eq.${client}`, ref_month: `eq.${month}` };
     if (n) f.installment = `eq.${Number(n)}`;
-    await db.remove('payments', f);
+    const removed = await db.remove('payments', f);
+    for (const r of removed || []) if (r.asaas_id && r.status === 'pending') await cancelCharge(r.asaas_id);
     send(res, 200, { ok: true });
   },
 });

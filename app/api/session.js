@@ -4,7 +4,8 @@ import { currentUser, checkPassword, checkUserPassword, sessionCookie, clearCook
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
-import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7 } from '../lib/migrations.js';
+import { asaasEnv } from '../lib/asaas.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8 } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -50,6 +51,8 @@ async function setupInfo() {
       await db.select('clients', { select: 'brand_kit,installments', limit: 1 });
     } catch { parts.push(MIGRATION_PRO); }
     try { await db.select('proposals', { select: 'id', limit: 1 }); } catch { parts.push(MIGRATION_V7); }
+    try { await db.select('payments', { select: 'asaas_id', limit: 1 }); await db.select('clients', { select: 'asaas_customer_id', limit: 1 }); } catch { parts.push(MIGRATION_V8); }
+    if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }
   return info;

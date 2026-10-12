@@ -164,17 +164,49 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     return json(404, { error: { message: `rota simulada inexistente ${u.pathname}` } });
   }
 
+  // Asaas simulado: clientes, cobranças Pix, QR Code e webhooks
+  const asaasDb = { customers: [], payments: [], webhooks: [], calls: [] };
+  async function asaasFake(url, init = {}) {
+    const u = new URL(url); const method = init.method || 'GET'; const path = u.pathname.replace('/v3', '');
+    asaasDb.calls.push(`${method} ${path}`);
+    if (init.headers?.access_token !== process.env.ASAAS_API_KEY) return json(401, { errors: [{ description: 'chave inválida' }] });
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (path === '/customers' && method === 'POST') {
+      if (!body.cpfCnpj) return json(400, { errors: [{ description: 'CPF/CNPJ obrigatório' }] });
+      const c = { id: `cus_${asaasDb.customers.length + 1}`, ...body }; asaasDb.customers.push(c); return json(200, c);
+    }
+    if (path === '/payments' && method === 'POST') {
+      const p = { id: `pay_${asaasDb.payments.length + 1}`, status: 'PENDING', invoiceUrl: `https://sandbox.asaas.com/i/${asaasDb.payments.length + 1}`, ...body }; asaasDb.payments.push(p); return json(200, p);
+    }
+    let m = path.match(/^\/payments\/([^/]+)\/pixQrCode$/);
+    if (m) return json(200, { encodedImage: 'iVBORw0KGgo=', payload: `00020126PIX${m[1]}`, expirationDate: '2027-01-01 23:59:59' });
+    m = path.match(/^\/payments\/([^/]+)$/);
+    if (m) {
+      const p = asaasDb.payments.find((x) => x.id === m[1]);
+      if (!p) return json(404, { errors: [{ description: 'não encontrada' }] });
+      if (method === 'DELETE') { p.deleted = true; return json(200, { deleted: true, id: p.id }); }
+      return json(200, p);
+    }
+    if (path === '/finance/balance') return json(200, { balance: 1234.5 });
+    if (path === '/webhooks' && method === 'GET') return json(200, { data: asaasDb.webhooks });
+    if (path === '/webhooks' && method === 'POST') { const w = { id: `wh_${asaasDb.webhooks.length + 1}`, ...body }; asaasDb.webhooks.push(w); return json(200, w); }
+    m = path.match(/^\/webhooks\/([^/]+)$/);
+    if (m && method === 'PUT') { const w = asaasDb.webhooks.find((x) => x.id === m[1]); Object.assign(w, body); return json(200, w); }
+    return json(404, { errors: [{ description: `rota simulada inexistente ${path}` }] });
+  }
+
   globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input.url;
     if (url.startsWith(supabaseUrl)) return supa(url, init);
     if (/instagram\.com/.test(new URL(url).host)) return instagram(url, init);
+    if (/asaas\.com$/.test(new URL(url).host)) return asaasFake(url, init);
     if (new URL(url).host === 'api.anthropic.com') {
       const req = JSON.parse(init.body); ig.aiCalls = (ig.aiCalls || []).concat([req]);
       return json(200, { content: [{ type: 'text', text: 'Aqui:\n{"options":[{"label":"Curta","caption":"Foco no corre.","hashtags":["funk","#corre","foco no corre"]},{"label":"Engajamento","caption":"Marca o parça!","hashtags":["#parça"]}]}' }] });
     }
     return realFetch(input, init);
   };
-  return { tables, files, ig, restore: () => { globalThis.fetch = realFetch; } };
+  return { tables, files, ig, asaas: asaasDb, restore: () => { globalThis.fetch = realFetch; } };
 }
 
 function json(status, data) {

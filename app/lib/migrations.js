@@ -168,3 +168,11 @@ create table if not exists proposals (
 alter table proposals enable row level security;
 
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V8 = `-- MC DIGITAL: atualização 8 (Pix automático via Asaas) — rode uma vez no SQL Editor do Supabase
+alter table payments add column if not exists asaas_id text;
+alter table payments add column if not exists pix_payload text;
+alter table payments add column if not exists pix_url text;
+alter table payments add column if not exists receipt_url text;
+alter table clients add column if not exists asaas_customer_id text;
+notify pgrst, 'reload schema';`;

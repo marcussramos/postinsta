@@ -70,6 +70,12 @@
   .tabs { flex-wrap: wrap; }
   .tab { white-space: nowrap; flex: 1 1 auto; }
   @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+  .pix-sheet { position: fixed; inset: 0; background: rgba(10,12,16,.55); display: grid; place-items: end center; padding: 12px; z-index: 50; }
+  .pix-card { background: var(--surface); border-radius: 18px; padding: 20px; width: min(420px, 100%); display: grid; gap: 10px; justify-items: center; text-align: center; }
+  .pix-card .big { font-size: 28px; font-weight: 800; }
+  .pix-qr { width: 220px; height: 220px; background: #fff; border-radius: 12px; padding: 8px; image-rendering: pixelated; }
+  .pix-card .pix { width: 100%; text-align: left; }
+  @media (min-width: 640px) { .pix-sheet { place-items: center; } }
   .msg { text-align: center; padding: 80px 16px; color: var(--muted); }
   .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; }
   footer { padding: 10px 0 40px; font-size: 12.5px; color: var(--muted); text-align: center; }
@@ -146,20 +152,22 @@ function render() {
     else {
       if (D.agency.pix) panel.append(h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Pagamento por PIX'),
         h('div', { class: 'pix' }, h('code', {}, D.agency.pix), h('button', { class: 'btn sm', onclick: async () => { try { await navigator.clipboard.writeText(D.agency.pix); toast('Chave PIX copiada.'); } catch { toast('Selecione e copie a chave.'); } } }, 'Copiar chave')),
-        h('span', { class: 'muted', style: 'font-size:13px' }, `Mensalidade de ${brl(D.billing.monthly_fee_cents)}${(months[0]?.parcels.length || 1) > 1 ? `, em ${months[0].parcels.length} parcelas (dias ${[...new Set(months[0].parcels.map((p) => Number(p.due.slice(8))))].join(', ')})` : D.billing.due_day ? `, vence todo dia ${D.billing.due_day}` : ''}. Depois de pagar, mande o comprovante para a agência.`)));
+        D.pix_enabled ? h('span', { class: 'muted', style: 'font-size:13px' }, 'Prefira o botão "Pagar com Pix" de cada mês: a baixa é automática.') : null,
+        h('span', { class: 'muted', style: 'font-size:13px' }, `Mensalidade de ${brl(D.billing.monthly_fee_cents)}${(months[0]?.parcels.length || 1) > 1 ? `, em ${months[0].parcels.length} parcelas (dias ${[...new Set(months[0].parcels.map((p) => Number(p.due.slice(8))))].join(', ')})` : D.billing.due_day ? `, vence todo dia ${D.billing.due_day}` : ''}.${D.pix_enabled ? '' : ' Depois de pagar, mande o comprovante para a agência.'}`)));
       for (const m of months) {
         const multi = m.parcels.length > 1;
         panel.append(h('div', { class: 'item' },
           h('div', { class: 't' }, monthName(m.month)),
           h('div', { class: 'act' }, h('span', { class: `pill ${m.status}` }, LABEL[m.status]),
-            !multi && m.parcels[0].receipt_id ? h('a', { class: 'btn sm', href: fileUrl(m.parcels[0].receipt_id), target: '_blank', rel: 'noopener' }, '📎 Comprovante') : null),
+            !multi ? receiptLink(m.parcels[0], '📎 Comprovante') : null,
+            !multi ? payButton(m, m.parcels[0]) : null),
           h('div', { class: 's' }, multi ? `${brl(m.amount_cents)} em ${m.parcels.length} parcelas`
             : m.status === 'paid' ? `Pago${m.parcels[0].paid_at ? ` em ${dmy(m.parcels[0].paid_at)}` : ''} · ${brl(m.amount_cents)}`
             : m.status === 'waived' ? 'Sem cobrança neste mês' : `Vence ${dmy(m.due)} · ${brl(m.amount_cents)}`),
           multi ? h('div', { class: 'parcels' }, ...m.parcels.map((p) => h('div', { class: 'parcel' },
             h('span', {}, `${p.n}ª · ${brl(p.cents)}`),
             h('span', { class: `pill ${p.status}` }, p.status === 'paid' && p.paid_at ? `Pago ${dmy(p.paid_at).slice(0, 5)}` : p.status === 'open' || p.status === 'late' ? `${LABEL[p.status]} · ${dmy(p.due).slice(0, 5)}` : LABEL[p.status]),
-            p.receipt_id ? h('a', { class: 'btn sm', href: fileUrl(p.receipt_id), target: '_blank', rel: 'noopener', title: 'Comprovante' }, '📎') : null))) : null));
+            receiptLink(p, '📎'), payButton(m, p)))) : null));
       }
     }
   } else if (tab === 'relatorios') {
@@ -200,6 +208,36 @@ function render() {
       D.client.ig_username ? h('div', { class: 'muted' }, `@${D.client.ig_username}`) : null),
     cards, tabs, panel,
     h('footer', {}, 'Link pessoal e intransferível. Não compartilhe.', D.agency.email ? [h('br'), `Dúvidas: ${D.agency.email}`] : null));
+}
+
+// Comprovante: arquivo da pasta ou recibo do Pix automático
+function receiptLink(p, label) {
+  if (p.receipt_id) return h('a', { class: 'btn sm', href: fileUrl(p.receipt_id), target: '_blank', rel: 'noopener', title: 'Comprovante' }, label);
+  if (p.receipt_url) return h('a', { class: 'btn sm', href: p.receipt_url, target: '_blank', rel: 'noopener', title: 'Comprovante do Pix' }, label);
+  return null;
+}
+// Pagar com Pix (cobrança exclusiva da parcela; a baixa é automática)
+function payButton(m, p) {
+  if (!D.pix_enabled || !['open', 'late'].includes(p.status)) return null;
+  return h('button', { class: 'btn primary sm', type: 'button', onclick: async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Gerando Pix…';
+    try {
+      const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}&pix=1`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: m.month, n: p.n }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Não foi possível gerar o Pix.');
+      const sheet = h('div', { class: 'pix-sheet', role: 'dialog', 'aria-label': 'Pagar com Pix' },
+        h('div', { class: 'pix-card' },
+          h('div', { class: 'eyebrow' }, d.label),
+          h('div', { class: 'big' }, brl(d.value_cents)),
+          d.image ? h('img', { src: d.image, alt: 'QR Code do Pix', class: 'pix-qr' }) : null,
+          h('span', { class: 'muted', style: 'font-size:13px' }, 'Abra o app do banco, escolha Pix → Copia e cola (ou leia o QR Code).'),
+          h('div', { class: 'pix' }, h('code', {}, d.payload), h('button', { class: 'btn sm', onclick: async () => { try { await navigator.clipboard.writeText(d.payload); toast('Código Pix copiado.'); } catch { toast('Selecione e copie o código.'); } } }, 'Copiar')),
+          h('span', { class: 'muted', style: 'font-size:12.5px' }, 'Depois de pagar, a baixa aparece aqui sozinha em instantes. Não precisa mandar comprovante.'),
+          h('button', { class: 'btn', onclick: () => sheet.remove() }, 'Fechar')));
+      sheet.addEventListener('click', (ev) => { if (ev.target === sheet) sheet.remove(); });
+      document.body.append(sheet);
+    } catch (x) { toast(x.message); }
+    btn.disabled = false; btn.textContent = 'Pagar com Pix';
+  } }, 'Pagar com Pix');
 }
 
 // Novo pedido: texto, data desejada e até 5 anexos (fotos/PDF/vídeo curto até 4 MB cada)
