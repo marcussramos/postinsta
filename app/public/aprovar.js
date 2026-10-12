@@ -44,6 +44,7 @@ function render() {
     ...decided.map((p) => card(p, handle)),
     out.length ? h('div', { class: 'eyebrow section-title' }, 'Publicados') : null,
     ...out.map((p) => card(p, handle)),
+    h('footer', { class: 'eyebrow', style: 'text-align:center;margin-top:12px' }, 'Gestão de conteúdo · MC DIGITAL'),
   ].filter(Boolean));
 }
 

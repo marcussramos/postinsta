@@ -1,6 +1,6 @@
-# Pauta — guia de instalação
+# MC DIGITAL — guia de instalação
 
-O Pauta é o seu sistema de posts: você cria o post, o cliente aprova pelo link, e o post é publicado sozinho no Instagram no horário marcado.
+O MC DIGITAL é o seu sistema de posts: você cria o post, o cliente aprova pelo link, e o post é publicado sozinho no Instagram no horário marcado.
 
 São 4 etapas. Reserve umas 2 horas para a primeira vez (sem contar a análise da Meta).
 

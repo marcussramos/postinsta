@@ -1,4 +1,4 @@
-/* Pauta — sistema visual
+/* MC DIGITAL — sistema visual
    Layout: barra superior fina + coluna de trabalho larga; agenda agrupada por dia, como uma pauta de redação. */
 :root {
   --bg: #F3F4F6;
@@ -54,9 +54,8 @@ img { max-width: 100%; }
 /* ── barra superior */
 .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 .topbar-in { max-width: 1120px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 20px; }
-.brand { font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: -.03em; display: flex; align-items: center; gap: 8px; }
-.brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--ink); position: relative; }
-.brand-mark::after { content: ""; position: absolute; left: 5px; right: 5px; top: 6px; height: 2px; background: var(--bg); box-shadow: 0 4px 0 var(--bg), 0 8px 0 var(--bg); }
+.brand { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: .04em; display: flex; align-items: center; gap: 7px; }
+.brand-mark { display: inline-grid; place-items: center; height: 26px; padding: 0 7px; border-radius: 7px; background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 800; letter-spacing: .02em; line-height: 1; }
 .tabs { display: flex; gap: 4px; }
 .tab { border: 0; background: none; padding: 7px 12px; border-radius: 8px; color: var(--muted); font-weight: 600; cursor: pointer; }
 .tab[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }

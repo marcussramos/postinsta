@@ -62,7 +62,7 @@ function renderLogin() {
         S.admin = true; S.tz = s.timezone; await boot();
       } catch (err) { toast(err.message, true); btn.disabled = false; pw.select(); }
     } },
-      h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }), 'Pauta'),
+      h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'MC'), 'DIGITAL'),
       h('h1', {}, 'Entrar no painel'),
       h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Senha'), pw),
       btn,
@@ -74,7 +74,7 @@ function renderLogin() {
 function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
-    h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }), h('span', {}, 'Pauta')),
+    h('div', { class: 'brand', 'aria-label': 'MC DIGITAL' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'MC'), h('span', {}, 'DIGITAL')),
     h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('clientes', 'Clientes'), tab('ajustes', 'Ajustes')),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),

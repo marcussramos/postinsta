@@ -7,7 +7,7 @@ import { db } from '../lib/db.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
-  return `-- Pauta: agendador (rode uma vez no SQL Editor do Supabase)
+  return `-- MC DIGITAL: agendador (rode uma vez no SQL Editor do Supabase)
 create table if not exists app_state (key text primary key, value jsonb, updated_at timestamptz default now());
 alter table app_state enable row level security;
 create extension if not exists pg_cron;
