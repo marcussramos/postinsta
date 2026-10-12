@@ -1,0 +1,141 @@
+<title>Aprovação @frasesdefunkwow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: coluna única estreita, como a tela do celular onde o cliente aprova; cada post = prévia do feed + painel de decisão */
+  :root {
+    --bg: #F3F2EF; --surface: #FFFFFF; --fg: #17171A; --muted: #6B6A72; --line: #E2E0DC;
+    --ok: #1E7A46; --ok-bg: #E3F3E9; --warn: #A35A00; --warn-bg: #FBEEDC; --accent: #17171A; --accent-fg: #FFFFFF;
+    --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #111114; --surface: #1B1B20; --fg: #F1F0EC; --muted: #9B9AA3; --line: #2C2C33;
+    --ok: #6FD39A; --ok-bg: #16301F; --warn: #F2B46A; --warn-bg: #36260F; --accent: #F1F0EC; --accent-fg: #111114; color-scheme: dark } }
+  :root[data-theme="dark"] {
+    --bg: #111114; --surface: #1B1B20; --fg: #F1F0EC; --muted: #9B9AA3; --line: #2C2C33;
+    --ok: #6FD39A; --ok-bg: #16301F; --warn: #F2B46A; --warn-bg: #36260F; --accent: #F1F0EC; --accent-fg: #111114; color-scheme: dark }
+  body { background: var(--bg); color: var(--fg); font-family: var(--display); font-size: 16px; line-height: 1.5; padding: 32px 16px 64px; }
+  .wrap { max-width: 520px; margin: 0 auto; display: grid; gap: 28px; }
+  header h1 { font-size: 30px; line-height: 1.1; margin: 0 0 8px; letter-spacing: -.02em; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); }
+  .meta { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .post { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .ig-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-weight: 700; font-size: 14px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #0B0B0F; display: grid; place-items: center; color: #C6FF3D; font-size: 13px; font-weight: 700; flex: none; }
+  .post img { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; }
+  .caption { padding: 12px 14px 4px; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
+  .caption b { font-weight: 700; }
+  .when { padding: 6px 14px 14px; }
+  .decide { border-top: 1px solid var(--line); padding: 14px; display: grid; gap: 12px; }
+  .status { justify-self: start; font-family: var(--mono); font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+  .status.ok { background: var(--ok-bg); color: var(--ok); }
+  .status.warn { background: var(--warn-bg); color: var(--warn); }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; font-size: 15px; border-radius: 10px; padding: 11px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--fg); flex: 1 1 140px; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
+  label { font-size: 14px; font-weight: 600; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 84px; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+  .send { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; }
+  .send h2 { margin: 0; font-size: 20px; }
+  .send p { margin: 0; color: var(--muted); font-size: 14px; }
+  pre { margin: 0; font-family: var(--mono); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  a.wa { display: block; text-align: center; text-decoration: none; font-weight: 700; border-radius: 10px; padding: 13px 16px; background: #1F8F4E; color: #FFFFFF; }
+  .hint { font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="meta" id="lote"></div>
+    <h1>Posts para sua aprovação</h1>
+    <p>Veja como cada post vai aparecer no feed. Aprove ou peça ajuste, depois envie sua resposta pelo WhatsApp no final da página.</p>
+  </header>
+  <main id="posts" style="display:grid;gap:28px"></main>
+  <section class="send" aria-labelledby="send-h">
+    <h2 id="send-h">Enviar resposta</h2>
+    <p id="resumo">Decida cada post acima para montar sua resposta.</p>
+    <pre id="msg"></pre>
+    <a class="wa" id="wa" href="#" target="_blank" rel="noopener">Enviar pelo WhatsApp</a>
+    <button type="button" id="copy">Copiar resposta</button>
+    <div class="hint" id="copied" role="status"></div>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null/*END*/;
+const state = {};
+document.getElementById("lote").textContent = DATA.lote;
+
+function fmt(iso) {
+  const d = new Date(iso);
+  const dias = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const p = n => String(n).padStart(2, "0");
+  return `${dias[d.getDay()]} ${p(d.getDate())}/${p(d.getMonth() + 1)} às ${p(d.getHours())}h${p(d.getMinutes())}`;
+}
+
+const box = document.getElementById("posts");
+DATA.posts.forEach((p, i) => {
+  state[p.id] = { decisao: null, nota: "" };
+  const el = document.createElement("article");
+  el.className = "post";
+  el.innerHTML = `
+    <div class="ig-top"><span class="avatar">F</span><span>${DATA.perfil}</span></div>
+    <img alt="">
+    <div class="caption"></div>
+    <div class="when meta"></div>
+    <div class="decide">
+      <span class="status">Aguardando sua decisão</span>
+      <div class="btns">
+        <button type="button" class="primary" data-a="ok">Aprovar</button>
+        <button type="button" data-a="ajuste">Pedir ajuste</button>
+      </div>
+      <div class="nota" hidden>
+        <label for="nota-${p.id}">O que você quer mudar?</label>
+        <textarea id="nota-${p.id}" placeholder="Ex.: trocar a frase, mudar o horário, ajustar a cor"></textarea>
+      </div>
+    </div>`;
+  el.querySelector("img").src = p.img;
+  el.querySelector("img").alt = p.alt;
+  const cap = el.querySelector(".caption");
+  const b = document.createElement("b"); b.textContent = DATA.perfil.replace("@", "") + " ";
+  cap.append(b, document.createTextNode(p.legenda));
+  el.querySelector(".when").textContent = `Post ${i + 1} · publica ${p.quando}`;
+  const status = el.querySelector(".status"), nota = el.querySelector(".nota"), ta = el.querySelector("textarea");
+  el.querySelectorAll("[data-a]").forEach(btn => btn.addEventListener("click", () => {
+    const a = btn.dataset.a;
+    state[p.id].decisao = a;
+    status.className = "status " + (a === "ok" ? "ok" : "warn");
+    status.textContent = a === "ok" ? "Aprovado" : "Ajuste solicitado";
+    nota.hidden = a !== "ajuste";
+    if (a === "ajuste") ta.focus();
+    render();
+  }));
+  ta.addEventListener("input", () => { state[p.id].nota = ta.value; render(); });
+  box.append(el);
+});
+
+function render() {
+  const linhas = DATA.posts.map((p, i) => {
+    const s = state[p.id];
+    const head = `Post ${i + 1} (${p.quando})`;
+    if (s.decisao === "ok") return `✅ ${head}: aprovado`;
+    if (s.decisao === "ajuste") return `✏️ ${head}: ajustar${s.nota.trim() ? " – " + s.nota.trim() : ""}`;
+    return `⏳ ${head}: sem resposta`;
+  });
+  const feitos = DATA.posts.filter(p => state[p.id].decisao).length;
+  document.getElementById("resumo").textContent = feitos === DATA.posts.length
+    ? "Tudo decidido. Envie a resposta abaixo."
+    : `${feitos} de ${DATA.posts.length} posts decididos.`;
+  const texto = `Aprovação ${DATA.perfil} – ${DATA.lote}\n\n${linhas.join("\n")}`;
+  document.getElementById("msg").textContent = texto;
+  document.getElementById("wa").href = `https://wa.me/${DATA.whatsapp || ""}?text=${encodeURIComponent(texto)}`;
+}
+render();
+
+document.getElementById("copy").addEventListener("click", async () => {
+  const t = document.getElementById("msg").textContent, out = document.getElementById("copied");
+  try { await navigator.clipboard.writeText(t); out.textContent = "Resposta copiada. Cole no WhatsApp."; }
+  catch { const r = document.createRange(); r.selectNodeContents(document.getElementById("msg")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); out.textContent = "Texto selecionado. Copie e cole no WhatsApp."; }
+});
+</script>
