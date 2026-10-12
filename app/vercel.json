@@ -4,7 +4,8 @@
   "functions": {
     "api/cron.js": { "maxDuration": 60 },
     "api/upload.js": { "maxDuration": 30 },
-    "api/ai/caption.js": { "maxDuration": 60 }
+    "api/ai/caption.js": { "maxDuration": 60 },
+    "api/pasta.js": { "maxDuration": 60 }
   },
   "headers": [
     {
@@ -16,7 +17,7 @@
       ]
     },
     {
-      "source": "/aprovar",
+      "source": "/(aprovar|relatorio|contrato)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     }
   ]

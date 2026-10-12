@@ -52,3 +52,28 @@ insert into storage.buckets (id, name, public) values ('docs', 'docs', false)
 on conflict (id) do update set public = false;
 
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_REPORTS = `-- MC DIGITAL: atualização 4 (relatórios mensais do Instagram) — rode uma vez no SQL Editor do Supabase
+create table if not exists reports (
+  id           uuid primary key default gen_random_uuid(),
+  client_id    uuid not null references clients(id) on delete cascade,
+  ref_month    text not null,
+  data         jsonb not null,
+  note         text,
+  share_token  text not null unique,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (client_id, ref_month)
+);
+alter table reports enable row level security;
+
+-- total de seguidores por dia (base para "seguidores ganhos" em perfis com menos de 100 seguidores)
+create table if not exists ig_daily (
+  client_id  uuid not null references clients(id) on delete cascade,
+  day        date not null,
+  followers  int,
+  primary key (client_id, day)
+);
+alter table ig_daily enable row level security;
+
+notify pgrst, 'reload schema';`;

@@ -2,7 +2,8 @@
 // Documentação: https://developers.facebook.com/docs/instagram-platform/content-publishing
 import { env, appUrl, IG_API_VERSION } from './env.js';
 
-const SCOPES = ['instagram_business_basic', 'instagram_business_content_publish'];
+// manage_insights: métricas para os relatórios mensais (clientes conectados antes precisam reconectar)
+const SCOPES = ['instagram_business_basic', 'instagram_business_content_publish', 'instagram_business_manage_insights'];
 const graph = () => `https://graph.instagram.com/${IG_API_VERSION()}`;
 
 export class IgError extends Error {
@@ -119,4 +120,55 @@ export async function permalink(mediaId, token) {
     const r = await igFetch(`${graph()}/${mediaId}?${form({ fields: 'permalink', access_token: token })}`);
     return r.permalink || null;
   } catch { return null; }
+}
+
+// ───────── métricas (relatórios)
+// Sem a permissão de métricas a API responde (#10)/(#200)/"permission": o cliente precisa reconectar.
+export const isPermissionError = (e) => [10, 200, 190].includes(e?.code) || /permiss|not authorized|does not have/i.test(e?.message || '');
+
+export async function profile(token) {
+  return igFetch(`${graph()}/me?${form({ fields: 'user_id,username,followers_count,media_count', access_token: token })}`);
+}
+
+// Posts publicados entre since e until (ms). Percorre o feed do mais novo para o mais antigo.
+export async function mediaBetween(igUserId, token, since, until, maxPages = 8) {
+  const fields = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
+  let url = `${graph()}/${igUserId}/media?${form({ fields, limit: 50, access_token: token })}`;
+  const out = [];
+  for (let i = 0; i < maxPages && url; i++) {
+    const r = await igFetch(url);
+    let older = false;
+    for (const m of r.data || []) {
+      const t = new Date(m.timestamp).getTime();
+      if (t < since) { older = true; continue; }
+      if (t < until) out.push(m);
+    }
+    if (older) break;
+    url = r.paging?.next || null;
+  }
+  return out;
+}
+
+const MEDIA_METRICS = ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions'];
+// Métricas de um post. Pede tudo; se a API recusar alguma, cai para o conjunto básico.
+export async function mediaInsights(mediaId, token) {
+  const read = (r) => Object.fromEntries((r.data || []).map((d) => [d.name, d.values?.[0]?.value ?? d.total_value?.value ?? null]));
+  try {
+    return read(await igFetch(`${graph()}/${mediaId}/insights?${form({ metric: MEDIA_METRICS.join(','), access_token: token })}`));
+  } catch (e) {
+    if (isPermissionError(e)) throw e;
+    return read(await igFetch(`${graph()}/${mediaId}/insights?${form({ metric: 'reach,likes,comments,saved,shares', access_token: token })}`));
+  }
+}
+
+// Total de uma métrica da conta num período (segundos unix). null = indisponível.
+export async function accountTotal(igUserId, token, metric, since, until, extra = {}) {
+  const r = await igFetch(`${graph()}/${igUserId}/insights?${form({ metric, period: 'day', metric_type: 'total_value', since, until, access_token: token, ...extra })}`);
+  const d = (r.data || [])[0];
+  if (!d) return null;
+  if (extra.breakdown) {
+    const res = d.total_value?.breakdowns?.[0]?.results || [];
+    return Object.fromEntries(res.map((x) => [x.dimension_values?.[0], x.value]));
+  }
+  return d.total_value?.value ?? null;
 }

@@ -448,7 +448,10 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('span', { class: 'label' }, isNew ? 'Cliente(s)' : 'Cliente'), clientBox,
       isNew ? h('span', { class: 'hint' }, 'Escolha mais de um para criar o mesmo post em vários perfis.') : null),
     h('div', { class: 'field' }, h('label', { for: 'f-title' }, 'Pauta (uso interno)'), title),
-    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Imagem'), imgBox),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Imagem'), imgBox,
+      locked ? null : h('div', { class: 'canva-row' },
+        h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
+        h('span', { class: 'hint' }, 'Crie a arte em 1080×1350, baixe em PNG/JPG e arraste aqui.'))),
     h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), cap, counter, locked ? null : aiPanel()),
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
@@ -828,9 +831,10 @@ const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'
 
 async function loadFolder(id) {
   try {
-    const [files, payments, preview] = await Promise.all([
-      api(`/api/pasta?r=files&client=${id}`), api('/api/pasta?r=payments'), api(`/api/pasta?r=contract&client=${id}`)]);
-    Object.assign(S.folder, { files, preview, loading: false, error: null }); S.payments = payments;
+    const [files, payments, preview, reports] = await Promise.all([
+      api(`/api/pasta?r=files&client=${id}`), api('/api/pasta?r=payments'), api(`/api/pasta?r=contract&client=${id}`),
+      api(`/api/pasta?r=reports&client=${id}`).catch(() => null)]); // null = falta a atualização 4 do banco
+    Object.assign(S.folder, { files, preview, reports, loading: false, error: null }); S.payments = payments;
   } catch (e) {
     Object.assign(S.folder, { loading: false, error: e.message });
   }
@@ -850,7 +854,7 @@ function viewFolder() {
     h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, '🔒 Pasta privada · só você vê'));
   const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
     ...FOLDER_TABS.map(([k, l]) => {
-      const n = k === 'finance' ? late : k === 'contract' ? count('contract') : count(k);
+      const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0) : count(k);
       return h('button', { class: 'seg-btn', 'aria-pressed': String(F.tab === k), onclick: () => { F.tab = k; render(); } },
         l, n ? h('span', { class: `seg-n${k === 'finance' ? ' bad' : ''}` }, String(n)) : null);
     }));
@@ -1024,7 +1028,76 @@ function openPayment(c, m) {
 
 // ── Relatórios e Outros
 function folderReports(c) {
-  return [filesSection(c, 'report', 'Relatórios mensais', 'Envie o relatório de cada mês (PDF de desempenho, prints de métricas, planilhas). Escolha o mês antes de enviar.', { month: true, group: true })];
+  return [igReports(c), filesSection(c, 'report', 'Outros relatórios (arquivos)', 'PDFs, prints ou planilhas que você queira guardar junto. Escolha o mês antes de enviar.', { month: true, group: true })];
+}
+
+// ── Relatórios do Instagram (gerados pelo app, com link em português para o cliente)
+function reportMessage(c, r) {
+  return `Olá! Segue o relatório de desempenho do Instagram de ${c.name} de ${monthLabel(r.ref_month).toLowerCase()}:\n${r.share_url}\n\nDá para baixar em PDF pelo botão no topo da página.`;
+}
+function igReports(c) {
+  const F = S.folder;
+  const card = (...kids) => h('section', { class: 'card' }, h('div', { class: 'files-head' },
+    h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Relatórios do Instagram'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Alcance, curtidas, comentários, salvamentos, compartilhamentos, seguidores ganhos e os melhores posts do mês. Gerado automaticamente todo dia 3 para o mês anterior.'))), ...kids);
+  if (F.reports === null) return card(h('div', { class: 'banner' }, 'Falta a atualização do banco para os relatórios. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.'));
+  if (!c.ig_connected) return card(h('div', { class: 'banner' }, 'Conecte o Instagram deste cliente para gerar relatórios. ', h('a', { href: `/api/ig/connect?client=${c.id}` }, 'Conectar agora')));
+  const month = h('input', { type: 'month', class: 'month-in', value: shiftMonth(todayLocal().slice(0, 7), -1), max: todayLocal().slice(0, 7), 'aria-label': 'Mês do relatório' });
+  const err = h('div');
+  const gen = h('button', { class: 'btn primary sm', onclick: () => generate(month.value, gen) }, 'Gerar relatório');
+  async function generate(m, btn) {
+    if (!m) return toast('Escolha o mês.', true);
+    const label = btn.textContent; btn.disabled = true; btn.textContent = 'Lendo o Instagram…'; err.replaceChildren();
+    try {
+      const r = await api('/api/pasta?r=reports', { method: 'POST', body: { client_id: c.id, ref_month: m } });
+      F.reports = [r, ...(F.reports || []).filter((x) => x.id !== r.id)].sort((a, b) => b.ref_month.localeCompare(a.ref_month));
+      render(); toast(`Relatório de ${monthLabel(m).toLowerCase()} pronto.`);
+    } catch (e) {
+      btn.disabled = false; btn.textContent = label;
+      err.replaceChildren(h('div', { class: 'errorbox' }, h('b', {}, 'Não deu para gerar: '), e.message,
+        e.status === 409 ? h('div', { style: 'margin-top:8px' }, h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, 'Reconectar Instagram')) : null));
+    }
+  }
+  const metric = (label, v, suffix = '') => h('div', { class: 'rmetric' }, h('b', {}, v == null ? '—' : `${v.toLocaleString('pt-BR')}${suffix}`), h('span', {}, label));
+  const rows = (F.reports || []).map((r) => {
+    const s = r.summary;
+    return h('article', { class: 'report-row' },
+      h('div', { class: 'report-top' },
+        h('div', { style: 'min-width:0' }, h('div', { class: 'month-name' }, monthLabel(r.ref_month)),
+          h('div', { class: 'muted', style: 'font-size:12.5px' }, `${r.partial ? 'Parcial · ' : ''}atualizado em ${fmtDay(partsInTz(r.updated_at, S.tz).date)}`)),
+        h('div', { class: 'actions' },
+          h('a', { class: 'btn primary sm', href: r.share_url, target: '_blank', rel: 'noopener' }, 'Abrir'),
+          h('button', { class: 'btn sm', onclick: () => copyText(r.share_url, 'Link do relatório copiado.') }, 'Copiar link'),
+          c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, reportMessage(c, r)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
+          c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, `Relatório de ${monthLabel(r.ref_month).toLowerCase()} · ${c.name}`, reportMessage(c, r)) }, 'E-mail') : null)),
+      h('div', { class: 'rmetrics' },
+        metric('alcance', s.reach), metric('curtidas', s.likes), metric('comentários', s.comments), metric('salvamentos', s.saves),
+        metric('seguidores ganhos', s.followers_gained), metric('posts', s.posts), metric('engajamento', s.engagement, '%')),
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn ghost sm', onclick: () => openReportNote(c, r) }, r.note ? '✎ Editar comentário' : '✎ Comentário para o cliente'),
+        h('button', { class: 'btn ghost sm', onclick: (e) => generate(r.ref_month, e.currentTarget) }, '↻ Atualizar números'),
+        confirmButton('Apagar', 'Confirmar: o link para de abrir', async () => {
+          await api(`/api/pasta?r=reports&id=${r.id}`, { method: 'DELETE' });
+          F.reports = F.reports.filter((x) => x.id !== r.id); render(); toast('Relatório apagado.');
+        }, 'btn ghost sm danger')));
+  });
+  return card(h('div', { class: 'files-head' }, h('span', { class: 'muted', style: 'font-size:13.5px;flex:1' }, 'Gerar agora (o mês atual sai parcial):'), month, gen), err,
+    rows.length ? h('div', { class: 'reports' }, ...rows) : h('p', { class: 'muted files-empty' }, 'Nenhum relatório ainda. Escolha o mês e clique em Gerar relatório.'));
+}
+
+function openReportNote(c, r) {
+  const ta = h('textarea', { id: 'r-note', style: 'min-height:180px', placeholder: 'Ex.: Setembro teve o melhor alcance do ano, puxado pelo carrossel de frases. Para outubro vamos testar mais Reels às 19h.' });
+  ta.value = r.note || '';
+  const close = drawer(`Comentário · ${monthLabel(r.ref_month)}`, [
+    h('div', { class: 'field' }, h('label', { for: 'r-note' }, 'Aparece no relatório do cliente, em "Comentários da agência"'), ta,
+      h('span', { class: 'hint' }, 'Análise do mês, destaques e próximos passos. Deixe em branco para não mostrar.'))],
+  [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async () => {
+    try {
+      const saved = await api('/api/pasta?r=reports', { method: 'PATCH', body: { id: r.id, note: ta.value } });
+      S.folder.reports = S.folder.reports.map((x) => (x.id === saved.id ? saved : x)); close(); render(); toast('Comentário salvo.');
+    } catch (e) { toast(e.message, true); }
+  } }, 'Salvar')]);
+  ta.focus();
 }
 function folderOther(c) {
   return [filesSection(c, 'other', 'Outros documentos', 'Briefing, manual de marca, notas fiscais, propostas, acessos documentados…')];
