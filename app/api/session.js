@@ -32,7 +32,7 @@ async function setupInfo() {
   if (!missing.length && info.app_url) {
     info.cron_sql = cronSql(info.app_url, cronSecret());
     try { info.publisher_last_run = (await db.one('app_state', { select: 'value', key: 'eq.publisher' }))?.value?.at || null; }
-    catch { /* tabela app_state ainda não existe = agendador ainda não configurado */ }
+    catch (e) { info.publisher_state_error = e.message; /* tabela app_state ainda não existe ou não visível */ }
   }
   return info;
 }

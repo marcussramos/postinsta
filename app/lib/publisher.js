@@ -75,7 +75,10 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
       value: { at: new Date(now()).toISOString(), published: log.published.length, failed: log.failed.length },
       updated_at: new Date(now()).toISOString(),
     });
-  } catch { /* tabela ainda não criada: tudo bem, é só informativo */ }
+  } catch (e) {
+    // não impede a publicação; aparece na resposta do agendador para diagnóstico
+    log.state_error = e.message;
+  }
   return log;
 }
 
