@@ -5,9 +5,11 @@ import payments from '../lib/pasta/payments.js';
 import settings from '../lib/pasta/settings.js';
 import contract from '../lib/pasta/contract.js';
 import reports, { publicReport } from '../lib/pasta/reports.js';
+import portal from '../lib/pasta/portal.js';
 import { send } from '../lib/http.js';
 
-const ROUTES = { files, payments, settings, contract, reports, report: publicReport }; // "report" é o único público (link do cliente)
+// "report" e "portal" são públicos (abertos pelo link secreto do cliente); o resto exige login da agência
+const ROUTES = { files, payments, settings, contract, reports, report: publicReport, portal };
 
 export default function handler(req, res) {
   const r = new URL(req.url, 'http://x').searchParams.get('r');

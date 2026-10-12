@@ -17,7 +17,7 @@
       ]
     },
     {
-      "source": "/(aprovar|relatorio|contrato)",
+      "source": "/(aprovar|relatorio|contrato|cliente)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     }
   ]

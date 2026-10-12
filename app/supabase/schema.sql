@@ -106,6 +106,9 @@ alter table payments enable row level security;
 insert into storage.buckets (id, name, public) values ('docs', 'docs', false)
 on conflict (id) do update set public = false;
 
+-- área do cliente (link privado com contrato, relatórios e financeiro)
+alter table clients add column if not exists portal_token text unique;
+
 -- ───────────── Relatórios mensais do Instagram
 create table if not exists reports (
   id           uuid primary key default gen_random_uuid(),

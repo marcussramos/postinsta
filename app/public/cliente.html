@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Área do cliente</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314161B'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' font-size='14' fill='%23fff'%3EMC%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #F3F4F6; --surface: #fff; --surface-2: #F8F9FB; --ink: #14161B; --muted: #646B78; --line: #E1E4EA;
+    --accent: #2443C9; --accent-soft: #E8ECFB;
+    --ok: #17703F; --ok-bg: #E2F4E9; --wait: #8A5A00; --wait-bg: #FCF1D9; --bad: #B4232F; --bad-bg: #FBE3E5; --off: #6B7280; --off-bg: #EEF0F3;
+    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0F1115; --surface: #171A20; --surface-2: #1D2128; --ink: #ECEEF2; --muted: #9AA1AD; --line: #2A2F38; --accent: #7B93FF; --accent-soft: #1E2645;
+      --ok: #6DD39A; --ok-bg: #12301F; --wait: #F1BE5C; --wait-bg: #33280F; --bad: #FF7C86; --bad-bg: #3A161B; --off: #A3A9B4; --off-bg: #23272F; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--display); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+  .bar { background: var(--surface); border-bottom: 1px solid var(--line); }
+  .bar .wrap { display: flex; align-items: center; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  .brand b { display: block; font-weight: 800; letter-spacing: .1em; font-size: 14px; }
+  .brand span { font-size: 10.5px; letter-spacing: .1em; color: var(--muted); }
+  .lock { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  header.hero { padding: 26px 0 6px; display: grid; gap: 4px; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(26px, 6vw, 36px); margin: 0; line-height: 1.1; }
+  h2 { font-size: 18px; margin: 0; }
+  .muted { color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+  .card .big { font-size: 22px; font-weight: 800; }
+  .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; cursor: pointer; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; justify-self: start; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
+  .tabs { display: flex; gap: 4px; margin: 22px 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .tab { flex: 1; border: 0; background: transparent; padding: 9px 8px; border-radius: 9px; font: inherit; font-weight: 700; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06); }
+  .panel { display: grid; gap: 10px; padding-bottom: 40px; }
+  .item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
+  .item .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .s { font-size: 13px; color: var(--muted); }
+  .item .act { grid-row: span 2; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .paid { color: var(--ok); background: var(--ok-bg); } .open { color: var(--wait); background: var(--wait-bg); }
+  .late { color: var(--bad); background: var(--bad-bg); } .waived { color: var(--off); background: var(--off-bg); }
+  .metrics { grid-column: 1 / -1; display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .metrics b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; color: var(--muted); font-size: 14px; }
+  .pix { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .pix code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+  .msg { text-align: center; padding: 80px 16px; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+  footer { padding: 10px 0 40px; font-size: 12.5px; color: var(--muted); text-align: center; }
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: minmax(0, 1fr); }
+    .item { grid-template-columns: minmax(0, 1fr); }
+    .item .act { grid-row: auto; justify-content: flex-start; }
+    .tab { font-size: 13px; padding: 9px 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="bar"><div class="wrap"><div class="brand" id="brand"><b>MC DIGITAL</b></div><span class="lock">🔒 Área exclusiva</span></div></div>
+<main class="wrap" id="app"><p class="msg">Carregando…</p></main>
+<script type="module">
+const t = new URLSearchParams(location.search).get('t');
+const $app = document.getElementById('app');
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const monthName = (ym) => { const [y, m] = ym.split('-').map(Number); const s = `${MESES[m - 1]} de ${y}`; return s[0].toUpperCase() + s.slice(1); };
+const brl = (c) => (c == null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+const dmy = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+const nf = (v) => (v == null ? '—' : Number(v).toLocaleString('pt-BR'));
+const size = (n) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1).replace('.', ',')} MB`);
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k.startsWith('on')) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? '' : v); }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; el.append(c instanceof Node ? c : document.createTextNode(String(c))); }
+  return el;
+}
+function toast(msg) { document.querySelector('.toast')?.remove(); const el = h('div', { class: 'toast', role: 'status' }, msg); document.body.append(el); setTimeout(() => el.remove(), 3000); }
+const fileUrl = (id, dl) => `/api/pasta?r=portal&t=${encodeURIComponent(t)}&file=${id}${dl ? '&download=1' : ''}`;
+const LABEL = { paid: 'Pago', open: 'Em aberto', late: 'Atrasado', waived: 'Isento' };
+
+let D, tab = 'financeiro';
+try { const s = sessionStorage.getItem('mc_cliente_tab'); if (s) tab = s; } catch { /* sem armazenamento */ }
+
+function render() {
+  const brand = document.getElementById('brand');
+  brand.replaceChildren(h('b', {}, D.agency.marca), D.agency.slogan ? h('span', {}, D.agency.slogan) : null);
+  document.title = `${D.client.name} · Área do cliente`;
+  const months = D.billing?.months || [];
+  const late = months.filter((m) => m.status === 'late');
+  const nextOpen = [...months].reverse().find((m) => m.status === 'open' || m.status === 'late');
+  const cards = h('div', { class: 'cards' },
+    h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Mensalidade'),
+      late.length ? [h('div', { class: 'big', style: 'color:var(--bad)' }, `${late.length} em atraso`), h('div', { class: 'muted', style: 'font-size:13.5px' }, `Total ${brl(late.reduce((s, m) => s + (m.amount_cents || 0), 0))}`)]
+        : nextOpen ? [h('div', { class: 'big' }, brl(nextOpen.amount_cents)), h('div', { class: 'muted', style: 'font-size:13.5px' }, `Próximo vencimento: ${dmy(nextOpen.due)}`)]
+        : D.billing ? [h('div', { class: 'big', style: 'color:var(--ok)' }, 'Tudo em dia ✓')] : h('div', { class: 'muted' }, 'Sem cobranças cadastradas.')),
+    h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Posts para aprovar'),
+      h('div', { class: 'big' }, D.approval.pending ? `${D.approval.pending} aguardando você` : 'Nenhum pendente'),
+      h('a', { class: `btn${D.approval.pending ? ' primary' : ''} sm`, href: D.approval.url }, D.approval.pending ? 'Aprovar agora' : 'Ver aprovações')));
+  const TABS = [['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['contrato', 'Contrato']];
+  const tabs = h('div', { class: 'tabs', role: 'tablist' }, ...TABS.map(([k, l]) => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(tab === k),
+    onclick: () => { tab = k; try { sessionStorage.setItem('mc_cliente_tab', k); } catch { /* ok */ } render(); } }, l)));
+  const fileItem = (f, sub) => h('div', { class: 'item' },
+    h('div', { class: 't' }, f.name),
+    h('div', { class: 'act' }, h('a', { class: 'btn sm', href: fileUrl(f.id), target: '_blank', rel: 'noopener' }, 'Abrir'), h('a', { class: 'btn sm', href: fileUrl(f.id, true) }, 'Baixar')),
+    h('div', { class: 's' }, sub || `${size(f.size)} · enviado em ${dmy(f.created_at)}`));
+  const panel = h('section', { class: 'panel', role: 'tabpanel' });
+  if (tab === 'financeiro') {
+    if (!D.billing) panel.append(h('div', { class: 'empty' }, 'Nenhuma mensalidade cadastrada ainda.'));
+    else {
+      if (D.agency.pix) panel.append(h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Pagamento por PIX'),
+        h('div', { class: 'pix' }, h('code', {}, D.agency.pix), h('button', { class: 'btn sm', onclick: async () => { try { await navigator.clipboard.writeText(D.agency.pix); toast('Chave PIX copiada.'); } catch { toast('Selecione e copie a chave.'); } } }, 'Copiar chave')),
+        h('span', { class: 'muted', style: 'font-size:13px' }, `Mensalidade de ${brl(D.billing.monthly_fee_cents)}${D.billing.due_day ? `, vence todo dia ${D.billing.due_day}` : ''}. Depois de pagar, mande o comprovante para a agência.`)));
+      for (const m of months) {
+        panel.append(h('div', { class: 'item' },
+          h('div', { class: 't' }, monthName(m.month)),
+          h('div', { class: 'act' }, h('span', { class: `pill ${m.status}` }, LABEL[m.status]),
+            m.receipt_id ? h('a', { class: 'btn sm', href: fileUrl(m.receipt_id), target: '_blank', rel: 'noopener' }, '📎 Comprovante') : null),
+          h('div', { class: 's' }, m.status === 'paid' ? `Pago${m.paid_at ? ` em ${dmy(m.paid_at)}` : ''} · ${brl(m.amount_cents)}`
+            : m.status === 'waived' ? 'Sem cobrança neste mês' : `Vence ${dmy(m.due)} · ${brl(m.amount_cents)}`)));
+      }
+    }
+  } else if (tab === 'relatorios') {
+    if (!D.reports.length && !D.files.some((f) => f.category === 'report')) panel.append(h('div', { class: 'empty' }, 'Os relatórios mensais aparecem aqui assim que ficarem prontos.'));
+    for (const r of D.reports) {
+      const s = r.summary;
+      panel.append(h('div', { class: 'item' },
+        h('div', { class: 't' }, `Relatório de ${monthName(r.ref_month).toLowerCase()}${r.partial ? ' (parcial)' : ''}`),
+        h('div', { class: 'act' }, h('a', { class: 'btn primary sm', href: r.url, target: '_blank', rel: 'noopener' }, 'Ver relatório')),
+        h('div', { class: 's' }, 'Instagram · dá para baixar em PDF'),
+        h('div', { class: 'metrics' }, h('span', {}, h('b', {}, nf(s.reach)), ' alcance'), h('span', {}, h('b', {}, nf(s.interactions)), ' interações'),
+          h('span', {}, h('b', {}, s.followers_gained == null ? '—' : `${s.followers_gained > 0 ? '+' : ''}${nf(s.followers_gained)}`), ' seguidores'), h('span', {}, h('b', {}, nf(s.posts)), ' posts'))));
+    }
+    for (const f of D.files.filter((x) => x.category === 'report')) panel.append(fileItem(f, `${f.ref_month ? `${monthName(f.ref_month)} · ` : ''}${size(f.size)}`));
+  } else {
+    const list = D.files.filter((f) => f.category === 'contract');
+    if (!list.length) panel.append(h('div', { class: 'empty' }, 'O contrato assinado aparece aqui assim que a agência anexar.'));
+    for (const f of list) panel.append(fileItem(f));
+  }
+  $app.replaceChildren(
+    h('header', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Área do cliente'), h('h1', {}, D.client.name),
+      D.client.ig_username ? h('div', { class: 'muted' }, `@${D.client.ig_username}`) : null),
+    cards, tabs, panel,
+    h('footer', {}, 'Link pessoal e intransferível. Não compartilhe.', D.agency.email ? [h('br'), `Dúvidas: ${D.agency.email}`] : null));
+}
+
+try {
+  if (!t) throw new Error('Link incompleto. Peça o seu link para a agência.');
+  const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}`);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Não foi possível abrir.');
+  D = data; render();
+} catch (e) {
+  $app.replaceChildren(h('p', { class: 'msg' }, e.message));
+}
+</script>
+</body>
+</html>

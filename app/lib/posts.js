@@ -90,10 +90,11 @@ export function statusAfterEdit(oldStatus, contentChanged, sendNow) {
 
 // Remove campos sensíveis antes de mandar para o navegador.
 export function publicClient(c, appUrl) {
-  const { ig_token, approval_token, ...rest } = c;
+  const { ig_token, approval_token, portal_token, ...rest } = c;
   return {
     ...rest,
     ig_connected: Boolean(ig_token),
     approval_url: `${appUrl}/aprovar?t=${approval_token}`,
+    portal_url: portal_token ? `${appUrl}/cliente?t=${portal_token}` : null,
   };
 }

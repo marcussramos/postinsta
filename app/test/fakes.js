@@ -14,7 +14,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
 
   const defaults = {
     clients: () => ({ id: crypto.randomUUID(), approval_token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString(),
-      contact_whatsapp: null, contact_email: null, brand_voice: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
+      contact_whatsapp: null, contact_email: null, brand_voice: null, portal_token: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
     app_state: () => ({ updated_at: new Date().toISOString() }),
     client_files: () => ({ id: crypto.randomUUID(), ref_month: null, created_at: new Date().toISOString() }),
     reports: () => ({ id: crypto.randomUUID(), note: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),

@@ -86,6 +86,11 @@ export default route({
     const body = await readJson(req);
     const patch = cleanClient(body);
     if (body.new_approval_link) patch.approval_token = randomToken(); // invalida o link antigo
+    // Área do cliente: 'enable' cria o link (ou mantém o atual), 'regenerate' troca, 'disable' desliga
+    if (body.portal === 'enable' || body.portal === 'regenerate') {
+      const cur = await db.one('clients', { select: 'portal_token', id: `eq.${id}` });
+      if (body.portal === 'regenerate' || !cur?.portal_token) patch.portal_token = randomToken();
+    } else if (body.portal === 'disable') patch.portal_token = null;
     if (body.disconnect_instagram) Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null });
     const [row] = await db.update('clients', { id: `eq.${id}` }, patch);
     need(row, 404, 'Cliente não encontrado.');

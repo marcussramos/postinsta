@@ -4,7 +4,7 @@ import { isAdmin, checkPassword, sessionCookie, clearCookie } from '../lib/auth.
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
-import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS } from '../lib/migrations.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -42,6 +42,8 @@ async function setupInfo() {
     catch { parts.push(MIGRATION_FOLDERS); }
     try { await db.select('reports', { select: 'id', limit: 1 }); await db.select('ig_daily', { select: 'day', limit: 1 }); }
     catch { parts.push(MIGRATION_REPORTS); }
+    try { await db.select('clients', { select: 'portal_token', limit: 1 }); }
+    catch { parts.push(MIGRATION_PORTAL); }
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }
   return info;

@@ -859,7 +859,9 @@ function viewFolder() {
   const head = h('div', { class: 'page-head' },
     h('div', {}, h('a', { class: 'eyebrow back', href: '#clientes' }, '← Clientes'), h('h1', {}, c.name)),
     h('div', { class: 'spacer' }),
-    h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, '🔒 Pasta privada · só você vê'));
+    h('div', { class: 'actions' },
+      h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, '🔒 Pasta privada'),
+      h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente')));
   const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
     ...FOLDER_TABS.map(([k, l]) => {
       const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0) : count(k);
@@ -1168,4 +1170,39 @@ function filesSection(c, category, title, hint, { month = false, group = false }
       monthInput, h('button', { class: 'btn primary sm', onclick: () => input.click() }, '+ Enviar arquivo'), input),
     status, content);
   return box;
+}
+
+// ── Área do cliente: link secreto em que o cliente vê só a pasta dele (contrato, relatórios e financeiro)
+function portalMessage(c) {
+  return `Olá! Este é o seu acesso exclusivo à área do cliente da agência: contrato, relatórios mensais do Instagram e financeiro, tudo em um só lugar.\n${c.portal_url}\n\nO link é pessoal, não compartilhe.`;
+}
+function openPortal(c) {
+  const save = async (portal, msg) => {
+    try {
+      const saved = await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: { portal } });
+      const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
+      close(); render(); if (msg) toast(msg);
+      if (saved.portal_url) openPortal(saved);
+    } catch (e) {
+      toast(/portal_token|column|schema/i.test(e.message) ? 'Falta a atualização do banco (veja Ajustes).' : e.message, true);
+    }
+  };
+  const body = [h('p', { class: 'muted', style: 'margin:0;font-size:14px' },
+    'O cliente abre pelo celular, sem senha, e vê só a pasta dele: contrato assinado, relatórios do Instagram, mensalidades com comprovantes e o atalho para aprovar posts. Ele não vê outros clientes, nem a seção "Outros" nem suas anotações.')];
+  const foot = [];
+  if (!c.portal_url) {
+    foot.push(h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => save('enable', 'Link do cliente criado.') }, 'Criar link'));
+  } else {
+    body.push(h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.portal_url), h('button', { class: 'btn sm', onclick: () => copyText(c.portal_url, 'Link copiado.') }, 'Copiar')),
+      h('div', { class: 'actions' },
+        h('a', { class: 'btn sm', href: c.portal_url, target: '_blank', rel: 'noopener' }, 'Ver como o cliente vê'),
+        c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, portalMessage(c)), target: '_blank', rel: 'noopener' }, 'Enviar por WhatsApp') : null,
+        c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, `Sua área do cliente · ${c.name}`, portalMessage(c)) }, 'Enviar por e-mail') : null),
+      h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Segurança'),
+        h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Se o link vazou ou o contrato terminou, gere um novo (o antigo para de abrir) ou desative.'),
+        h('div', { class: 'actions' },
+          confirmButton('Gerar link novo', 'Confirmar: o antigo para de abrir', () => save('regenerate', 'Link novo gerado.'), 'btn sm'),
+          confirmButton('Desativar', 'Confirmar desativar', () => save('disable', 'Link desativado.'), 'btn ghost sm danger'))));
+  }
+  const close = drawer(`Link do cliente · ${c.name}`, body, foot);
 }

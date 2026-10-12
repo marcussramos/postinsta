@@ -77,3 +77,7 @@ create table if not exists ig_daily (
 alter table ig_daily enable row level security;
 
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_PORTAL = `-- MC DIGITAL: atualização 5 (área do cliente) — rode uma vez no SQL Editor do Supabase
+alter table clients add column if not exists portal_token text unique;
+notify pgrst, 'reload schema';`;
