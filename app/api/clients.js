@@ -16,6 +16,7 @@ function cleanClient(input) {
     // aceita "65 99999-9999" e completa com o 55 do Brasil
     out.contact_whatsapp = digits ? (digits.length <= 11 ? `55${digits}` : digits) : null;
   }
+  if (input.brand_voice !== undefined) out.brand_voice = String(input.brand_voice || '').trim().slice(0, 1500) || null;
   if (input.contact_email !== undefined) {
     const e = String(input.contact_email || '').trim();
     need(!e || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e), 400, 'E-mail inválido.');

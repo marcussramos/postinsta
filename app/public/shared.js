@@ -1,7 +1,9 @@
 // Funções compartilhadas pelo painel e pela página de aprovação.
 
 export const STATUS_LABEL = {
-  draft: 'Rascunho',
+  idea: 'Ideia',
+  draft: 'Em produção',
+  internal_review: 'Revisão interna',
   pending_approval: 'Aguardando cliente',
   approved: 'Aprovado',
   changes_requested: 'Ajuste pedido',
@@ -134,3 +136,9 @@ export async function copyText(text, okMsg = 'Copiado.') {
 }
 
 export const waLink = (number, text) => `https://wa.me/${String(number || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+export const mailLink = (to, subject, body) => `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+export function blobToDataUrl(blob) {
+  return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(blob); });
+}

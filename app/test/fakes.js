@@ -9,9 +9,9 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
 
   const defaults = {
     clients: () => ({ id: crypto.randomUUID(), approval_token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString(),
-      contact_whatsapp: null, contact_email: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
+      contact_whatsapp: null, contact_email: null, brand_voice: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
     app_state: () => ({ updated_at: new Date().toISOString() }),
-    posts: () => ({ id: crypto.randomUUID(), status: 'draft', caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
+    posts: () => ({ id: crypto.randomUUID(), status: 'draft', title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
       ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   };
@@ -39,7 +39,10 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     let out = rows;
     for (const [k, v] of sp) {
       if (['select', 'order', 'limit'].includes(k)) continue;
-      if (k === 'and') {
+      if (k === 'or') {
+        const conds = v.replace(/^\(|\)$/g, '').split(',').map((c) => { const [col, ...e] = c.split('.'); return [col, e.join('.')]; });
+        out = out.filter((r) => conds.some(([c, e]) => test(r, c, e)));
+      } else if (k === 'and') {
         const conds = v.replace(/^\(|\)$/g, '').split(',').map((c) => { const [col, ...e] = c.split('.'); return [col, e.join('.')]; });
         out = out.filter((r) => conds.every(([c, e]) => test(r, c, e)));
       } else out = out.filter((r) => test(r, k, v));
@@ -61,7 +64,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     if (method === 'GET') {
       let out = filterRows(rows, sp);
       const order = sp.get('order');
-      if (order) { const [col, dir] = order.split('.'); out = [...out].sort((a, b) => cmp(a[col], b[col]) * (dir === 'desc' ? -1 : 1)); }
+      if (order) { const [col, dir] = order.split('.'); out = [...out].sort((a, b) => (a[col] == null) - (b[col] == null) || cmp(a[col], b[col]) * (dir === 'desc' ? -1 : 1)); }
       if (sp.get('limit')) out = out.slice(0, +sp.get('limit'));
       return json(200, out.map((r) => ({ ...r })));
     }
@@ -110,6 +113,10 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     const url = typeof input === 'string' ? input : input.url;
     if (url.startsWith(supabaseUrl)) return supa(url, init);
     if (/instagram\.com/.test(new URL(url).host)) return instagram(url, init);
+    if (new URL(url).host === 'api.anthropic.com') {
+      const req = JSON.parse(init.body); ig.aiCalls = (ig.aiCalls || []).concat([req]);
+      return json(200, { content: [{ type: 'text', text: 'Aqui:\n{"options":[{"label":"Curta","caption":"Foco no corre.","hashtags":["funk","#corre","foco no corre"]},{"label":"Engajamento","caption":"Marca o parça!","hashtags":["#parça"]}]}' }] });
+    }
     return realFetch(input, init);
   };
   return { tables, files, ig, restore: () => { globalThis.fetch = realFetch; } };

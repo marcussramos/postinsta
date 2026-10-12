@@ -4,6 +4,7 @@ import { isAdmin, checkPassword, sessionCookie, clearCookie } from '../lib/auth.
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
+import { MIGRATION_WORKFLOW } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -27,12 +28,15 @@ select cron.schedule(
 
 async function setupInfo() {
   const missing = missingEnv();
-  const info = { missing_env: missing, key_problem: supabaseKeyProblem(), ig_ready: igReady(), app_url: null, redirect_uri: null, cron_sql: null, publisher_last_run: null };
+  const info = { missing_env: missing, key_problem: supabaseKeyProblem(), ig_ready: igReady(), ai_ready: Boolean(process.env.ANTHROPIC_API_KEY), migration_sql: null, app_url: null, redirect_uri: null, cron_sql: null, publisher_last_run: null };
   try { info.app_url = appUrl(); info.redirect_uri = redirectUri(); } catch { /* sem endereço ainda */ }
   if (!missing.length && !info.key_problem && info.app_url) {
     info.cron_sql = cronSql(info.app_url, cronSecret());
     try { info.publisher_last_run = (await db.one('app_state', { select: 'value', key: 'eq.publisher' }))?.value?.at || null; }
     catch (e) { info.publisher_state_error = e.message; /* tabela app_state ainda não existe ou não visível */ }
+    // banco desatualizado? (colunas da atualização 2)
+    try { await db.select('posts', { select: 'title', limit: 1 }); await db.select('clients', { select: 'brand_voice', limit: 1 }); }
+    catch { info.migration_sql = MIGRATION_WORKFLOW; }
   }
   return info;
 }

@@ -10,6 +10,7 @@ create table if not exists clients (
   name             text not null,
   contact_whatsapp text,                         -- só números, com DDI+DDD: 5565999999999
   contact_email    text,
+  brand_voice      text,                         -- tom de voz da marca (usado pela IA de legendas)
   approval_token   text not null unique default encode(gen_random_bytes(24), 'hex'),
   ig_user_id       text,                         -- id do perfil na API do Instagram
   ig_username      text,
@@ -20,19 +21,22 @@ create table if not exists clients (
 );
 
 -- ───────────── Posts
--- Status: draft → pending_approval → approved → publishing → published
---                               ↘ changes_requested (volta para draft ao editar)
+-- Fluxo: idea → draft (produção) → internal_review → pending_approval → approved → publishing → published
+--                                                     ↘ changes_requested
 -- failed = a publicação deu erro (mensagem em last_error)
 create table if not exists posts (
   id               uuid primary key default gen_random_uuid(),
   client_id        uuid not null references clients(id) on delete cascade,
-  image_url        text not null,                -- URL pública (bucket "posts")
+  title            text,                         -- pauta/ideia (uso interno)
+  notes            text,                         -- briefing interno
+  image_url        text,                         -- URL pública (bucket "posts"); ideias podem não ter
+
   image_path       text,                         -- caminho no bucket, para apagar depois
   caption          text not null default '',
   alt_text         text,
-  scheduled_at     timestamptz not null,
+  scheduled_at     timestamptz,                  -- ideias podem não ter data
   status           text not null default 'draft'
-                   check (status in ('draft','pending_approval','approved','changes_requested','publishing','published','failed')),
+                   check (status in ('idea','draft','internal_review','pending_approval','approved','changes_requested','publishing','published','failed')),
   client_feedback  text,
   decided_at       timestamptz,                  -- quando o cliente aprovou/pediu ajuste
   sent_for_approval_at timestamptz,

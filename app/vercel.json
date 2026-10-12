@@ -3,7 +3,8 @@
   "cleanUrls": true,
   "functions": {
     "api/cron.js": { "maxDuration": 60 },
-    "api/upload.js": { "maxDuration": 30 }
+    "api/upload.js": { "maxDuration": 30 },
+    "api/ai/caption.js": { "maxDuration": 60 }
   },
   "headers": [
     {
