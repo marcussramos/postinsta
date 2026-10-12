@@ -4,8 +4,10 @@ import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepare
 const VIEWS = ['agenda', 'calendario', 'fluxo', 'clientes', 'ajustes'];
 const S = {
   admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '',
-  cal: { month: null, posts: [], day: null, loading: false },
+  cal: { month: null, posts: [], day: null, loading: false, mode: savedPref('mc_cal_mode', 'thumbs') },
 };
+function savedPref(key, fallback) { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } }
+function savePref(key, value) { try { localStorage.setItem(key, value); } catch { /* navegador sem armazenamento: só não lembra */ } }
 const viewFromHash = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'agenda');
 const root = document.getElementById('app');
 const sinceISO = () => new Date(Date.now() - 7 * 86400e3).toISOString();
@@ -215,31 +217,46 @@ function viewCalendar() {
     h('div', {}, h('div', { class: 'eyebrow' }, 'Planejamento'), h('h1', {}, label)),
     h('div', { class: 'spacer' }),
     h('div', { class: 'actions' },
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Modo de exibição' },
+        ...[['thumbs', 'Miniaturas'], ['list', 'Lista']].map(([k, l]) => h('button', { class: 'seg-btn', 'aria-pressed': String(S.cal.mode === k),
+          onclick: () => { S.cal.mode = k; savePref('mc_cal_mode', k); render(); } }, l))),
       h('button', { class: 'btn sm', onclick: () => go(-1), 'aria-label': 'Mês anterior' }, '‹'),
       h('button', { class: 'btn sm', onclick: () => go(0) }, 'Hoje'),
       h('button', { class: 'btn sm', onclick: () => go(1), 'aria-label': 'Próximo mês' }, '›')));
 
   const week = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-  const grid = h('div', { class: `cal${S.cal.loading ? ' loading' : ''}`, role: 'grid', 'aria-label': `Calendário de ${label}` },
+  const grid = h('div', { class: `cal mode-${S.cal.mode}${S.cal.loading ? ' loading' : ''}`, role: 'grid', 'aria-label': `Calendário de ${label}` },
     ...week.map((w) => h('div', { class: 'cal-wd', role: 'columnheader' }, w)),
     ...monthGrid(m).map((d) => {
       const list = (byDay.get(d) || []).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
       const out = d.slice(0, 7) !== m;
       const cell = h('div', { class: `cal-day${out ? ' out' : ''}${d === today ? ' today' : ''}${S.cal.day === d ? ' sel' : ''}`, role: 'gridcell', tabindex: 0,
         onclick: (e) => {
-          if (e.target.closest('.cal-chip')) return;
+          if (e.target.closest('.cal-chip, .cal-tile, .cal-more')) return;
           if (window.matchMedia('(max-width: 640px)').matches) { S.cal.day = d; render(); return; }
           openPost(null, { date: d });
         },
         onkeydown: (e) => { if (e.key === 'Enter') openPost(null, { date: d }); } },
         h('div', { class: 'cal-num' }, String(Number(d.slice(8)))),
         h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: `dot st-${p.status}` }))),
-        h('div', { class: 'cal-list' },
-          ...list.slice(0, 3).map((p) => h('button', { class: `cal-chip st-${p.status}`, title: `${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`, onclick: () => openPost(p) },
-            p.image_url ? h('img', { src: p.image_url, alt: '' }) : null,
-            h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
-            h('span', { class: 'cal-chip-t' }, S.fClient ? postLabel(p) : clientName(p.client_id)))),
-          list.length > 3 ? h('button', { class: 'cal-more', onclick: () => { S.cal.day = d; render(); } }, `+${list.length - 3} mais`) : null));
+        // celular, modo miniaturas: a 1ª imagem do dia + quantos posts tem
+        list.length ? h('div', { class: 'cal-mini', 'aria-hidden': 'true' },
+          list[0].image_url ? h('img', { src: list[0].image_url, alt: '' }) : h('span', { class: 'thumb-empty' }),
+          list.length > 1 ? h('span', { class: 'cal-badge' }, String(list.length)) : null) : null,
+        S.cal.mode === 'thumbs'
+          ? h('div', { class: 'cal-thumbs' },
+              ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`,
+                onclick: () => (i === 3 && list.length > 4 ? (S.cal.day = d, render()) : openPost(p)) },
+                p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
+                h('span', { class: 'cal-tile-time mono' }, fmtTime(p.scheduled_at, S.tz)),
+                h('span', { class: 'cal-tile-dot', 'aria-hidden': 'true' }),
+                i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null)))
+          : h('div', { class: 'cal-list' },
+              ...list.slice(0, 4).map((p) => h('button', { class: `cal-chip st-${p.status}`, title: `${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`, onclick: () => openPost(p) },
+                h('span', { class: 'cal-chip-dot', 'aria-hidden': 'true' }),
+                h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
+                h('span', { class: 'cal-chip-t' }, S.fClient ? postLabel(p) : `${clientName(p.client_id)} · ${postLabel(p)}`))),
+              list.length > 4 ? h('button', { class: 'cal-more', onclick: () => { S.cal.day = d; render(); } }, `+${list.length - 4} mais`) : null));
       return cell;
     }));
 

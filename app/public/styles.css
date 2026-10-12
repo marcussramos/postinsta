@@ -225,7 +225,6 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
 .cal-num { font-weight: 700; font-size: 13.5px; justify-self: start; min-width: 24px; height: 24px; display: grid; place-items: center; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .cal-list { display: grid; gap: 4px; min-width: 0; }
 .cal-chip { display: flex; align-items: center; gap: 5px; border: 0; border-radius: 6px; padding: 3px 5px; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; min-width: 0; }
-.cal-chip img { width: 18px; height: 22px; object-fit: cover; border-radius: 3px; flex: none; }
 .cal-chip .mono { font-size: 11px; flex: none; }
 .cal-chip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .cal-more { border: 0; background: none; color: var(--muted); font-size: 12px; text-align: left; padding: 0 5px; cursor: pointer; }
@@ -260,4 +259,45 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
   .cal-dots { display: flex; justify-content: center; }
   .hint-desk { display: none; }
   .board { grid-auto-columns: 78vw; }
+}
+
+/* ── calendário: modos Miniaturas / Lista */
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg-btn { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; font-weight: 600; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.seg-btn[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+.cal.mode-thumbs .cal-day { min-height: 150px; }
+.cal-thumbs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.cal-thumbs:has(> :only-child) { grid-template-columns: minmax(0, 1fr); max-width: 70%; }
+.cal-tile { position: relative; border: 0; padding: 0; border-radius: 6px; overflow: hidden; aspect-ratio: 4 / 5; cursor: pointer; background: var(--surface-2); display: block; }
+.cal-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cal-tile-empty { display: grid; place-items: center; height: 100%; padding: 4px; font-size: 10.5px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.2; overflow: hidden; }
+.cal-tile-time { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 500; padding: 1px 4px; border-radius: 4px; background: rgba(10,12,16,.72); color: #fff; }
+.cal-tile-dot { position: absolute; right: 4px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.cal-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-tile-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10,12,16,.6); color: #fff; font-weight: 800; font-size: 14px; }
+.cal-tile.st-draft, .cal-tile.st-idea, .cal-tile.st-internal_review, .cal-tile.st-pending_approval, .cal-tile.st-approved,
+.cal-tile.st-changes_requested, .cal-tile.st-published, .cal-tile.st-publishing, .cal-tile.st-failed { background-color: var(--surface-2); }
+
+.cal-chip { background: var(--surface-2); color: var(--ink); }
+.cal-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.cal-chip.st-idea .cal-chip-dot { background: #6B4FC4; }
+.cal-chip.st-draft .cal-chip-dot { background: var(--s-draft); }
+.cal-chip.st-internal_review .cal-chip-dot { background: #0F6E7A; }
+.cal-chip.st-pending_approval .cal-chip-dot { background: var(--s-wait); }
+.cal-chip.st-changes_requested .cal-chip-dot { background: var(--s-change); }
+.cal-chip.st-approved .cal-chip-dot { background: var(--s-ok); }
+.cal-chip.st-publishing .cal-chip-dot, .cal-chip.st-published .cal-chip-dot { background: var(--s-pub); }
+.cal-chip.st-failed .cal-chip-dot { background: var(--s-fail); }
+.cal-mini { display: none; }
+
+@media (max-width: 640px) {
+  .cal-thumbs { display: none; }
+  .cal.mode-thumbs .cal-day { min-height: 74px; }
+  .cal.mode-thumbs .cal-dots { display: none; }
+  .cal.mode-thumbs .cal-mini { display: block; position: relative; width: 30px; aspect-ratio: 4 / 5; border-radius: 4px; overflow: hidden; justify-self: center; }
+  .cal-mini img, .cal-mini .thumb-empty { width: 100%; height: 100%; object-fit: cover; display: block; font-size: 0; }
+  .cal-badge { position: absolute; right: 0; bottom: 0; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 4px 0 4px 0; background: var(--accent); color: var(--accent-ink); font-size: 9.5px; font-weight: 800; display: grid; place-items: center; }
+  .page-head .actions { width: 100%; }
+  .seg { margin-right: auto; }
 }
