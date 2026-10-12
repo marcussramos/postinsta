@@ -19,6 +19,7 @@ export default route({
     send(res, 200, {
       html, title: `Contrato - ${client.contract_data?.nome || client.name}`,
       missing: missing.map((k) => FIELDS[k] || k), template_is_default: s.template_is_default,
+      brand: { marca: s.agency.marca || '', slogan: s.agency.slogan || '', titulo: (s.contract_template.match(/^# (.+)/m)?.[1] || '').trim() },
     });
   },
 });

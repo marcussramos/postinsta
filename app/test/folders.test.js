@@ -121,3 +121,15 @@ test('contrato: dados do cliente + agência viram contrato preenchido', async ()
   await call(`/api/clients?id=${c.id}`, { method: 'DELETE' });
   assert.ok(![...S.fakes.files.keys()].some((x) => x.includes(`${c.id}/contract/`)));
 });
+
+test('modelo: tabela de resumo, texto à direita e identificação automática do cliente', async () => {
+  const { contractValues } = await import('../lib/contract.js');
+  const v = contractValues({ agency: {}, client: { name: 'X', contract_data: { documento: '35.762.465/0001-64', total_conteudos: 12 } }, today: '2026-10-12' });
+  assert.equal(v['cliente.identificacao'], 'pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 35.762.465/0001-64');
+  assert.equal(v['contrato.total_conteudos'], '12 (doze)');
+  const pf = contractValues({ client: { contract_data: { documento: '077.005.419-65' } } });
+  assert.match(pf['cliente.identificacao'], /^pessoa física, inscrita no CPF/);
+  const { html } = renderContract('| MENSALIDADE | {{contrato.valor}}\n| VIGÊNCIA | indeterminado\n\n>> Cuiabá/MT, hoje', { 'contrato.valor': 'R$ 1,00' });
+  assert.match(html, /<table class="quadro">.*<th scope="row">MENSALIDADE<\/th><td><span class="campo">R\$ 1,00<\/span><\/td>/);
+  assert.match(html, /<p class="direita">Cuiabá\/MT, hoje<\/p>/);
+});

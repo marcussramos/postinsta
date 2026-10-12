@@ -4,7 +4,7 @@ import { requireAdmin } from '../auth.js';
 import { db } from '../db.js';
 import { DEFAULT_TEMPLATE, FIELDS } from '../contract.js';
 
-const AGENCY_FIELDS = ['razao_social', 'cnpj', 'endereco', 'cidade', 'representante', 'email', 'pix'];
+const AGENCY_FIELDS = ['razao_social', 'qualificacao', 'cnpj', 'endereco', 'cidade', 'representante', 'representante_cpf', 'email', 'pix', 'marca', 'slogan'];
 
 async function getKey(key) {
   try { return (await db.one('app_state', { select: 'value', key: `eq.${key}` }))?.value ?? null; }

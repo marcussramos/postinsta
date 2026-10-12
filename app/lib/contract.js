@@ -4,24 +4,32 @@
 //   - linha em branco separa parágrafos
 //   - linha que começa com "# " vira título; com "## " vira subtítulo (ex.: cláusulas)
 //   - **texto** fica em negrito
-//   - {{assinaturas}} sozinho numa linha → linhas de assinatura (contratada, contratante e 2 testemunhas)
+//   - {{assinaturas}} sozinho numa linha → linhas de assinatura (contratante, contratada e 2 testemunhas)
+//   - bloco em que toda linha começa com "|" vira tabela (ex.: "| MENSALIDADE | {{contrato.valor}}")
+//   - parágrafo que começa com ">> " fica alinhado à direita (ex.: local e data)
 //   - campos: {{cliente.nome}}, {{contrato.valor}}, {{data.hoje}} … (lista em FIELDS)
 
 export const FIELDS = {
   'agencia.razao_social': 'Razão social da agência',
   'agencia.cnpj': 'CNPJ da agência',
+  'agencia.qualificacao': 'Tipo da empresa (ex.: Empresária Individual)',
   'agencia.endereco': 'Endereço da agência',
   'agencia.cidade': 'Cidade/UF da agência (foro)',
   'agencia.representante': 'Representante da agência',
+  'agencia.representante_cpf': 'CPF do representante da agência',
   'agencia.email': 'E-mail da agência',
   'agencia.pix': 'Chave PIX da agência',
   'cliente.nome': 'Nome / razão social do cliente',
   'cliente.documento': 'CPF ou CNPJ do cliente',
+  'cliente.identificacao': 'Identificação do cliente (pessoa jurídica/física + CNPJ/CPF)',
   'cliente.endereco': 'Endereço do cliente',
   'cliente.representante': 'Representante do cliente',
+  'cliente.representante_cpf': 'CPF do representante do cliente',
   'cliente.email': 'E-mail do cliente',
   'cliente.whatsapp': 'WhatsApp do cliente',
   'contrato.servicos': 'Serviços contratados',
+  'contrato.entregas': 'Entregas mensais (ex.: 8 posts e 4 Reels)',
+  'contrato.total_conteudos': 'Total de conteúdos por mês',
   'contrato.valor': 'Valor mensal (R$ 1.500,00)',
   'contrato.valor_extenso': 'Valor mensal por extenso',
   'contrato.vencimento': 'Dia de vencimento',
@@ -74,10 +82,22 @@ export function valorPorExtenso(cents) {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
+// "pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ..." conforme o documento informado
+function identificacao(doc) {
+  if (!doc) return '';
+  const n = String(doc).replace(/\D/g, '').length;
+  if (n === 14) return `pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${doc}`;
+  if (n === 11) return `pessoa física, inscrita no CPF sob o nº ${doc}`;
+  return `inscrita no CPF/CNPJ sob o nº ${doc}`;
+}
+
 export function contractValues({ agency = {}, client = {}, today = new Date().toISOString() }) {
   const k = client.contract_data || {};
   const fee = client.monthly_fee_cents;
   return {
+    'agencia.qualificacao': agency.qualificacao, 'agencia.representante_cpf': agency.representante_cpf,
+    'cliente.identificacao': identificacao(k.documento), 'cliente.representante_cpf': k.representante_cpf,
+    'contrato.entregas': k.entregas, 'contrato.total_conteudos': k.total_conteudos ? `${k.total_conteudos} (${inteiro(Number(k.total_conteudos))})` : '',
     'agencia.razao_social': agency.razao_social, 'agencia.cnpj': agency.cnpj, 'agencia.endereco': agency.endereco,
     'agencia.cidade': agency.cidade, 'agencia.representante': agency.representante, 'agencia.email': agency.email, 'agencia.pix': agency.pix,
     'cliente.nome': k.nome || client.name, 'cliente.documento': k.documento, 'cliente.endereco': k.endereco,
@@ -92,9 +112,10 @@ export function contractValues({ agency = {}, client = {}, today = new Date().to
 
 // Bloco de assinaturas: escreva {{assinaturas}} sozinho numa linha do modelo.
 function signatures(values, fill) {
-  const line = (who, name, doc) => `<div class="ass"><div class="ass-linha"></div><b>${who}</b><br>${fill(name)}${doc ? `<br>${fill(doc)}` : ''}</div>`;
+  const docLabel = (doc) => (String(doc || '').replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ');
+  const line = (who, name, doc) => `<div class="ass"><div class="ass-linha"></div>${fill(name)}${doc ? `<br>${fill(doc)}` : ''}<br><b>${who}</b></div>`;
   const testemunha = (n) => `<div class="ass"><div class="ass-linha"></div><b>Testemunha ${n}</b><br>Nome:<br>CPF:</div>`;
-  return `<div class="assinaturas">${line('CONTRATADA', '{{agencia.razao_social}}', 'CNPJ {{agencia.cnpj}}')}${line('CONTRATANTE', '{{cliente.nome}}', 'CPF/CNPJ {{cliente.documento}}')}${testemunha(1)}${testemunha(2)}</div>`;
+  return `<div class="assinaturas">${line('CONTRATANTE', '{{cliente.nome}}', `${docLabel(values['cliente.documento'])} nº {{cliente.documento}}`)}${line('CONTRATADA', '{{agencia.razao_social}}', 'CNPJ nº {{agencia.cnpj}}')}${testemunha(1)}${testemunha(2)}</div>`;
 }
 
 // Devolve o HTML do contrato e a lista de campos que ficaram vazios.
@@ -111,8 +132,14 @@ export function renderContract(template, values) {
     const t = block.trim();
     if (!t) return '';
     if (t === '{{assinaturas}}') return signatures(values, fill);
-    if (t.startsWith('## ')) return `<h2>${fill(t.slice(3))}</h2>`;
-    if (t.startsWith('# ')) return `<h1>${fill(t.slice(2))}</h1>`;
+    if (t.startsWith('## ')) return `<h2>${t.slice(3).split('\n').map(fill).join('<br>')}</h2>`;
+    if (t.startsWith('# ')) return `<h1>${t.slice(2).split('\n').map(fill).join('<br>')}</h1>`;
+    const lines = t.split('\n');
+    if (lines.every((l) => l.trim().startsWith('|'))) {
+      const rows = lines.map((l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => fill(c.trim())));
+      return `<table class="quadro"><tbody>${rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${c}</th>` : `<td>${c}</td>`)).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    if (t.startsWith('>> ')) return `<p class="direita">${t.slice(3).split('\n').map(fill).join('<br>')}</p>`;
     return `<p>${t.split('\n').map(fill).join('<br>')}</p>`;
   }).join('\n');
   return { html, missing: [...missing] };

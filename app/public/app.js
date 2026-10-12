@@ -768,8 +768,11 @@ function settingsContract() {
   const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Pastas dos clientes'), h('h2', { style: 'font-size:22px' }, 'Contrato')));
   if (!S.settings) return [head, h('p', { class: 'muted' }, S.settings === false ? 'Disponível depois da atualização do banco de dados.' : 'Carregando…')];
   const A = S.settings.agency || {};
-  const fields = [['razao_social', 'Razão social', 'MC Digital Ltda'], ['cnpj', 'CNPJ', '00.000.000/0001-00'], ['endereco', 'Endereço', 'Rua, número, bairro, cidade/UF, CEP'],
-    ['cidade', 'Cidade/UF (foro e assinatura)', 'Cuiabá/MT'], ['representante', 'Representante legal', 'Marcus Ramos'], ['email', 'E-mail', 'contato@…'], ['pix', 'Chave PIX', '']];
+  const fields = [['razao_social', 'Razão social (como no CNPJ)', '00.000.000 NOME COMPLETO'], ['qualificacao', 'Tipo da empresa', 'Empresária Individual'],
+    ['cnpj', 'CNPJ', '00.000.000/0001-00'], ['endereco', 'Endereço completo', 'Rua, número, bairro, Cuiabá/MT, CEP 00.000-000'],
+    ['cidade', 'Cidade/UF (foro e assinatura)', 'Cuiabá/MT'], ['representante', 'Representante legal (quem assina)', 'Nome completo'],
+    ['representante_cpf', 'CPF do representante', '000.000.000-00'], ['email', 'E-mail', 'contato@…'], ['pix', 'Chave PIX', ''],
+    ['marca', 'Marca no rodapé do contrato', 'MCAROLINA DIGITAL'], ['slogan', 'Linha abaixo da marca', 'SOCIAL MEDIA | VIDEO MAKER']];
   const inputs = {};
   const agencyCard = h('article', { class: 'card', style: 'grid-column:1/-1' },
     h('div', { class: 'eyebrow' }, 'Contratada'), h('h3', {}, 'Dados da agência'),
@@ -787,11 +790,16 @@ function settingsContract() {
   };
   const tplCard = h('article', { class: 'card', style: 'grid-column:1/-1' },
     h('div', { class: 'eyebrow' }, S.settings.template_is_default ? 'Modelo provisório' : 'Seu modelo'), h('h3', {}, 'Modelo de contrato'),
-    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cole o texto do seu contrato e troque os dados variáveis pelos campos abaixo (clique num campo para inseri-lo onde está o cursor). Linha começando com "# " vira título, "## " vira cláusula, **texto** fica em negrito e {{assinaturas}} sozinho numa linha cria as linhas de assinatura.'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cole o texto do seu contrato e troque os dados variáveis pelos campos abaixo (clique num campo para inseri-lo onde está o cursor). Linha começando com "# " vira título, "## " vira cláusula, **texto** fica em negrito, linhas começando com "|" viram tabela (| RÓTULO | valor), ">> " alinha à direita e {{assinaturas}} sozinho numa linha cria as linhas de assinatura.'),
     h('div', { class: 'pick tpl-fields' }, ...Object.entries({ ...S.settings.fields, assinaturas: 'Linhas de assinatura' }).map(([k, label]) =>
       h('button', { class: 'chip', type: 'button', title: label, onclick: () => insert(k) }, label))),
     ta,
     h('div', { class: 'actions' },
+      h('label', { class: 'btn sm', style: 'cursor:pointer' }, 'Carregar de arquivo .txt',
+        h('input', { type: 'file', accept: '.txt,text/plain', hidden: true, onchange: async (e) => {
+          const f = e.target.files[0]; if (!f) return;
+          ta.value = await f.text(); toast('Modelo carregado. Confira e clique em Salvar modelo.');
+        } })),
       h('button', { class: 'btn primary sm', onclick: async (e) => {
         e.target.disabled = true;
         try { S.settings = await api('/api/pasta?r=settings', { method: 'PUT', body: { contract_template: ta.value } }); S.folder.id = null; toast('Modelo salvo. Os próximos contratos já saem com ele.'); render(); }
@@ -914,23 +922,27 @@ function openContractData(c) {
   const [nome, fNome] = inp('k-nome', 'Nome ou razão social do contratante', k.nome || c.name);
   const [doc, fDoc] = inp('k-doc', 'CPF ou CNPJ', k.documento, { placeholder: '00.000.000/0001-00' });
   const [end, fEnd] = inp('k-end', 'Endereço completo', k.endereco, { placeholder: 'Rua, número, bairro, cidade/UF, CEP' });
-  const [rep, fRep] = inp('k-rep', 'Representante (quem assina)', k.representante, { placeholder: 'Nome e CPF' });
-  const [serv, fServ] = inp('k-serv', 'Serviços contratados', k.servicos, { tag: 'textarea', style: 'min-height:110px', placeholder: 'Ex.: Gestão do Instagram com 12 posts por mês (arte + legenda), agendamento, aprovação e relatório mensal.' });
+  const [rep, fRep] = inp('k-rep', 'Representante (quem assina)', k.representante, { placeholder: 'Nome completo' });
+  const [repCpf, fRepCpf] = inp('k-repcpf', 'CPF do representante', k.representante_cpf, { placeholder: '000.000.000-00' });
+  const [entr, fEntr] = inp('k-entr', 'Entregas mensais', k.entregas, { placeholder: '8 (oito) posts estáticos e 4 (quatro) Reels' });
+  const [total, fTotal] = inp('k-total', 'Total de conteúdos/mês', k.total_conteudos, { type: 'number', min: 1, max: 999, placeholder: '12' });
+  const [serv, fServ] = inp('k-serv', 'Serviços contratados (opcional)', k.servicos, { tag: 'textarea', style: 'min-height:80px', placeholder: 'Só se o seu modelo usar o campo "Serviços contratados".' });
   const [fee, fFee] = inp('k-fee', 'Valor mensal (R$)', c.monthly_fee_cents != null ? (c.monthly_fee_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.500,00' });
   const [due, fDue] = inp('k-due', 'Dia do vencimento', c.due_day, { type: 'number', min: 1, max: 31, placeholder: '10' });
   const [start, fStart] = inp('k-start', 'Início do contrato', c.billing_start, { type: 'date' }, 'A cobrança mensal começa neste mês.');
-  const [prazo, fPrazo] = inp('k-prazo', 'Prazo (meses)', k.prazo_meses, { type: 'number', min: 1, max: 120, placeholder: '12' });
-  const [forma, fForma] = inp('k-forma', 'Forma de pagamento', k.forma_pagamento, { placeholder: 'PIX ou boleto' });
+  const [prazo, fPrazo] = inp('k-prazo', 'Prazo (meses, opcional)', k.prazo_meses, { type: 'number', min: 1, max: 120, placeholder: 'vazio = indeterminado' });
+  const [forma, fForma] = inp('k-forma', 'Forma de pagamento', k.forma_pagamento, { tag: 'textarea', style: 'min-height:70px', placeholder: 'via Pix, em 3 (três) parcelas mensais: R$ 433,34 no dia 4; R$ 433,33 no dia 14; e R$ 433,33 no dia 24 de cada mês' },
+    'Escreva começando com letra minúscula: entra no meio da frase do contrato.');
   const close = drawer(`Dados do contrato · ${c.name}`, [
-    h('div', { class: 'eyebrow' }, 'Contratante'), fNome, fDoc, fEnd, fRep,
-    h('div', { class: 'eyebrow' }, 'Serviço e cobrança'), fServ,
+    h('div', { class: 'eyebrow' }, 'Contratante'), fNome, fDoc, fEnd, h('div', { class: 'grid-2 tight' }, fRep, fRepCpf),
+    h('div', { class: 'eyebrow' }, 'Serviço e cobrança'), h('div', { class: 'grid-2 tight' }, fEntr, fTotal), fServ,
     h('div', { class: 'grid-2 tight' }, fFee, fDue), h('div', { class: 'grid-2 tight' }, fStart, fPrazo), fForma,
   ], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async (e) => {
     e.target.disabled = true;
     try {
       const saved = await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: {
         monthly_fee: fee.value, due_day: due.value, billing_start: start.value,
-        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
+        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, representante_cpf: repCpf.value, entregas: entr.value, total_conteudos: total.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
       } });
       const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
       close(); toast('Dados do contrato salvos.');

@@ -29,8 +29,19 @@
   .sheet .campo { font-weight: 600; }
   .sheet .campo.longo { font-weight: 400; }
   mark.falta { background: #FFE58A; color: #5a3d00; padding: 0 3px; border-radius: 3px; font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 9.5pt; font-weight: 700; }
-  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 34pt 28pt; margin-top: 34pt; break-inside: avoid; text-align: center; font-size: 10pt; line-height: 1.45; }
+  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 40pt 28pt; margin-top: 40pt; break-inside: avoid; text-align: center; font-size: 10pt; line-height: 1.45; }
   .ass-linha { border-top: 1px solid var(--ink); margin-bottom: 5pt; }
+  .sheet table.quadro { width: 100%; border-collapse: collapse; margin: 6pt 0 14pt; font-size: 10.5pt; line-height: 1.45; text-align: left; break-inside: avoid; }
+  .sheet table.quadro th, .sheet table.quadro td { border: 1px solid #9aa1ad; padding: 6pt 8pt; vertical-align: top; }
+  .sheet table.quadro th { width: 32%; font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 9.5pt; letter-spacing: .03em; background: #F1F3F6; }
+  .sheet p.direita { text-align: right; margin-top: 18pt; }
+  .sheet h1 + h2 { text-align: center; margin-top: 4pt; }
+  table.frame { width: 100%; border-collapse: collapse; }
+  table.frame > thead td, table.frame > tfoot td { padding: 0; }
+  .run-head { text-align: center; font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 8pt; letter-spacing: .08em; color: var(--muted); padding-bottom: 14pt !important; }
+  .run-foot { text-align: center; font-family: "Schibsted Grotesk", Arial, sans-serif; padding-top: 16pt !important; line-height: 1.3; }
+  .run-foot b { display: block; font-size: 10pt; letter-spacing: .14em; }
+  .run-foot span { font-size: 7.5pt; letter-spacing: .12em; color: var(--muted); }
   .msg { max-width: 560px; margin: 80px auto; text-align: center; padding: 0 16px; }
   @media (max-width: 640px) { .sheet { padding: 20px 18px; font-size: 11pt; } .assinaturas { grid-template-columns: 1fr; } }
   @page { size: A4; margin: 20mm 18mm; }
@@ -66,7 +77,21 @@ try {
   document.getElementById('t').textContent = data.title;
   const sheet = document.createElement('article');
   sheet.className = 'sheet';
-  sheet.innerHTML = data.html; // HTML montado no servidor com todo texto escapado
+  // Moldura: cabeçalho e rodapé com a marca se repetem em cada página impressa (thead/tfoot).
+  const b = data.brand || {};
+  const frame = document.createElement('table');
+  frame.className = 'frame';
+  const row = (tag, cls) => { const s = document.createElement(tag); const tr = s.insertRow(); const td = tr.insertCell(); if (cls) td.className = cls; return [s, td]; };
+  const [thead, th] = row('thead', 'run-head'); th.textContent = b.titulo || '';
+  const [tfoot, tf] = row('tfoot', 'run-foot');
+  if (b.marca) tf.append(Object.assign(document.createElement('b'), { textContent: b.marca }));
+  if (b.slogan) tf.append(Object.assign(document.createElement('span'), { textContent: b.slogan }));
+  const [tbody, body] = row('tbody');
+  body.innerHTML = data.html; // HTML montado no servidor com todo texto escapado
+  if (b.titulo) frame.append(thead);
+  frame.append(tbody);
+  if (b.marca || b.slogan) frame.append(tfoot);
+  sheet.append(frame);
   doc.replaceChildren(sheet);
   const notes = [];
   if (data.missing?.length) notes.push(`<b>Faltam ${data.missing.length} dado(s)</b>, marcados em amarelo: ${data.missing.map((m) => m.replace(/[<>&]/g, '')).join(' · ')}. Preencha em "Editar dados" na pasta do cliente (ou em Ajustes, para os dados da agência). Se imprimir assim, eles saem como linha em branco para preencher à mão.`);

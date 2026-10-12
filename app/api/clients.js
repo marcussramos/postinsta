@@ -45,7 +45,7 @@ function cleanClient(input) {
   if (input.contract_data !== undefined) {
     const k = input.contract_data || {};
     const keep = {};
-    for (const f of ['nome', 'documento', 'endereco', 'representante', 'servicos', 'forma_pagamento']) {
+    for (const f of ['nome', 'documento', 'endereco', 'representante', 'representante_cpf', 'servicos', 'entregas', 'forma_pagamento']) {
       const v = String(k[f] ?? '').trim().slice(0, f === 'servicos' ? 3000 : 300);
       if (v) keep[f] = v;
     }
@@ -53,6 +53,11 @@ function cleanClient(input) {
       const p = Number(k.prazo_meses);
       need(Number.isInteger(p) && p > 0 && p <= 120, 400, 'Prazo do contrato deve ser em meses (1 a 120).');
       keep.prazo_meses = p;
+    }
+    if (k.total_conteudos !== undefined && k.total_conteudos !== '' && k.total_conteudos !== null) {
+      const n = Number(k.total_conteudos);
+      need(Number.isInteger(n) && n > 0 && n <= 999, 400, 'Total de conteúdos por mês inválido.');
+      keep.total_conteudos = n;
     }
     out.contract_data = keep;
   }
