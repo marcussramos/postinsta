@@ -369,7 +369,7 @@ function cardClient(c) {
       h('dt', {}, 'WhatsApp'), h('dd', {}, c.contact_whatsapp ? `+${c.contact_whatsapp}` : h('span', { class: 'muted' }, '—')),
       h('dt', {}, 'E-mail'), h('dd', {}, c.contact_email || h('span', { class: 'muted' }, '—'))),
     h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Link fixo de aprovação'),
-      h('div', { class: 'linkbox' }, h('code', {}, c.approval_url), h('button', { class: 'btn sm', onclick: () => copyText(c.approval_url, 'Link copiado.') }, 'Copiar'))),
+      h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.approval_url), h('button', { class: 'btn sm', onclick: () => copyText(c.approval_url, 'Link copiado.') }, 'Copiar'))),
     h('div', { class: 'actions' },
       c.ig_connected && !(exp !== null && exp <= 0)
         ? null
@@ -435,7 +435,7 @@ function viewSettings() {
   const ago = st.publisher_last_run ? Math.round((Date.now() - new Date(st.publisher_last_run)) / 60000) : null;
   const ok = (cond, yes, no) => h('span', { class: cond ? 'ig-ok' : 'ig-warn' }, cond ? `✓ ${yes}` : `• ${no}`);
   const codeBox = (text, label) => h('div', { style: 'display:grid;gap:8px' },
-    h('pre', { class: 'mono', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, text),
+    h('pre', { class: 'mono notranslate', translate: 'no', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, text),
     h('button', { class: 'btn sm', style: 'justify-self:start', onclick: () => copyText(text, `${label} copiado.`) }, `Copiar ${label}`));
   return [
     h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Instalação'), h('h1', {}, 'Ajustes'))),
@@ -444,7 +444,7 @@ function viewSettings() {
         h('div', { class: 'eyebrow' }, 'Etapa 2 · App no ar'),
         h('h3', {}, 'Endereço e banco de dados'),
         ok(!st.missing_env?.length, 'Banco de dados e senha configurados', `Faltam: ${(st.missing_env || []).join(', ')}`),
-        st.app_url ? h('div', { class: 'linkbox' }, h('code', {}, st.app_url), h('button', { class: 'btn sm', onclick: () => copyText(st.app_url, 'Endereço copiado.') }, 'Copiar')) : null),
+        st.app_url ? h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, st.app_url), h('button', { class: 'btn sm', onclick: () => copyText(st.app_url, 'Endereço copiado.') }, 'Copiar')) : null),
       h('article', { class: 'card' },
         h('div', { class: 'eyebrow' }, 'Etapa 3 · Meta'),
         h('h3', {}, 'App do Instagram'),
