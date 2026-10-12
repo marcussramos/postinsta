@@ -3,9 +3,9 @@
 // POST ?client=&category=&ref_month=  envia (corpo = arquivo; nome no cabeçalho x-file-name)
 // DELETE ?id=  apaga
 import crypto from 'node:crypto';
-import { route, send, readRaw, query, need, redirect } from '../lib/http.js';
-import { requireAdmin } from '../lib/auth.js';
-import { db, docs } from '../lib/db.js';
+import { route, send, readRaw, query, need, redirect } from '../http.js';
+import { requireAdmin } from '../auth.js';
+import { db, docs } from '../db.js';
 
 const CATEGORIES = ['contract', 'receipt', 'report', 'other'];
 const MAX = 4 * 1024 * 1024; // limite da Vercel para envio

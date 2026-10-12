@@ -1,8 +1,8 @@
 // Dados da agência e modelo de contrato (guardados em app_state). Só para a agência.
-import { route, send, readJson, need } from '../lib/http.js';
-import { requireAdmin } from '../lib/auth.js';
-import { db } from '../lib/db.js';
-import { DEFAULT_TEMPLATE, FIELDS } from '../lib/contract.js';
+import { route, send, readJson, need } from '../http.js';
+import { requireAdmin } from '../auth.js';
+import { db } from '../db.js';
+import { DEFAULT_TEMPLATE, FIELDS } from '../contract.js';
 
 const AGENCY_FIELDS = ['razao_social', 'cnpj', 'endereco', 'cidade', 'representante', 'email', 'pix'];
 

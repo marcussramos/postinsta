@@ -1,7 +1,7 @@
 // Controle de mensalidades. GET ?client= | PUT (marca o mês) | DELETE ?client=&month= (volta a "em aberto")
-import { route, send, readJson, query, need } from '../lib/http.js';
-import { requireAdmin } from '../lib/auth.js';
-import { db } from '../lib/db.js';
+import { route, send, readJson, query, need } from '../http.js';
+import { requireAdmin } from '../auth.js';
+import { db } from '../db.js';
 
 const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '');
 

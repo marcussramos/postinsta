@@ -38,7 +38,7 @@ async function loadAll() {
   try {
     const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
     S.clients = clients; S.posts = posts;
-    S.payments = await api('/api/payments').catch(() => []); // vazio até a atualização do banco
+    S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
   } catch (e) {
     if (e.status === 401) { S.admin = false; return renderLogin(); }
     toast(e.message, true);
@@ -760,7 +760,7 @@ function viewSettings() {
 function settingsContract() {
   if (S.settings === undefined) {
     S.settings = null;
-    api('/api/settings').then((v) => { S.settings = v; }).catch(() => { S.settings = false; }).finally(() => { if (S.view === 'ajustes') render(); });
+    api('/api/pasta?r=settings').then((v) => { S.settings = v; }).catch(() => { S.settings = false; }).finally(() => { if (S.view === 'ajustes') render(); });
   }
   const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Pastas dos clientes'), h('h2', { style: 'font-size:22px' }, 'Contrato')));
   if (!S.settings) return [head, h('p', { class: 'muted' }, S.settings === false ? 'Disponível depois da atualização do banco de dados.' : 'Carregando…')];
@@ -774,7 +774,7 @@ function settingsContract() {
     h('div', { class: 'grid-2 tight' }, ...fields.map(([k, label, ph]) => { inputs[k] = h('input', { id: `ag-${k}`, value: A[k] || '', placeholder: ph }); return h('div', { class: 'field' }, h('label', { for: `ag-${k}` }, label), inputs[k]); })),
     h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async (e) => {
       e.target.disabled = true;
-      try { S.settings = await api('/api/settings', { method: 'PUT', body: { agency: Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])) } }); S.folder.id = null; toast('Dados da agência salvos.'); render(); }
+      try { S.settings = await api('/api/pasta?r=settings', { method: 'PUT', body: { agency: Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])) } }); S.folder.id = null; toast('Dados da agência salvos.'); render(); }
       catch (err) { toast(err.message, true); e.target.disabled = false; }
     } }, 'Salvar dados'));
   const ta = h('textarea', { id: 'tpl', class: 'mono tpl', spellcheck: 'false', translate: 'no', value: S.settings.contract_template });
@@ -791,11 +791,11 @@ function settingsContract() {
     h('div', { class: 'actions' },
       h('button', { class: 'btn primary sm', onclick: async (e) => {
         e.target.disabled = true;
-        try { S.settings = await api('/api/settings', { method: 'PUT', body: { contract_template: ta.value } }); S.folder.id = null; toast('Modelo salvo. Os próximos contratos já saem com ele.'); render(); }
+        try { S.settings = await api('/api/pasta?r=settings', { method: 'PUT', body: { contract_template: ta.value } }); S.folder.id = null; toast('Modelo salvo. Os próximos contratos já saem com ele.'); render(); }
         catch (err) { toast(err.message, true); e.target.disabled = false; }
       } }, 'Salvar modelo'),
       S.settings.template_is_default ? null : confirmButton('Voltar ao modelo provisório', 'Confirmar: apaga o seu modelo', async () => {
-        S.settings = await api('/api/settings', { method: 'PUT', body: { contract_template: '' } }); render(); toast('Modelo provisório restaurado.');
+        S.settings = await api('/api/pasta?r=settings', { method: 'PUT', body: { contract_template: '' } }); render(); toast('Modelo provisório restaurado.');
       }, 'btn ghost sm')));
   return [head, h('div', { class: 'grid-clients' }, agencyCard, tplCard)];
 }
@@ -829,7 +829,7 @@ const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'
 async function loadFolder(id) {
   try {
     const [files, payments, preview] = await Promise.all([
-      api(`/api/files?client=${id}`), api('/api/payments'), api(`/api/contract?client=${id}`)]);
+      api(`/api/pasta?r=files&client=${id}`), api('/api/pasta?r=payments'), api(`/api/pasta?r=contract&client=${id}`)]);
     Object.assign(S.folder, { files, preview, loading: false, error: null }); S.payments = payments;
   } catch (e) {
     Object.assign(S.folder, { loading: false, error: e.message });
@@ -930,7 +930,7 @@ function openContractData(c) {
       } });
       const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
       close(); toast('Dados do contrato salvos.');
-      S.folder.preview = await api(`/api/contract?client=${c.id}`).catch(() => S.folder.preview);
+      S.folder.preview = await api(`/api/pasta?r=contract&client=${c.id}`).catch(() => S.folder.preview);
       render();
     } catch (err) { toast(err.message, true); e.target.disabled = false; }
   } }, 'Salvar')]);
@@ -965,7 +965,7 @@ function folderFinance(c) {
         h('span', { class: `pill ${cls}` }, label),
         h('div', { class: 'month-sub muted' }, sub, p?.note && m.status === 'paid' ? ` · ${p.note}` : ''),
         h('div', { class: 'month-act' },
-          p?.file_id && fileName(p.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/files?id=${p.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(p.file_id) }, '📎 Comprovante') : null,
+          p?.file_id && fileName(p.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${p.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(p.file_id) }, '📎 Comprovante') : null,
           h('button', { class: `btn sm${m.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m) }, m.status === 'paid' || m.status === 'waived' ? 'Editar' : 'Registrar pagamento')));
     })),
     filesSection(c, 'receipt', 'Todos os comprovantes', 'Comprovantes enviados ao registrar pagamentos aparecem aqui. Também dá para enviar direto.', { month: true }),
@@ -1000,7 +1000,7 @@ function openPayment(c, m) {
       }
       const cents = Math.round(Number(amount.value.replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) * 100);
       if (status === 'paid' && !Number.isFinite(cents)) throw new Error('Valor inválido.');
-      const row = await api('/api/payments', { method: 'PUT', body: {
+      const row = await api('/api/pasta?r=payments', { method: 'PUT', body: {
         client_id: c.id, ref_month: m.month, status, note: note.value,
         ...(status === 'paid' ? { paid_at: paidAt.value || null, amount_cents: cents, file_id: fileId } : { file_id: null }),
       } });
@@ -1010,7 +1010,7 @@ function openPayment(c, m) {
   } }, 'Salvar');
   const foot = [];
   if (p) foot.push(confirmButton('Voltar para em aberto', 'Confirmar', async () => {
-    await api(`/api/payments?client=${c.id}&month=${m.month}`, { method: 'DELETE' });
+    await api(`/api/pasta?r=payments&client=${c.id}&month=${m.month}`, { method: 'DELETE' });
     S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month));
     close(); render(); toast('Pagamento desfeito.');
   }, 'btn ghost'));
@@ -1034,7 +1034,7 @@ async function uploadDoc(c, file, category, refMonth) {
   if (file.size > 4 * 1024 * 1024) throw new Error(`"${file.name}" tem mais de 4 MB. Comprima e tente de novo.`);
   const qs = new URLSearchParams({ client: c.id, category });
   if (refMonth) qs.set('ref_month', refMonth);
-  return api(`/api/files?${qs}`, { method: 'POST', raw: file, headers: { 'x-file-name': encodeURIComponent(file.name) } });
+  return api(`/api/pasta?r=files&${qs}`, { method: 'POST', raw: file, headers: { 'x-file-name': encodeURIComponent(file.name) } });
 }
 
 const FILE_ICON = (f) => (f.mime === 'application/pdf' ? 'PDF' : f.mime.startsWith('image/') ? 'IMG' : /sheet|excel|csv/.test(f.mime) ? 'XLS' : /word/.test(f.mime) ? 'DOC' : 'TXT');
@@ -1058,12 +1058,12 @@ function filesSection(c, category, title, hint, { month = false, group = false }
   const row = (f) => h('div', { class: 'file' },
     h('span', { class: `file-ic ic-${FILE_ICON(f).toLowerCase()}`, 'aria-hidden': 'true' }, FILE_ICON(f)),
     h('div', { class: 'file-main' },
-      h('a', { class: 'file-name', href: `/api/files?id=${f.id}&open=1`, target: '_blank', rel: 'noopener' }, f.name),
+      h('a', { class: 'file-name', href: `/api/pasta?r=files&id=${f.id}&open=1`, target: '_blank', rel: 'noopener' }, f.name),
       h('span', { class: 'muted' }, [f.ref_month && !group ? monthLabel(f.ref_month, true) : null, fileSize(f.size), `enviado em ${fmtDay(partsInTz(f.created_at, S.tz).date)}`].filter(Boolean).join(' · '))),
     h('div', { class: 'file-act' },
-      h('a', { class: 'btn ghost sm', href: `/api/files?id=${f.id}&download=1`, title: 'Baixar' }, 'Baixar'),
+      h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${f.id}&download=1`, title: 'Baixar' }, 'Baixar'),
       confirmButton('Apagar', 'Confirmar', async () => {
-        await api(`/api/files?id=${f.id}`, { method: 'DELETE' });
+        await api(`/api/pasta?r=files&id=${f.id}`, { method: 'DELETE' });
         S.folder.files = S.folder.files.filter((x) => x.id !== f.id); render(); toast('Arquivo apagado.');
       }, 'btn ghost sm danger')));
   let content;

@@ -1,9 +1,9 @@
 // Contrato preenchido de um cliente: GET ?client=  → { html, missing, title }
-import { route, send, query, need } from '../lib/http.js';
-import { requireAdmin } from '../lib/auth.js';
-import { db } from '../lib/db.js';
-import { TIMEZONE } from '../lib/env.js';
-import { renderContract, contractValues, FIELDS } from '../lib/contract.js';
+import { route, send, query, need } from '../http.js';
+import { requireAdmin } from '../auth.js';
+import { db } from '../db.js';
+import { TIMEZONE } from '../env.js';
+import { renderContract, contractValues, FIELDS } from '../contract.js';
 import { loadSettings } from './settings.js';
 
 export default route({

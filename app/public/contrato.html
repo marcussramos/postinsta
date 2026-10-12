@@ -59,7 +59,7 @@ if (id) document.getElementById('back').href = `/#pasta/${encodeURIComponent(id)
 btn.onclick = () => window.print();
 try {
   if (!id) throw Object.assign(new Error('Abra o contrato pela pasta do cliente.'), { status: 400 });
-  const r = await fetch(`/api/contract?client=${encodeURIComponent(id)}`, { credentials: 'same-origin' });
+  const r = await fetch(`/api/pasta?r=contract&client=${encodeURIComponent(id)}`, { credentials: 'same-origin' });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(data.error || `Erro ${r.status}.`), { status: r.status });
   document.title = data.title; // vira o nome do arquivo ao salvar o PDF
