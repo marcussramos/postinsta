@@ -1,6 +1,6 @@
 // Login do painel: uma senha (ADMIN_PASSWORD) e um cookie assinado com HMAC.
 import crypto from 'node:crypto';
-import { env } from './env.js';
+import { env, sessionSecret } from './env.js';
 import { HttpError } from './http.js';
 
 const COOKIE = 'pauta_sess';
@@ -10,14 +10,14 @@ const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
 export function sign(payload) {
   const body = b64url(JSON.stringify(payload));
-  const mac = crypto.createHmac('sha256', env('SESSION_SECRET')).update(body).digest('base64url');
+  const mac = crypto.createHmac('sha256', sessionSecret()).update(body).digest('base64url');
   return `${body}.${mac}`;
 }
 
 export function verify(token) {
   if (!token || !token.includes('.')) return null;
   const [body, mac] = token.split('.');
-  const expected = crypto.createHmac('sha256', env('SESSION_SECRET')).update(body).digest('base64url');
+  const expected = crypto.createHmac('sha256', sessionSecret()).update(body).digest('base64url');
   const a = Buffer.from(mac), b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {

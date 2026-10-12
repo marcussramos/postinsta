@@ -1,7 +1,8 @@
 // Pauta — painel da agência (JavaScript puro, sem build).
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, STATUS_LABEL } from '/shared.js';
 
-const S = { admin: false, tz: 'America/Cuiaba', missing: [], clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '' };
+const S = { admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '' };
+const viewFromHash = () => ({ '#clientes': 'clientes', '#ajustes': 'ajustes' })[location.hash] || 'agenda';
 const root = document.getElementById('app');
 
 boot();
@@ -10,12 +11,12 @@ async function boot() {
   const p = new URLSearchParams(location.search);
   if (p.get('ig')) {
     toast(p.get('msg') || 'Pronto.', p.get('ig') !== 'ok');
-    history.replaceState(null, '', '/#clientes');
+    history.replaceState(null, '', `/${location.hash || '#clientes'}`);
   }
-  S.view = location.hash === '#clientes' ? 'clientes' : 'agenda';
+  S.view = viewFromHash();
   try {
     const s = await api('/api/session');
-    Object.assign(S, { admin: s.admin, tz: s.timezone, missing: s.missing_env || [] });
+    Object.assign(S, { admin: s.admin, tz: s.timezone, setup: s.setup || null });
   } catch { /* mostra o login */ }
   if (!S.admin) return renderLogin();
   await loadAll();
@@ -33,7 +34,7 @@ async function loadAll() {
   render();
 }
 
-window.addEventListener('hashchange', () => { S.view = location.hash === '#clientes' ? 'clientes' : 'agenda'; render(); });
+window.addEventListener('hashchange', () => { S.view = viewFromHash(); render(); });
 
 // Mantém a agenda em dia com as decisões dos clientes: atualiza ao voltar para a aba e a cada minuto.
 async function refresh() {
@@ -74,14 +75,15 @@ function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }), h('span', {}, 'Pauta')),
-    h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('clientes', 'Clientes')),
+    h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('clientes', 'Clientes'), tab('ajustes', 'Ajustes')),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),
     h('button', { class: 'btn ghost sm', onclick: logout, title: 'Sair' }, 'Sair'),
   ));
   const page = h('main', { class: 'page' });
-  if (S.missing.length) page.append(h('div', { class: 'banner' }, h('b', {}, 'Configuração incompleta: '), `faltam as variáveis ${S.missing.join(', ')} na Vercel.`));
-  page.append(...(S.view === 'clientes' ? viewClients() : viewAgenda()));
+  const pend = setupPending();
+  if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
+  page.append(...(S.view === 'clientes' ? viewClients() : S.view === 'ajustes' ? viewSettings() : viewAgenda()));
   root.replaceChildren(top, page);
 }
 
@@ -415,4 +417,53 @@ function openClient(c = null) {
   foot.push(h('button', { class: 'btn primary', onclick: () => saveClient() }, c ? 'Salvar' : 'Criar cliente'));
   const close = drawer(c ? c.name : 'Novo cliente', body, foot);
   name.focus();
+}
+
+
+// ───────────────────────── ajustes (estado da instalação)
+function setupPending() {
+  const st = S.setup; if (!st) return [];
+  const out = [];
+  if (st.missing_env?.length) out.push(`variáveis ${st.missing_env.join(', ')} na Vercel`);
+  if (!st.ig_ready) out.push('app da Meta (Instagram)');
+  if (st.cron_sql && !st.publisher_last_run) out.push('agendador automático');
+  return out;
+}
+
+function viewSettings() {
+  const st = S.setup || {};
+  const ago = st.publisher_last_run ? Math.round((Date.now() - new Date(st.publisher_last_run)) / 60000) : null;
+  const ok = (cond, yes, no) => h('span', { class: cond ? 'ig-ok' : 'ig-warn' }, cond ? `✓ ${yes}` : `• ${no}`);
+  const codeBox = (text, label) => h('div', { style: 'display:grid;gap:8px' },
+    h('pre', { class: 'mono', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, text),
+    h('button', { class: 'btn sm', style: 'justify-self:start', onclick: () => copyText(text, `${label} copiado.`) }, `Copiar ${label}`));
+  return [
+    h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Instalação'), h('h1', {}, 'Ajustes'))),
+    h('div', { class: 'grid-clients' },
+      h('article', { class: 'card' },
+        h('div', { class: 'eyebrow' }, 'Etapa 2 · App no ar'),
+        h('h3', {}, 'Endereço e banco de dados'),
+        ok(!st.missing_env?.length, 'Banco de dados e senha configurados', `Faltam: ${(st.missing_env || []).join(', ')}`),
+        st.app_url ? h('div', { class: 'linkbox' }, h('code', {}, st.app_url), h('button', { class: 'btn sm', onclick: () => copyText(st.app_url, 'Endereço copiado.') }, 'Copiar')) : null),
+      h('article', { class: 'card' },
+        h('div', { class: 'eyebrow' }, 'Etapa 3 · Meta'),
+        h('h3', {}, 'App do Instagram'),
+        ok(st.ig_ready, 'IG_APP_ID e IG_APP_SECRET configurados', 'Falta colocar IG_APP_ID e IG_APP_SECRET na Vercel'),
+        h('span', { class: 'muted', style: 'font-size:14px' }, 'Cole este endereço em "URLs de redirecionamento OAuth" no app da Meta:'),
+        st.redirect_uri ? codeBox(st.redirect_uri, 'endereço') : null,
+        h('span', { class: 'muted', style: 'font-size:14px' }, 'Política de privacidade (para a Meta):'),
+        st.app_url ? codeBox(`${st.app_url}/privacidade`, 'link') : null),
+      h('article', { class: 'card', style: 'grid-column:1/-1' },
+        h('div', { class: 'eyebrow' }, 'Etapa 4 · Agendador'),
+        h('h3', {}, 'Publicação automática a cada 5 minutos'),
+        st.publisher_last_run
+          ? ok(ago <= 15, `Funcionando · última execução há ${ago} min`, `Última execução há ${ago} min — confira o agendador no Supabase`)
+          : ok(false, '', 'Ainda não configurado'),
+        st.cron_sql
+          ? [h('span', { class: 'muted', style: 'font-size:14px' }, 'No Supabase, abra SQL Editor → New query, cole o comando abaixo e clique em Run. Ele já vem com o seu endereço e o código secreto; não precisa mudar nada.'),
+             codeBox(st.cron_sql, 'comando')]
+          : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
+        h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
+    ),
+  ];
 }

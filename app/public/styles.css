@@ -182,8 +182,9 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
   .two { grid-template-columns: 1fr; }
   .preview { grid-template-columns: 96px minmax(0, 1fr); }
   .preview img { width: 96px; }
-  .topbar-in { gap: 10px; }
-  .brand span { display: none; }
+  .topbar-in { gap: 8px 10px; flex-wrap: wrap; padding: 10px 16px; }
+  .tabs { order: 3; width: 100%; }
+  .tab { flex: 1; text-align: center; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .drawer { animation: slide .18s ease-out; }

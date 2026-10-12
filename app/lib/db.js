@@ -49,6 +49,13 @@ export const db = {
     body: JSON.stringify(patch),
   }),
 
+  // Insere ou atualiza pela chave primária.
+  upsert: (table, row) => call(`/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(row),
+  }),
+
   remove: (table, filter) => call(`/rest/v1/${table}?${qs(filter)}`, {
     method: 'DELETE',
     headers: { Prefer: 'return=representation' },

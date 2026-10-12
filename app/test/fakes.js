@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [] };
+  const tables = { clients: [], posts: [], app_state: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail };
   const realFetch = globalThis.fetch;
@@ -10,6 +10,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
   const defaults = {
     clients: () => ({ id: crypto.randomUUID(), approval_token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString(),
       contact_whatsapp: null, contact_email: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
+    app_state: () => ({ updated_at: new Date().toISOString() }),
     posts: () => ({ id: crypto.randomUUID(), status: 'draft', caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
       ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
@@ -66,6 +67,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     }
     if (method === 'POST') {
       const row = { ...defaults[table](), ...JSON.parse(init.body) };
+      if (table === 'app_state') { tables.app_state = rows.filter((r) => r.key !== row.key); tables.app_state.push(row); return json(201, []); }
       rows.push(row); return json(201, [{ ...row }]);
     }
     if (method === 'PATCH') {

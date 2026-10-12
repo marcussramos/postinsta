@@ -37,24 +37,18 @@ São 4 etapas. Reserve umas 2 horas para a primeira vez (sem contar a análise d
    - **Root Directory:** clique em Edit e escolha `app`
    - **Framework Preset:** `Other`
    - Build Command e Output Directory: deixe vazios
-4. Abra **Environment Variables** e adicione:
+4. Abra **Environment Variables** e adicione só estas 3:
 
 | Nome | Valor |
 |---|---|
-| `APP_URL` | o endereço do app, ex.: `https://pauta-marcus.vercel.app`. Na primeira vez você ainda não sabe: coloque qualquer valor, publique e depois corrija |
-| `ADMIN_PASSWORD` | a senha para entrar no painel. Use uma senha forte |
-| `SESSION_SECRET` | um texto aleatório de 40 caracteres ou mais |
-| `CRON_SECRET` | outro texto aleatório de 40 caracteres ou mais |
-| `SUPABASE_URL` | da Etapa 1 |
-| `SUPABASE_SERVICE_KEY` | da Etapa 1 |
-| `IG_APP_ID` | da Etapa 3 (por enquanto, coloque `pendente`) |
-| `IG_APP_SECRET` | da Etapa 3 (por enquanto, coloque `pendente`) |
-| `APP_TIMEZONE` | `America/Cuiaba` |
+| `ADMIN_PASSWORD` | a senha para entrar no painel (use uma senha forte) |
+| `SUPABASE_URL` | a Project URL da Etapa 1 |
+| `SUPABASE_SERVICE_KEY` | a chave service_role da Etapa 1 |
 
-   Para gerar os textos aleatórios, use um gerador de senhas (do navegador ou do seu gerenciador de senhas), com 40 caracteres ou mais.
+   O resto o app descobre sozinho: o endereço vem da própria Vercel, e os códigos secretos internos são gerados a partir da chave do Supabase. `IG_APP_ID` e `IG_APP_SECRET` entram na Etapa 3.
 
-5. Clique em **Deploy**. Quando terminar, copie o endereço (`https://...vercel.app`), corrija o `APP_URL` em **Settings → Environment Variables** e faça **Redeploy**.
-6. Abra o endereço e entre com o `ADMIN_PASSWORD`. Se faltar alguma variável, o painel mostra um aviso amarelo dizendo qual é.
+5. Clique em **Deploy**, espere cerca de 1 minuto e abra o endereço que a Vercel mostrar.
+6. Entre com o `ADMIN_PASSWORD`. A aba **Ajustes** mostra o que já está pronto e o que falta.
 
 ---
 
@@ -71,12 +65,9 @@ Os nomes dos menus da Meta mudam com frequência. Se algum não bater exatamente
 ### 3.2 Configurar o login do Instagram
 1. No app, abra o caso de uso do Instagram e vá em **Configuração da API com login do Instagram**.
 2. Anote o **ID do app do Instagram** e a **Chave secreta do app do Instagram**. Eles vão em `IG_APP_ID` e `IG_APP_SECRET` na Vercel. Atenção: não são o ID do app do Facebook, que fica no topo da página.
-3. Em **Configurar o login empresarial do Instagram → URLs de redirecionamento OAuth**, adicione:
-   ```
-   https://SEU-APP.vercel.app/api/ig/callback
-   ```
+3. Em **Configurar o login empresarial do Instagram → URLs de redirecionamento OAuth**, cole o endereço que aparece na aba **Ajustes** do painel. Ele termina em `/api/ig/callback`.
 4. Confira se as permissões `instagram_business_basic` e `instagram_business_content_publish` estão no caso de uso.
-5. Volte na Vercel, atualize `IG_APP_ID` e `IG_APP_SECRET` e faça **Redeploy**.
+5. Na Vercel, em **Settings → Environment Variables**, adicione `IG_APP_ID` e `IG_APP_SECRET` e depois faça **Deployments → ⋯ → Redeploy**.
 
 ### 3.3 Liberar os perfis dos clientes (modo de desenvolvimento)
 Enquanto a Meta não aprova o app, ele só publica em perfis cadastrados como **testadores**:
@@ -93,7 +84,7 @@ Isso já atende seus 10 clientes enquanto a análise da Meta (3.4) não sai.
 ### 3.4 Pedir a aprovação da Meta (para funcionar com qualquer perfil)
 1. **Verificação da empresa:** em **business.facebook.com → Configurações → Central de segurança → Verificação da empresa**, envie os dados do CNPJ e um comprovante.
 2. Em **Configurações do app → Básico**, preencha:
-   - **URL da Política de Privacidade:** `https://SEU-APP.vercel.app/privacidade`
+   - **URL da Política de Privacidade:** o link que aparece na aba **Ajustes** (termina em `/privacidade`)
      (antes, troque os campos entre colchetes no arquivo `public/privacidade.html` pelos seus dados)
    - **Instruções de exclusão de dados:** a mesma URL
    - Ícone e categoria do app
@@ -106,13 +97,9 @@ Isso já atende seus 10 clientes enquanto a análise da Meta (3.4) não sai.
 
 ## Etapa 4 — Agendador (publicação automática a cada 5 minutos)
 
-1. No Supabase, abra o **SQL Editor** e cole o bloco do final do `schema.sql` que começa em `create extension if not exists pg_cron;`.
-2. Tire os `--` do começo das linhas e troque:
-   - `SEU-APP.vercel.app` pelo endereço do app
-   - `SEU_CRON_SECRET` pelo mesmo valor do `CRON_SECRET` da Vercel
-3. Clique em **Run**. Para conferir, rode `select * from cron.job;`, que deve listar `pauta-publicador`.
-
-Como reserva, a Vercel também chama o publicador uma vez por dia (configurado no `vercel.json`).
+1. No painel do Pauta, abra a aba **Ajustes** e clique em **Copiar comando**. Ele já vem com o seu endereço e o código secreto.
+2. No Supabase, abra **SQL Editor → New query**, cole o comando e clique em **Run**.
+3. Espere uns 5 minutos e clique em **Verificar de novo** na aba Ajustes. Deve aparecer **"✓ Funcionando"**.
 
 ---
 

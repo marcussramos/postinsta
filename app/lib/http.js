@@ -59,7 +59,8 @@ export function route(methods) {
     } catch (err) {
       const status = err.status || 500;
       if (status >= 500) console.error(err);
-      if (!res.writableEnded) send(res, status, { error: status >= 500 ? 'Erro interno. Tente de novo em instantes.' : err.message });
+      // erros de configuração (expose) mostram a mensagem real: dizem o que falta ajustar
+      if (!res.writableEnded) send(res, status, { error: status >= 500 && !err.expose ? 'Erro interno. Tente de novo em instantes.' : err.message });
     }
   };
 }

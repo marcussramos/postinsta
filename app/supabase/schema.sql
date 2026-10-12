@@ -66,23 +66,14 @@ insert into storage.buckets (id, name, public)
 values ('posts', 'posts', true)
 on conflict (id) do update set public = true;
 
--- ───────────── AGENDADOR (rode separado, depois de publicar o app na Vercel)
--- Chama o publicador a cada 5 minutos. Troque:
---   SEU-APP.vercel.app  → o endereço do seu app
---   SEU_CRON_SECRET     → o mesmo valor da variável CRON_SECRET na Vercel
---
--- create extension if not exists pg_cron;
--- create extension if not exists pg_net;
--- select cron.schedule(
---   'pauta-publicador',
---   '*/5 * * * *',
---   $$ select net.http_post(
---        url     := 'https://SEU-APP.vercel.app/api/cron',
---        headers := jsonb_build_object('Authorization', 'Bearer SEU_CRON_SECRET', 'Content-Type', 'application/json'),
---        body    := '{}'::jsonb,
---        timeout_milliseconds := 55000
---      ) $$
--- );
---
--- Para conferir:  select * from cron.job;
--- Para remover:   select cron.unschedule('pauta-publicador');
+-- ───────────── Estado do sistema (última execução do agendador etc.)
+create table if not exists app_state (
+  key        text primary key,
+  value      jsonb,
+  updated_at timestamptz default now()
+);
+alter table app_state enable row level security;
+
+-- ───────────── AGENDADOR
+-- Não precisa editar nada aqui: depois de publicar o app, entre no painel,
+-- abra a aba "Ajustes" e copie o comando pronto (já vem com o seu endereço e o código secreto).

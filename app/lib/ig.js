@@ -1,6 +1,6 @@
 // Instagram API com Login do Instagram (sem precisar de Página do Facebook).
 // Documentação: https://developers.facebook.com/docs/instagram-platform/content-publishing
-import { env, IG_API_VERSION } from './env.js';
+import { env, appUrl, IG_API_VERSION } from './env.js';
 
 const SCOPES = ['instagram_business_basic', 'instagram_business_content_publish'];
 const graph = () => `https://graph.instagram.com/${IG_API_VERSION()}`;
@@ -30,7 +30,7 @@ async function igFetch(url, init) {
 
 const form = (obj) => new URLSearchParams(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== ''));
 
-export const redirectUri = () => `${env('APP_URL')}/api/ig/callback`;
+export const redirectUri = () => `${appUrl()}/api/ig/callback`;
 
 export function authorizeUrl(state) {
   const u = new URL('https://www.instagram.com/oauth/authorize');

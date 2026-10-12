@@ -2,7 +2,7 @@
 import { route, send, readJson, query, need } from '../lib/http.js';
 import { requireAdmin, randomToken } from '../lib/auth.js';
 import { db, storage } from '../lib/db.js';
-import { env } from '../lib/env.js';
+import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
 
 function cleanClient(input) {
@@ -28,7 +28,7 @@ export default route({
   GET: async (req, res) => {
     requireAdmin(req);
     const rows = await db.select('clients', { select: '*', order: 'name.asc' });
-    send(res, 200, rows.map((c) => publicClient(c, env('APP_URL'))));
+    send(res, 200, rows.map((c) => publicClient(c, appUrl())));
   },
 
   POST: async (req, res) => {
@@ -36,7 +36,7 @@ export default route({
     const data = cleanClient(await readJson(req));
     need(data.name, 400, 'Dê um nome ao cliente.');
     const row = await db.insert('clients', data);
-    send(res, 201, publicClient(row, env('APP_URL')));
+    send(res, 201, publicClient(row, appUrl()));
   },
 
   PATCH: async (req, res) => {
@@ -49,7 +49,7 @@ export default route({
     if (body.disconnect_instagram) Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null });
     const [row] = await db.update('clients', { id: `eq.${id}` }, patch);
     need(row, 404, 'Cliente não encontrado.');
-    send(res, 200, publicClient(row, env('APP_URL')));
+    send(res, 200, publicClient(row, appUrl()));
   },
 
   DELETE: async (req, res) => {

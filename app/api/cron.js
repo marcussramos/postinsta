@@ -1,12 +1,12 @@
 // Endpoint do publicador. Protegido pelo CRON_SECRET.
 import crypto from 'node:crypto';
 import { route, send, need } from '../lib/http.js';
-import { env } from '../lib/env.js';
+import { cronSecret } from '../lib/env.js';
 import { runPublisher } from '../lib/publisher.js';
 
 function authorized(req) {
   const given = Buffer.from(String(req.headers.authorization || ''));
-  const expected = Buffer.from(`Bearer ${env('CRON_SECRET')}`);
+  const expected = Buffer.from(`Bearer ${cronSecret()}`);
   return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }
 

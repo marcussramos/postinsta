@@ -68,6 +68,14 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
       await handleError(claimed, e, log);
     }
   }
+  // Registra que o agendador rodou (a aba Ajustes do painel mostra "última execução").
+  try {
+    await db.upsert('app_state', {
+      key: 'publisher',
+      value: { at: new Date(now()).toISOString(), published: log.published.length, failed: log.failed.length },
+      updated_at: new Date(now()).toISOString(),
+    });
+  } catch { /* tabela ainda não criada: tudo bem, é só informativo */ }
   return log;
 }
 
