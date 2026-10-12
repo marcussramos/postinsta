@@ -8,3 +8,8 @@ Artes do @frasesdefunkwow, hospedadas aqui para o Metricool agendar no Instagram
 - `render.py` — gera um card: `python render.py "texto|destaque" posts/arquivo.jpg "TAG" 168`
 
 O repositório precisa continuar **público** para o Metricool conseguir baixar as imagens.
+
+## Pauta (pasta `app/`)
+
+Sistema próprio de agendamento: painel da agência, link de aprovação por cliente e publicação automática no Instagram pela API oficial da Meta.
+Guia de instalação: [`app/SETUP.md`](app/SETUP.md).

@@ -1,0 +1,123 @@
+// O publicador: roda a cada 5 minutos (chamado pelo agendador do Supabase).
+// 1) renova tokens do Instagram perto de vencer
+// 2) termina publicações em andamento
+// 3) publica os posts aprovados cujo horário chegou
+import { db } from './db.js';
+import * as ig from './ig.js';
+
+const MAX_ATTEMPTS = 3;
+const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
+const REFRESH_BEFORE_MS = 10 * 24 * 3600 * 1000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), wait = sleep } = {}) {
+  const started = now();
+  const timeLeft = () => budgetMs - (now() - started);
+  const log = { refreshed: [], published: [], failed: [], retrying: [], waiting: [] };
+
+  const clients = await db.select('clients', { select: 'id,name,ig_user_id,ig_username,ig_token,ig_token_expires_at,ig_connected_at', ig_token: 'not.is.null' });
+  const byId = new Map(clients.map((c) => [c.id, c]));
+
+  // 1) Tokens: valem 60 dias; renovamos quando faltam menos de 10.
+  for (const c of clients) {
+    const exp = new Date(c.ig_token_expires_at || 0).getTime();
+    const age = now() - new Date(c.ig_connected_at || 0).getTime();
+    if (exp - now() > REFRESH_BEFORE_MS || age < 24 * 3600 * 1000) continue;
+    try {
+      const t = await ig.refreshToken(c.ig_token);
+      await db.update('clients', { id: `eq.${c.id}` }, t);
+      Object.assign(c, t);
+      log.refreshed.push(c.name);
+    } catch (e) {
+      log.failed.push({ client: c.name, error: `Renovação do token: ${e.message}` });
+    }
+  }
+
+  // 2) Publicações já iniciadas (container criado, esperando processar).
+  const inFlight = await db.select('posts', { select: '*', status: 'eq.publishing', order: 'scheduled_at.asc', limit: 20 });
+  for (const p of inFlight) {
+    if (timeLeft() < 8000) break;
+    await finish(p, byId.get(p.client_id), log, now);
+  }
+
+  // 3) Aprovados com horário vencido.
+  const due = await db.select('posts', {
+    select: '*', status: 'eq.approved', scheduled_at: `lte.${new Date(now()).toISOString()}`,
+    order: 'scheduled_at.asc', limit: 15,
+  });
+  for (const p of due) {
+    if (timeLeft() < 10000) break;
+    const c = byId.get(p.client_id);
+    // Trava: só segue se o post ainda estiver "approved" (evita publicar em dobro).
+    const [claimed] = await db.update('posts', { id: `eq.${p.id}`, status: 'eq.approved' },
+      { status: 'publishing', attempts: (p.attempts || 0) + 1, last_error: null });
+    if (!claimed) continue;
+    if (!c?.ig_token) {
+      await fail(claimed, 'O Instagram deste cliente não está conectado.', log, true);
+      continue;
+    }
+    try {
+      const containerId = await ig.createContainer(c.ig_user_id, c.ig_token, {
+        image_url: claimed.image_url, caption: claimed.caption, alt_text: claimed.alt_text,
+      });
+      await db.update('posts', { id: `eq.${claimed.id}` }, { ig_container_id: containerId });
+      claimed.ig_container_id = containerId;
+      await wait(3000); // imagens costumam processar em poucos segundos
+      await finish(claimed, c, log, now);
+    } catch (e) {
+      await handleError(claimed, e, log);
+    }
+  }
+  return log;
+}
+
+async function finish(p, c, log, now) {
+  if (!c?.ig_token) return fail(p, 'O Instagram deste cliente não está conectado.', log, true);
+  if (!p.ig_container_id) return backToQueue(p, 'Publicação interrompida; tentando de novo.', log);
+  try {
+    const st = await ig.containerStatus(p.ig_container_id, c.ig_token);
+    if (st.code === 'IN_PROGRESS') {
+      if (now() - new Date(p.updated_at || p.scheduled_at).getTime() > STUCK_MS) {
+        return handleError(p, new ig.IgError('O Instagram demorou demais para processar a imagem.', { transient: true }), log);
+      }
+      log.waiting.push(p.id);
+      return;
+    }
+    if (st.code === 'ERROR' || st.code === 'EXPIRED') {
+      return handleError(p, new ig.IgError(`O Instagram recusou a imagem (${st.detail || st.code}).`, { transient: st.code === 'EXPIRED' }), log);
+    }
+    if (st.code === 'PUBLISHED') { // já saiu numa rodada anterior que caiu antes de registrar
+      await db.update('posts', { id: `eq.${p.id}` }, { status: 'published', published_at: new Date().toISOString(), last_error: null });
+      log.published.push({ id: p.id, client: c.name, permalink: null });
+      return;
+    }
+    const mediaId = await ig.publishContainer(c.ig_user_id, c.ig_token, p.ig_container_id);
+    const link = await ig.permalink(mediaId, c.ig_token);
+    await db.update('posts', { id: `eq.${p.id}` }, {
+      status: 'published', ig_media_id: mediaId, ig_permalink: link, published_at: new Date().toISOString(), last_error: null,
+    });
+    log.published.push({ id: p.id, client: c.name, permalink: link });
+  } catch (e) {
+    await handleError(p, e, log);
+  }
+}
+
+async function handleError(p, e, log) {
+  const attempts = p.attempts || 1;
+  if (e.transient && attempts < MAX_ATTEMPTS) return backToQueue(p, e.message, log);
+  return fail(p, e.message, log);
+}
+
+async function backToQueue(p, message, log) {
+  await db.update('posts', { id: `eq.${p.id}` }, { status: 'approved', ig_container_id: null, last_error: message });
+  log.retrying.push({ id: p.id, error: message });
+}
+
+async function fail(p, message, log, keepTrying = false) {
+  // Sem Instagram conectado: deixa aprovado para sair assim que reconectarem.
+  const patch = keepTrying && (p.attempts || 1) < MAX_ATTEMPTS
+    ? { status: 'approved', last_error: message }
+    : { status: 'failed', last_error: message };
+  await db.update('posts', { id: `eq.${p.id}` }, patch);
+  log.failed.push({ id: p.id, error: message });
+}

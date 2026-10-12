@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aprovação de posts</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  /* Página do cliente: uma coluna na largura do celular, cada post como aparece no feed. */
+  .ap { max-width: 520px; margin: 0 auto; padding: calc(28px + env(safe-area-inset-top, 0px)) 16px calc(64px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 22px; }
+  .ap-head h1 { font-size: 28px; margin: 4px 0 8px; }
+  .ap-head p { margin: 0; color: var(--muted); }
+  .count { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .post { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .ig { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-weight: 700; font-size: 14px; }
+  .av { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-size: 13px; flex: none; text-transform: uppercase; }
+  .post img { display: block; width: 100%; height: auto; background: var(--surface-2); }
+  .cap { padding: 12px 14px 4px; font-size: 14.5px; white-space: pre-line; overflow-wrap: anywhere; }
+  .cap.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .more { border: 0; background: none; color: var(--muted); padding: 0 14px; cursor: pointer; font-size: 14px; }
+  .when { padding: 8px 14px 14px; }
+  .decide { border-top: 1px solid var(--line); padding: 14px; display: grid; gap: 12px; }
+  .decide .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .decide .btn { padding: 12px; font-size: 15.5px; }
+  .done { display: grid; gap: 4px; }
+  .done b { font-size: 16px; }
+  .ok-txt { color: var(--s-ok); }
+  .ch-txt { color: var(--s-change); }
+  .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 600; justify-self: start; }
+  .section-title { margin-top: 8px; }
+  .state { text-align: center; padding: 60px 16px; display: grid; gap: 10px; }
+</style>
+</head>
+<body>
+<main class="ap" id="ap">
+  <div class="state"><p class="muted">Carregando os posts…</p></div>
+</main>
+<script type="module" src="/aprovar.js"></script>
+</body>
+</html>
