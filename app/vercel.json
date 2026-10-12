@@ -2,23 +2,70 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "functions": {
-    "api/cron.js": { "maxDuration": 60 },
-    "api/upload.js": { "maxDuration": 30 },
-    "api/ai/caption.js": { "maxDuration": 60 },
-    "api/pasta.js": { "maxDuration": 60 }
+    "api/cron.js": {
+      "maxDuration": 60
+    },
+    "api/upload.js": {
+      "maxDuration": 30
+    },
+    "api/ai/caption.js": {
+      "maxDuration": 60
+    },
+    "api/pasta.js": {
+      "maxDuration": 60
+    },
+    "api/page.js": {
+      "includeFiles": "pages/*.html"
+    }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "DENY" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
       ]
     },
     {
       "source": "/(aprovar|relatorio|contrato|cliente|historico|proposta)",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/aprovar",
+      "destination": "/api/page?p=aprovar"
+    },
+    {
+      "source": "/cliente",
+      "destination": "/api/page?p=cliente"
+    },
+    {
+      "source": "/relatorio",
+      "destination": "/api/page?p=relatorio"
+    },
+    {
+      "source": "/proposta",
+      "destination": "/api/page?p=proposta"
+    },
+    {
+      "source": "/historico",
+      "destination": "/api/page?p=historico"
     }
   ]
 }
