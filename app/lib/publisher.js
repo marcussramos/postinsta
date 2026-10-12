@@ -61,7 +61,8 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
       const containerId = await ig.createPostContainer(c.ig_user_id, c.ig_token, claimed, { wait });
       await db.update('posts', { id: `eq.${claimed.id}` }, { ig_container_id: containerId });
       claimed.ig_container_id = containerId;
-      await wait((claimed.media_type || 'IMAGE') === 'REELS' ? 8000 : 3000); // vídeo demora mais; se não ficar pronto, termina na próxima rodada
+      const isVideo = claimed.media_type === 'REELS' || (claimed.media || []).some((m) => m.kind === 'video');
+      await wait(isVideo ? 8000 : 3000); // vídeo demora mais; se não ficar pronto, termina na próxima rodada
       await finish(claimed, c, log, now);
     } catch (e) {
       await handleError(claimed, e, log);
@@ -87,7 +88,7 @@ async function finish(p, c, log, now) {
   try {
     const st = await ig.containerStatus(p.ig_container_id, c.ig_token);
     if (st.code === 'IN_PROGRESS') {
-      const limit = p.media_type === 'REELS' ? STUCK_MS * 2 : STUCK_MS; // vídeo pode levar mais tempo
+      const limit = (p.media || []).some((m) => m.kind === 'video') ? STUCK_MS * 2 : STUCK_MS; // vídeo pode levar mais tempo
       if (now() - new Date(p.updated_at || p.scheduled_at).getTime() > limit) {
         return handleError(p, new ig.IgError(p.media_type === 'REELS' ? 'O Instagram demorou demais para processar o vídeo.' : 'O Instagram demorou demais para processar a imagem.', { transient: true }), log);
       }
@@ -95,7 +96,7 @@ async function finish(p, c, log, now) {
       return;
     }
     if (st.code === 'ERROR' || st.code === 'EXPIRED') {
-      const what = p.media_type === 'REELS' ? 'o vídeo (confira: MP4/MOV, H.264, 3 s a 15 min, até 50 MB)' : p.media_type === 'CAROUSEL' ? 'o carrossel' : 'a imagem';
+      const what = p.media_type === 'STORY' ? 'o Story (use 9:16; vídeo até 60 s)' : p.media_type === 'REELS' ? 'o vídeo (confira: MP4/MOV, H.264, 3 s a 15 min, até 50 MB)' : p.media_type === 'CAROUSEL' ? 'o carrossel' : 'a imagem';
       return handleError(p, new ig.IgError(`O Instagram recusou ${what} (${st.detail || st.code}).`, { transient: st.code === 'EXPIRED' }), log);
     }
     if (st.code === 'PUBLISHED') { // já saiu numa rodada anterior que caiu antes de registrar

@@ -108,6 +108,10 @@ export async function createPostContainer(igUserId, token, post, { wait = (ms) =
   const type = post.media_type || 'IMAGE';
   if (type === 'IMAGE') return createContainer(igUserId, token, { image_url: post.image_url, caption: post.caption, alt_text: post.alt_text });
   const create = (fields) => igFetch(`${graph()}/${igUserId}/media`, { method: 'POST', body: form({ ...fields, access_token: token }) }).then((r) => r.id);
+  if (type === 'STORY') { // Stories não têm legenda; vídeo ou imagem em 9:16
+    const video = (post.media || []).find((m) => m.kind === 'video');
+    return create(video ? { media_type: 'STORIES', video_url: video.url } : { media_type: 'STORIES', image_url: post.image_url });
+  }
   if (type === 'REELS') {
     const video = (post.media || []).find((m) => m.kind === 'video');
     if (!video) throw new IgError('O Reels está sem vídeo.', { transient: false });

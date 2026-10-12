@@ -110,6 +110,12 @@ async function decide(p, decision, feedback, box) {
 // Foto, carrossel (deslizar) ou Reels (vídeo com capa)
 function media(p) {
   const type = p.media_type || 'IMAGE';
+  if (type === 'STORY') {
+    const v = (p.media || []).find((m) => m.kind === 'video');
+    return h('div', { class: 'ap-reel' },
+      v ? h('video', { src: v.url, poster: p.image_url || null, controls: true, playsinline: true, preload: 'none' }) : h('img', { src: p.image_url, alt: 'Story' }),
+      h('span', { class: 'ap-badge' }, '◷ Story · 24 h'));
+  }
   if (type === 'REELS') {
     const v = (p.media || []).find((m) => m.kind === 'video');
     return h('div', { class: 'ap-reel' },
@@ -130,7 +136,7 @@ function media(p) {
 
 // Prévia da grade do perfil: os próximos posts entram na frente dos já publicados.
 function feedPreview() {
-  const upcoming = D.posts.filter((p) => ['pending_approval', 'approved', 'changes_requested'].includes(p.status) && p.image_url)
+  const upcoming = D.posts.filter((p) => ['pending_approval', 'approved', 'changes_requested'].includes(p.status) && p.image_url && p.media_type !== 'STORY')
     .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
   if (!upcoming.length) return null;
   const feed = D.feed || [];

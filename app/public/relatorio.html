@@ -104,6 +104,8 @@
 </div></div>
 <main class="wrap" id="app"><p class="msg">Carregando o relatório…</p></main>
 <script type="module">
+// replaceChildren ignorando null/false (evita aparecer o texto "null" na tela)
+if (!Element.prototype.__mcSafe) { const rc = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...k) { return rc.apply(this, k.flat().filter((x) => x != null && x !== false)); }; Element.prototype.__mcSafe = true; }
 const $app = document.getElementById('app');
 const t = new URLSearchParams(location.search).get('t');
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];

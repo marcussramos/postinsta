@@ -26,7 +26,7 @@ const NEEDS_REAPPROVAL = ['pending_approval', 'approved', 'changes_requested', '
 
 export const FIELDS = ['title', 'notes', 'caption', 'alt_text', 'scheduled_at', 'image_url', 'image_path', 'media_type', 'media'];
 export const CONTENT_FIELDS = ['caption', 'image_url', 'alt_text', 'media_type', 'media'];
-export const MEDIA_TYPES = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };
+export const MEDIA_TYPES = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels', STORY: 'Story' };
 
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -69,6 +69,7 @@ export function readyProblem(post) {
   const type = post.media_type || 'IMAGE';
   if (type === 'CAROUSEL' && (post.media || []).filter((m) => m.kind === 'image').length < 2) return 'O carrossel precisa de pelo menos 2 imagens.';
   if (type === 'REELS' && !(post.media || []).some((m) => m.kind === 'video')) return 'Falta o vídeo do Reels.';
+  if (type === 'STORY') return post.image_url || (post.media || []).length ? (post.scheduled_at ? null : 'Falta a data e a hora de publicação.') : 'Falta a imagem ou o vídeo do Story.';
   if (!post.image_url) return type === 'REELS' ? 'Falta a capa do Reels.' : 'Falta a imagem do post.';
   if (!post.scheduled_at) return 'Falta a data e a hora de publicação.';
   return null;

@@ -148,3 +148,10 @@ test('melhores horários: ranking pelo desempenho relativo; poucos posts → sug
   const cached = (await call(`/api/pasta?r=besttime&client=${c.id}`)).data;
   assert.equal(cached.at, bt.at, 'usa o cache do dia');
 });
+
+test('lote: marcar parcelas antigas como pagas de uma vez', async () => {
+  const x = (await call('/api/clients', { method: 'POST', body: { name: 'Antigo' } })).data;
+  const r = (await call('/api/pasta?r=payments', { method: 'PUT', body: { client_id: x.id, status: 'paid', items: [{ ref_month: '2025-01', installment: 1, amount_cents: 100 }, { ref_month: '2025-02', installment: 2 }, { ref_month: 'xx' }] } })).data;
+  assert.equal(r.length, 2);
+  assert.equal((await call(`/api/pasta?r=payments&client=${x.id}`)).data.length, 2);
+});

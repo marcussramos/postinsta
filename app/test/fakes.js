@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [] };
+  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail,
     // métricas simuladas: feed extra, métricas por post e totais da conta
@@ -19,6 +19,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     client_files: () => ({ id: crypto.randomUUID(), ref_month: null, created_at: new Date().toISOString() }),
     reports: () => ({ id: crypto.randomUUID(), note: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     ig_daily: () => ({}),
+    proposals: () => ({ id: crypto.randomUUID(), status: 'draft', accepted: null, accepted_at: null, client_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     post_events: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
     users: () => ({ id: crypto.randomUUID(), active: true, created_at: new Date().toISOString() }),
     requests: () => ({ id: crypto.randomUUID(), status: 'open', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
@@ -90,6 +91,10 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       if (order) { const [col, dir] = order.split('.'); out = [...out].sort((a, b) => (a[col] == null) - (b[col] == null) || cmp(a[col], b[col]) * (dir === 'desc' ? -1 : 1)); }
       if (sp.get('limit')) out = out.slice(0, +sp.get('limit'));
       return json(200, out.map((r) => ({ ...r })));
+    }
+    if (method === 'POST' && Array.isArray(JSON.parse(init.body))) { // inserção/upsert em lote
+      for (const one of JSON.parse(init.body)) await supa(url, { ...init, body: JSON.stringify(one) });
+      return json(201, []);
     }
     if (method === 'POST') {
       const row = { ...defaults[table](), ...JSON.parse(init.body) };

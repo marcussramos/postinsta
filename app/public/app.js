@@ -2,7 +2,7 @@
 import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
-const VIEWS = ['agenda', 'calendario', 'fluxo', 'clientes', 'ajustes'];
+const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'propostas', 'ajustes'];
 const S = {
   admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '',
   payments: [], folderId: null, folder: { id: null, files: [], preview: null, loading: false, error: null, tab: 'contract' }, settings: undefined,
@@ -13,7 +13,7 @@ function savePref(key, value) { try { localStorage.setItem(key, value); } catch 
 function viewFromHash() {
   const v = location.hash.slice(1);
   if (v.startsWith('pasta/')) { S.folderId = v.slice(6); return 'pasta'; }
-  return VIEWS.includes(v) ? v : 'agenda';
+  return VIEWS.includes(v) ? v : 'inicio';
 }
 const root = document.getElementById('app');
 const sinceISO = () => new Date(Date.now() - 7 * 86400e3).toISOString();
@@ -32,7 +32,7 @@ async function boot() {
     Object.assign(S, { admin: s.admin, staff: s.staff ?? s.admin, role: s.role || (s.admin ? 'admin' : null), userName: s.name, tz: s.timezone, setup: s.setup || null });
   } catch { /* mostra o login */ }
   if (!S.staff) return renderLogin();
-  if (S.role !== 'admin' && S.view === 'ajustes') { S.view = 'agenda'; history.replaceState(null, '', '#agenda'); }
+  if (S.role !== 'admin' && ['ajustes', 'propostas'].includes(S.view)) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
   await loadAll();
 }
 
@@ -73,6 +73,7 @@ async function loadExtras() {
     api('/api/pasta?r=requests&open=1').catch(() => null),
   ]);
   S.deliv = deliv || {}; S.requests = reqs || [];
+  if (S.role === 'admin') S.proposals = await api('/api/pasta?r=proposals').catch(() => null);
 }
 
 // ───────────────────────── login
@@ -98,23 +99,23 @@ function renderLogin() {
   pw.focus();
 }
 
-const brand = () => h('div', { class: 'brand', 'aria-label': 'MC DIGITAL' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'MC'), h('span', {}, 'DIGITAL'));
+const brand = () => h('a', { class: 'brand', href: '#inicio', 'aria-label': 'MC DIGITAL — Início', title: 'Início' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'MC'), h('span', {}, 'DIGITAL'));
 
 // ───────────────────────── estrutura
 function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
-    h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
+    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
   const page = h('main', { class: `page${S.view === 'fluxo' ? ' wide' : ''}` });
-  if (S.view === 'ajustes' && S.role !== 'admin') S.view = 'agenda';
+  if (['ajustes', 'propostas'].includes(S.view) && S.role !== 'admin') S.view = 'inicio';
   const pend = S.role === 'admin' ? setupPending() : [];
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
-  const views = { clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder };
+  const views = { inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals };
   const main = views[S.view]().filter(Boolean);
   if (S.view === 'agenda' && S.clients.length) main.splice(1, 0, ...[approvalReminders(), requestsInbox()].filter(Boolean));
   page.append(...main);
@@ -147,12 +148,12 @@ function deliveryLine(cid, { big = false } = {}) {
         h('span', { class: 'muted' }, ` · ${x.published} no ar`)),
       x.quota ? h('div', { class: 'dl-bar' }, h('span', { style: `width:${pct}%` })) : null);
   };
-  const a = part(d.posts, 'posts'), b = part(d.reels, 'Reels');
-  if (!a && !b) return null;
+  const a = part(d.posts, 'posts'), b = part(d.reels, 'Reels'), st = d.stories ? part(d.stories, 'Stories') : null;
+  if (!a && !b && !st) return null;
   return h('div', { class: `deliv${big ? ' big' : ''}`, title: 'Programados/publicados no mês contra a cota do contrato' },
-    h('span', { class: 'eyebrow' }, `Entregas · ${monthLabel(d.month, true)}`), a, b);
+    h('span', { class: 'eyebrow' }, `Entregas · ${monthLabel(d.month, true)}`), a, b, st);
 }
-const typeBadge = (p) => (p.media_type === 'REELS' ? h('span', { class: 'type-badge' }, '▶ Reels') : p.media_type === 'CAROUSEL' ? h('span', { class: 'type-badge' }, `❐ ${(p.media || []).length || ''}`.trim()) : null);
+const typeBadge = (p) => (p.media_type === 'STORY' ? h('span', { class: 'type-badge story' }, '◷ Story') : p.media_type === 'REELS' ? h('span', { class: 'type-badge' }, '▶ Reels') : p.media_type === 'CAROUSEL' ? h('span', { class: 'type-badge' }, `❐ ${(p.media || []).length || ''}`.trim()) : null);
 const thumb = (p, cls = 'thumb') => p.image_url
   ? h('img', { class: cls, src: p.image_url, alt: '', loading: 'lazy' })
   : h('span', { class: `${cls} thumb-empty`, 'aria-hidden': 'true' }, p.status === 'idea' ? '💡' : '🖼');
@@ -291,7 +292,7 @@ function viewCalendar() {
               ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`,
                 onclick: () => (i === 3 && list.length > 4 ? (S.cal.day = d, render()) : openPost(p)) },
                 p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
-                h('span', { class: 'cal-tile-time mono' }, `${p.media_type === 'REELS' ? '▶ ' : p.media_type === 'CAROUSEL' ? '❐ ' : ''}${fmtTime(p.scheduled_at, S.tz)}`),
+                h('span', { class: 'cal-tile-time mono' }, `${{ REELS: '▶ ', CAROUSEL: '❐ ', STORY: '◷ ' }[p.media_type] || ''}${fmtTime(p.scheduled_at, S.tz)}`),
                 h('span', { class: 'cal-tile-dot', 'aria-hidden': 'true' }),
                 i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null)))
           : h('div', { class: 'cal-list' },
@@ -435,7 +436,7 @@ function openPost(post = null, opts = {}) {
   let mtype = post?.media_type || 'IMAGE';
   let mediaDirty = false;
   let items = mtype === 'CAROUSEL' ? (post.media || []).filter((m) => m.kind === 'image').map((m) => ({ url: m.url, path: m.path })) : [];
-  let video = mtype === 'REELS' ? ((post.media || []).find((m) => m.kind === 'video') || null) : null; // { url, path } ou { file, url, duration }
+  let video = ['REELS', 'STORY'].includes(mtype) ? ((post.media || []).find((m) => m.kind === 'video') || null) : null; // { url, path } ou { file, url, duration }
   let coverT = 1;
   const fileIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => fileIn.files[0] && takeFile(fileIn.files[0]) });
   const multiIn = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: () => addItems([...multiIn.files]) });
@@ -444,8 +445,8 @@ function openPost(post = null, opts = {}) {
   const typeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Formato do post' });
   const drawSeg = () => typeSeg.replaceChildren(...Object.entries(MEDIA_LABEL).map(([k, l]) => h('button', {
     type: 'button', class: 'seg-btn', 'aria-pressed': String(mtype === k), disabled: locked,
-    onclick: () => { if (mtype === k) return; if (mtype === 'REELS') img = null; mtype = k; mediaDirty = true; if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); },
-  }, { IMAGE: '🖼 ', CAROUSEL: '❐ ', REELS: '▶ ' }[k] + l)));
+    onclick: () => { if (mtype === k) return; if (['REELS', 'STORY'].includes(mtype) || k === 'STORY') { img = null; video = null; } mtype = k; mediaDirty = true; syncCaption(); if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); },
+  }, { IMAGE: '🖼 ', CAROUSEL: '❐ ', REELS: '▶ ', STORY: '◷ ' }[k] + l)));
   const dropZone = (title, hint, onPick, onFiles) => {
     const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => !locked && onPick(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } },
       h('b', {}, title), h('span', { class: 'muted' }, hint));
@@ -457,6 +458,7 @@ function openPost(post = null, opts = {}) {
   const drawImage = () => {
     if (mtype === 'CAROUSEL') return drawCarousel();
     if (mtype === 'REELS') return drawReels();
+    if (mtype === 'STORY') return drawStory();
     if (!img) return imgBox.replaceChildren(dropZone('Escolha a imagem do post', 'Arraste aqui, cole (Ctrl+V) ou clique. Pode deixar para depois se ainda é ideia.', () => fileIn.click(), (fs) => takeFile(fs[0])), fileIn);
     imgBox.replaceChildren(h('div', { class: 'preview' }, h('img', { src: img.url, alt: 'Prévia do post' }),
       h('div', { style: 'display:grid;gap:8px' },
@@ -497,6 +499,30 @@ function openPost(post = null, opts = {}) {
         locked ? null : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => videoIn.click() }, 'Trocar vídeo'),
         video.duration ? h('span', { class: 'hint muted' }, `${Math.round(video.duration)} s${video.file ? ` · ${fileSize(video.file.size)}` : ''}`) : null)), fileIn, videoIn);
   };
+  // Story: foto ou vídeo vertical (9:16), sem legenda
+  const storyIn = h('input', { type: 'file', accept: 'image/*,video/mp4,video/quicktime,.mp4,.mov', hidden: true, onchange: () => storyIn.files[0] && takeStory(storyIn.files[0]) });
+  const drawStory = () => {
+    if (!img && !video) return imgBox.replaceChildren(dropZone('Escolha a foto ou o vídeo do Story', 'Vertical 9:16 (1080×1920). Vídeo de até 60 s e 50 MB. O texto vai na própria arte: Story não tem legenda.', () => storyIn.click(), (fs) => takeStory(fs[0])), storyIn);
+    const view = video ? h('video', { src: video.url, controls: true, playsinline: true, muted: true, class: 'reel-video', poster: img?.url || null }) : h('img', { src: img.url, alt: 'Story', class: 'story-img' });
+    imgBox.replaceChildren(h('div', { class: 'reel-wrap' }, view,
+      h('div', { class: 'reel-side' },
+        h('span', { class: 'hint muted' }, video ? `Vídeo de ${Math.round(video.duration || 0)} s.` : 'Foto em tela cheia.', ' Fica 24 h no ar a partir do horário marcado.'),
+        locked ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => storyIn.click() }, 'Trocar'))), storyIn);
+  };
+  const takeStory = async (f) => {
+    try {
+      if (f.type.startsWith('image/')) { img = await videoFrameFromImage(f); video = null; }
+      else {
+        if (f.size > 50 * 1024 * 1024) throw new Error(`Vídeo com ${fileSize(f.size)}: o máximo é 50 MB.`);
+        const info = await videoInfo(f);
+        if (info.duration > 60) throw new Error('Story em vídeo pode ter no máximo 60 segundos.');
+        video = { file: f, url: info.url, duration: info.duration };
+        img = await videoFrame(info.url, Math.min(1, info.duration / 2));
+      }
+      mediaDirty = true;
+    } catch (e) { toast(e.message, true); }
+    storyIn.value = ''; drawImage();
+  };
   const takeVideo = async (f) => {
     try {
       if (f.size > 50 * 1024 * 1024) throw new Error(`Vídeo com ${fileSize(f.size)}: o máximo é 50 MB. Exporte em 1080p no CapCut/celular e tente de novo.`);
@@ -513,7 +539,7 @@ function openPost(post = null, opts = {}) {
   };
   const takeFile = async (f) => {
     try {
-      if (mtype === 'REELS') { img = await videoFrameFromImage(f); } else { img = await prepareImage(f); }
+      if (mtype === 'REELS') { img = await videoFrameFromImage(f); } else if (mtype === 'STORY') { return takeStory(f); } else { img = await prepareImage(f); }
       mediaDirty = true; drawImage();
     } catch (e) { toast(e.message, true); }
   };
@@ -534,6 +560,9 @@ function openPost(post = null, opts = {}) {
   drawSeg(); drawImage();
 
   const cap = h('textarea', { id: 'f-cap', disabled: locked, placeholder: 'Legenda, emojis e hashtags…' }, post?.caption || '');
+  const capNote = h('span', { class: 'hint', hidden: true }, 'Story não tem legenda no Instagram: o texto vai na arte. Use este campo só como anotação para o cliente.');
+  function syncCaption() { capNote.hidden = mtype !== 'STORY'; }
+  syncCaption();
   const counter = h('div', { class: 'counter' });
   const updCounter = () => {
     const n = cap.value.length, tags = (cap.value.match(/#[\p{L}\p{N}_]+/gu) || []).length;
@@ -586,7 +615,7 @@ function openPost(post = null, opts = {}) {
       locked ? null : h('div', { class: 'canva-row' },
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
         h('span', { class: 'hint' }, 'Feed 1080×1350 · Reels 1080×1920. Baixe e arraste aqui.'))),
-    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), cap, counter, locked ? null : aiPanel()),
+    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, locked ? null : aiPanel()),
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
       h('div', { class: 'field' }, h('label', { for: 'f-time' }, 'Hora'), tIn)),
@@ -640,7 +669,8 @@ function openPost(post = null, opts = {}) {
     const needsComplete = mode === 'send' || mode === 'approve';
     if (needsComplete && mtype === 'CAROUSEL' && items.length < 2) return toast('O carrossel precisa de pelo menos 2 imagens.', true);
     if (needsComplete && mtype === 'REELS' && !video) return toast('Escolha o vídeo do Reels.', true);
-    if (needsComplete && mtype !== 'CAROUSEL' && !img) return toast(mtype === 'REELS' ? 'Falta a capa do Reels.' : 'Para enviar ou aprovar, o post precisa de imagem.', true);
+    if (needsComplete && mtype === 'STORY' && !img && !video) return toast('Escolha a foto ou o vídeo do Story.', true);
+    if (needsComplete && !['CAROUSEL', 'STORY'].includes(mtype) && !img) return toast(mtype === 'REELS' ? 'Falta a capa do Reels.' : 'Para enviar ou aprovar, o post precisa de imagem.', true);
     if (needsComplete && !data.scheduled_at) return toast('Para enviar ou aprovar, escolha a data e a hora.', true);
     if (needsComplete && new Date(data.scheduled_at) < Date.now() + 60e3 && !confirmLate) {
       confirmLate = true; return toast('Esse horário já passou: o post sai na próxima rodada (até 5 min). Clique de novo para confirmar.');
@@ -656,7 +686,7 @@ function openPost(post = null, opts = {}) {
       } else {
         if (img?.blob) { const r = await up(img.blob); Object.assign(data, r); img = { url: r.image_url, path: r.image_path }; }
         else if (img) Object.assign(data, { image_url: img.url, image_path: img.path ?? post?.image_path ?? null });
-        if (mtype === 'REELS' && video) {
+        if (['REELS', 'STORY'].includes(mtype) && video) {
           if (video.file) { const v = await uploadVideo(video.file, cid, (pr) => toast(`Enviando vídeo… ${Math.round(pr * 100)}%`)); video = { url: v.url, path: v.path, duration: video.duration }; }
           data.media = [{ url: video.url, path: video.path, kind: 'video' }];
         } else data.media = null;
@@ -1076,6 +1106,7 @@ function openContractData(c) {
   const [repCpf, fRepCpf] = inp('k-repcpf', 'CPF do representante', k.representante_cpf, { placeholder: '000.000.000-00' });
   const [qp, fQp] = inp('k-qp', 'Posts de feed por mês (foto + carrossel)', k.quota_posts, { type: 'number', min: 0, max: 999, placeholder: '8' });
   const [qr, fQr] = inp('k-qr', 'Reels por mês', k.quota_reels, { type: 'number', min: 0, max: 999, placeholder: '4' });
+  const [qs, fQs] = inp('k-qs', 'Stories por mês (opcional)', k.quota_stories, { type: 'number', min: 0, max: 999, placeholder: '—' });
   const [entr, fEntr] = inp('k-entr', 'Entregas mensais', k.entregas, { placeholder: '8 (oito) posts estáticos e 4 (quatro) Reels' });
   const [total, fTotal] = inp('k-total', 'Total de conteúdos/mês', k.total_conteudos, { type: 'number', min: 1, max: 999, placeholder: '12' });
   const [serv, fServ] = inp('k-serv', 'Serviços contratados (opcional)', k.servicos, { tag: 'textarea', style: 'min-height:80px', placeholder: 'Só se o seu modelo usar o campo "Serviços contratados".' });
@@ -1120,13 +1151,13 @@ function openContractData(c) {
     h('div', { class: 'eyebrow' }, 'Contratante'), fNome, fDoc, fEnd, h('div', { class: 'grid-2 tight' }, fRep, fRepCpf),
     h('div', { class: 'eyebrow' }, 'Serviço e cobrança'), h('div', { class: 'grid-2 tight' }, fEntr, fTotal), fServ,
     h('div', { class: 'grid-2 tight' }, fFee, fDue), fParts, h('div', { class: 'grid-2 tight' }, fStart, fPrazo), fForma,
-    h('div', { class: 'eyebrow' }, 'Cota mensal (contador de entregas)'), h('div', { class: 'grid-2 tight' }, fQp, fQr),
+    h('div', { class: 'eyebrow' }, 'Cota mensal (contador de entregas)'), h('div', { class: 'grid-2 tight' }, fQp, fQr), fQs,
   ], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async (e) => {
     e.target.disabled = true;
     try {
       const saved = await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: {
         monthly_fee: fee0.value, due_day: due.value, billing_start: start.value, installments: parts.length > 1 ? parts : (c.installments ? [] : undefined),
-        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, representante_cpf: repCpf.value, entregas: entr.value, total_conteudos: total.value, quota_posts: qp.value, quota_reels: qr.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
+        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, representante_cpf: repCpf.value, entregas: entr.value, total_conteudos: total.value, quota_posts: qp.value, quota_reels: qr.value, quota_stories: qs.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
       } });
       const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
       close(); toast('Dados do contrato salvos.');
@@ -1173,6 +1204,7 @@ function folderFinance(c) {
       stat('Mensalidade', brl(c.monthly_fee_cents), plan.length > 1 ? `${plan.length} parcelas: dias ${plan.map((x) => x.day).join(', ')}` : c.due_day ? `vence todo dia ${c.due_day}` : 'vence no fim do mês'),
       stat('Em atraso', lateCents ? brl(lateCents) : 'Nada', lateParcels ? `${lateParcels} parcela(s)` : 'tudo em dia', lateCents ? 'bad' : 'good'),
       stat(`Recebido em ${year}`, brl(paidYear), 'pela marcação de pagos')),
+    bulkOld(c, months),
     h('div', { class: 'months' }, ...months.map((m) => {
       const [label, cls] = PAY_LABEL[m.status];
       return h('div', { class: `month-block${m.status === 'late' ? ' is-late' : ''}` },
@@ -1184,6 +1216,21 @@ function folderFinance(c) {
     })),
     filesSection(c, 'receipt', 'Todos os comprovantes', 'Comprovantes enviados ao registrar pagamentos aparecem aqui. Também dá para enviar direto.', { month: true }),
   ];
+}
+// Cliente antigo cadastrado agora: marca de uma vez os meses anteriores como pagos.
+function bulkOld(c, months) {
+  const cur = todayLocal().slice(0, 7);
+  const old = months.filter((m) => m.month < cur).flatMap((m) => m.parcels.filter((p) => p.status === 'late' || p.status === 'open').map((p) => ({ ref_month: m.month, installment: p.n, amount_cents: p.cents })));
+  if (old.length < 3) return null;
+  return h('div', { class: 'banner', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
+    h('span', { style: 'flex:1;min-width:220px' }, `${old.length} parcelas antigas (antes de ${monthLabel(cur).toLowerCase()}) estão em aberto. Se o cliente já é antigo e pagou tudo, marque de uma vez.`),
+    confirmButton('Marcar anteriores como pagas', `Confirmar: ${old.length} parcelas`, async () => {
+      const rows = await api('/api/pasta?r=payments', { method: 'PUT', body: { client_id: c.id, status: 'paid', items: old, note: 'marcado em lote' } });
+      const key = (x) => `${x.client_id}#${x.ref_month}#${x.installment || 1}`;
+      const keys = new Set(rows.map(key));
+      S.payments = S.payments.filter((x) => !keys.has(key(x))).concat(rows);
+      render(); toast(`${rows.length} parcelas marcadas como pagas.`);
+    }, 'btn sm'));
 }
 const stat = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:13px' }, sub));
 
@@ -1207,25 +1254,42 @@ function chargeButton(c, m, p) {
   return h('button', { class: 'btn sm', onclick: () => copyText(msg, 'Mensagem de cobrança copiada.') }, 'Copiar cobrança');
 }
 
-// Painel de cobranças (aba Clientes): parcelas vencidas e vencendo em 2 dias, de todos os clientes.
+// Painel de cobranças: por cliente — atrasado somado + o que vence em até 2 dias.
 function chargesCard() {
   if (S.role !== 'admin') return null;
   ensureSettings();
   const rows = [];
   for (const c of S.clients) {
     if (!c.billing_start) continue;
-    for (const p of dueSoon(billingMonths(c), todayLocal())) rows.push({ c, p, m: { month: p.month } });
+    const list = dueSoon(billingMonths(c), todayLocal());
+    const late = list.filter((p) => p.status === 'late'), soon = list.filter((p) => p.status !== 'late');
+    if (late.length) rows.push({ c, late });
+    for (const p of soon) rows.push({ c, p });
   }
   if (!rows.length) return null;
-  const late = rows.filter((r) => r.p.status === 'late');
+  const nLate = rows.filter((r) => r.late).length;
+  const row = (r) => {
+    if (r.late) {
+      const total = r.late.reduce((s, p) => s + (p.cents || 0), 0);
+      const msg = r.late.length === 1 ? chargeMessage(r.c, { month: r.late[0].month }, r.late[0])
+        : `Olá! Tudo bem? Passando para lembrar que constam ${r.late.length} parcelas em aberto por aqui, somando ${brl(total)} (a mais antiga venceu em ${fmtDay(r.late[0].due)}).${S.settings?.agency?.pix ? `\n\nChave PIX: ${S.settings.agency.pix}` : ''}\n\nSe já pagou, me mande os comprovantes que eu atualizo. Obrigado! 🙂`;
+      return h('div', { class: 'charge is-late' },
+        h('div', { style: 'min-width:0' }, h('b', {}, r.c.name), h('div', { class: 'muted', style: 'font-size:13px' }, `${r.late.length} parcela(s) em atraso · ${brl(total)} · desde ${fmtDay(r.late[0].due)}`)),
+        h('div', { class: 'actions' },
+          r.c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(r.c.contact_whatsapp, msg), target: '_blank', rel: 'noopener' }, 'Cobrar') : h('button', { class: 'btn sm', onclick: () => copyText(msg, 'Mensagem copiada.') }, 'Copiar cobrança'),
+          h('a', { class: 'btn ghost sm', href: `#pasta/${r.c.id}`, onclick: () => { S.folder.tab = 'finance'; } }, 'Abrir')));
+    }
+    const p = r.p;
+    return h('div', { class: 'charge' },
+      h('div', { style: 'min-width:0' }, h('b', {}, r.c.name), h('div', { class: 'muted', style: 'font-size:13px' }, `${p.of > 1 ? `${p.n}ª parcela · ` : ''}${monthLabel(p.month)} · ${brl(p.cents)} · vence ${fmtDay(p.due)}`)),
+      h('div', { class: 'actions' }, chargeButton(r.c, { month: p.month }, p), h('a', { class: 'btn ghost sm', href: `#pasta/${r.c.id}`, onclick: () => { S.folder.tab = 'finance'; } }, 'Abrir')));
+  };
+  const list = h('div', { class: 'charge-list' }, ...rows.slice(0, 6).map(row));
+  const more = rows.length > 6 ? h('button', { class: 'btn ghost sm more-row', onclick: () => { list.replaceChildren(...rows.map(row)); more.remove(); } }, `Ver todas (${rows.length})`) : null;
   return h('section', { class: 'card charges' },
-    h('div', { class: 'files-head' }, h('div', { style: 'flex:1' }, h('h3', {}, 'Cobranças'),
-      h('span', { class: 'muted', style: 'font-size:13.5px' }, `${late.length ? `${late.length} atrasada(s) · ` : ''}${rows.length - late.length} vencendo em até 2 dias. Clique em Cobrar/Lembrar para abrir o WhatsApp com a mensagem pronta.`))),
-    h('div', { class: 'charge-list' }, ...rows.map(({ c, p, m }) => h('div', { class: `charge${p.status === 'late' ? ' is-late' : ''}` },
-      h('div', { style: 'min-width:0' }, h('b', {}, c.name), h('div', { class: 'muted', style: 'font-size:13px' },
-        `${p.of > 1 ? `${p.n}ª parcela · ` : ''}${monthLabel(m.month)} · ${brl(p.cents)} · ${p.status === 'late' ? 'venceu' : 'vence'} ${fmtDay(p.due)}`)),
-      h('div', { class: 'actions' }, chargeButton(c, { month: m.month }, p),
-        h('a', { class: 'btn ghost sm', href: `#pasta/${c.id}`, onclick: () => { S.folder.tab = 'finance'; } }, 'Abrir'))))));
+    h('div', {}, h('h3', {}, 'Cobranças'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, `${nLate ? `${nLate} cliente(s) com atraso · ` : ''}${rows.length - nLate} parcela(s) vencendo em até 2 dias. Cobrar/Lembrar abre o WhatsApp com a mensagem pronta.`)),
+    list, more);
 }
 
 function openPayment(c, m, parcel) {
@@ -1653,7 +1717,7 @@ async function openFeedPreview(clientId, current) {
     api(`/api/pasta?r=feed&client=${clientId}`).catch(() => []),
     api(`/api/posts?client=${clientId}&status=pending_approval,approved,changes_requested,draft,internal_review&from=${encodeURIComponent(new Date().toISOString())}`).catch(() => []),
   ]);
-  const list = upcoming.filter((p) => p.image_url && p.scheduled_at && p.id !== current.id);
+  const list = upcoming.filter((p) => p.image_url && p.media_type !== 'STORY' && p.scheduled_at && p.id !== current.id);
   if (current.image_url) list.push({ ...current, scheduled_at: current.scheduled_at || new Date(Date.now() + 365 * 864e5).toISOString(), _current: true });
   list.sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
   const tile = (src, cls, tag) => h('div', { class: `g-tile ${cls}` }, h('img', { src, alt: '', loading: 'lazy' }), tag ? h('span', { class: 'g-tag' }, tag) : null);
@@ -1661,4 +1725,227 @@ async function openFeedPreview(clientId, current) {
     ...list.map((p) => tile(p.image_url, `new ${p._current ? 'current' : p.status}`, p._current ? 'este post' : p.scheduled_at ? fmtDay(partsInTz(p.scheduled_at, S.tz).date).slice(0, 5) : '')),
     ...feed.slice(0, Math.max(0, 15 - list.length)).map((f) => tile(f.thumb, 'old', f.type === 'REELS' ? '▶' : f.type === 'CAROUSEL' ? '❐' : null)));
   if (!list.length && !feed.length) grid.replaceChildren(h('p', { class: 'muted' }, 'Sem posts para mostrar ainda.'));
+}
+
+// ───────────────────────── INÍCIO: a "entrada" do MC DIGITAL (clique na logo)
+function viewHome() {
+  if (S.role === 'admin') ensureSettings();
+  const today = todayLocal();
+  const hour = Number(partsInTz(new Date().toISOString(), S.tz).time.slice(0, 2));
+  const hello = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const who = S.userName && S.userName !== 'Dono' ? S.userName.split(' ')[0] : (S.settings?.agency?.representante || '').split(' ')[0];
+  const ld = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: S.tz }).format(new Date());
+  const longDate = ld.charAt(0).toUpperCase() + ld.slice(1);
+  const month = today.slice(0, 7);
+  const posts = S.posts.filter((p) => p.scheduled_at);
+  const todays = posts.filter((p) => dayKey(p.scheduled_at, S.tz) === today && p.status !== 'idea').sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const week = posts.filter((p) => { const t = new Date(p.scheduled_at).getTime(); return t > Date.now() && t < Date.now() + 7 * 864e5 && !['idea'].includes(p.status); });
+  const waiting = S.posts.filter((p) => p.status === 'pending_approval').length;
+  const newReqs = (S.requests || []).filter((r) => r.status === 'open').length;
+
+  const hero = h('section', { class: 'home-hero' },
+    h('div', { class: 'home-mark', 'aria-hidden': 'true' }, 'MC'),
+    h('div', { class: 'home-hello' },
+      h('div', { class: 'eyebrow' }, longDate),
+      h('h1', {}, `${hello}${who ? `, ${who}` : ''}.`),
+      h('p', { class: 'muted' }, todays.length ? `Hoje saem ${todays.length} publicaç${todays.length > 1 ? 'ões' : 'ão'}.` : 'Nenhuma publicação marcada para hoje.',
+        waiting ? ` ${waiting} post${waiting > 1 ? 's' : ''} esperando aprovação dos clientes.` : '')),
+    h('div', { class: 'home-quick' },
+      h('button', { class: 'btn primary', onclick: () => openPost() }, '+ Novo post'),
+      h('a', { class: 'btn', href: '#calendario' }, 'Calendário'),
+      h('a', { class: 'btn', href: '#fluxo' }, 'Fluxo'),
+      S.role === 'admin' ? h('button', { class: 'btn', onclick: () => openProposal() }, '+ Proposta') : null));
+
+  // números
+  const tiles = [];
+  if (S.role === 'admin') {
+    let mrr = 0, received = 0, toReceive = 0, late = 0, active = 0;
+    for (const c of S.clients) {
+      if (!c.billing_start || c.monthly_fee_cents == null) continue;
+      if (c.billing_start.slice(0, 10) <= today) { mrr += c.monthly_fee_cents; active++; }
+      for (const m of billingMonths(c)) {
+        late += m.late_cents;
+        if (m.month === month) { received += m.parcels.filter((p) => p.status === 'paid').reduce((x, p) => x + (p.cents || 0), 0); toReceive += m.open_cents - m.late_cents; }
+      }
+    }
+    tiles.push(
+      kpi('Receita mensal', brl(mrr), `${active} contrato${active === 1 ? '' : 's'} ativo${active === 1 ? '' : 's'}`),
+      kpi(`Recebido em ${monthLabel(month, true)}`, brl(received), 'parcelas marcadas como pagas', 'good'),
+      kpi('A receber no mês', brl(toReceive), 'ainda no prazo'),
+      kpi('Em atraso', late ? brl(late) : 'Nada', late ? 'veja Cobranças abaixo' : 'tudo em dia', late ? 'bad' : 'good'));
+  }
+  tiles.push(
+    kpi('Publicações hoje', String(todays.length), `${week.length} nos próximos 7 dias`),
+    kpi('Aguardando clientes', String(waiting), 'posts para aprovar', waiting ? 'warn' : ''),
+    kpi('Pedidos novos', String(newReqs), 'vindos da área do cliente', newReqs ? 'warn' : ''),
+    kpi('Clientes', `${S.clients.length}`, `${S.clients.filter((c) => c.ig_connected).length} com Instagram conectado`));
+
+  // hoje
+  const todayCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Hoje'), h('a', { href: '#agenda', class: 'muted' }, 'Agenda completa →')),
+    todays.length ? h('div', { class: 'home-today' }, ...todays.map((p) => h('button', { class: 'ht', onclick: () => openPost(p) },
+      thumb(p, 'ht-img'), h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
+      h('span', { class: 'ht-main' }, h('b', {}, clientName(p.client_id)), ' ', typeBadge(p), h('span', { class: 'muted ht-cap' }, p.title || p.caption || '')),
+      h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]))))
+      : h('p', { class: 'muted', style: 'margin:0' }, 'Nada programado para hoje. Que tal adiantar a semana?'));
+
+  // atenção
+  const alerts = [];
+  const failed = S.posts.filter((p) => p.status === 'failed');
+  if (failed.length) alerts.push(alertRow('bad', `${failed.length} post${failed.length > 1 ? 's' : ''} não publicou`, 'Abra e tente de novo', () => openPost(failed[0])));
+  for (const c of S.clients) {
+    const exp = c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 864e5) : null;
+    if (!c.ig_connected) alerts.push(alertRow('warn', `${c.name}: Instagram não conectado`, 'Sem conexão, nada publica', null, `#clientes`));
+    else if (exp !== null && exp <= 5) alerts.push(alertRow('warn', `${c.name}: conexão do Instagram vence em ${Math.max(0, exp)} dia(s)`, 'Reconecte', null, '#clientes'));
+  }
+  if (S.role === 'admin' && Array.isArray(S.proposals)) {
+    for (const p of S.proposals.filter((x) => x.status === 'accepted' && x.accepted_at && Date.now() - new Date(x.accepted_at) < 10 * 864e5)) {
+      alerts.push(alertRow('good', `🎉 ${p.client_name} aceitou a proposta`, 'Gere o contrato e conecte o Instagram', null, p.client_id ? `#pasta/${p.client_id}` : '#propostas'));
+    }
+    for (const p of S.proposals.filter((x) => x.status === 'sent' && Date.now() - new Date(x.updated_at || x.created_at) > 5 * 864e5)) {
+      alerts.push(alertRow('', `${p.client_name}: proposta sem resposta há ${Math.floor((Date.now() - new Date(p.updated_at || p.created_at)) / 864e5)} dias`, 'Que tal um follow-up?', null, '#propostas'));
+    }
+  }
+  const attention = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
+    alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Tudo certo por aqui ✓'));
+
+  // entregas do mês
+  const rows = S.clients.map((c) => ({ c, d: S.deliv?.[c.id] })).filter(({ d }) => d && (d.posts.quota != null || d.reels.quota != null || d.posts.planned || d.reels.planned));
+  const [y, mo] = month.split('-').map(Number);
+  const frac = Number(today.slice(8)) / new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const pace = (x) => {
+    if (x.quota == null) return null;
+    if (x.planned >= x.quota) return h('span', { class: 'pace ok' }, 'completo ✓');
+    if (x.planned < Math.floor(x.quota * frac)) return h('span', { class: 'pace bad' }, `faltam ${x.quota - x.planned}`);
+    return h('span', { class: 'pace' }, `faltam ${x.quota - x.planned}`);
+  };
+  const delivCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, `Entregas de ${monthLabel(month).toLowerCase()}`), h('span', { class: 'muted', style: 'font-size:12.5px' }, 'programados / cota')),
+    rows.length ? h('div', { class: 'dtable' }, ...rows.map(({ c, d }) => h('div', { class: 'drow' },
+      h('b', {}, c.name),
+      h('div', {}, h('span', { class: 'mono' }, d.posts.quota != null ? `${d.posts.planned}/${d.posts.quota}` : d.posts.planned), ' posts ', pace(d.posts)),
+      h('div', {}, h('span', { class: 'mono' }, d.reels.quota != null ? `${d.reels.planned}/${d.reels.quota}` : d.reels.planned), ' Reels ', pace(d.reels)))))
+      : h('p', { class: 'muted', style: 'margin:0' }, S.role === 'admin' ? 'Defina a cota de cada cliente em Pasta → Contrato → Editar dados.' : 'Sem cotas definidas.'));
+
+  // reajustes (aniversário do contrato)
+  let reaj = null;
+  if (S.role === 'admin') {
+    const list = S.clients.filter((c) => c.billing_start && c.billing_start.slice(5, 7) === month.slice(5, 7) && c.billing_start.slice(0, 4) < month.slice(0, 4));
+    if (list.length) reaj = h('section', { class: 'card' }, h('h3', {}, 'Reajustes do mês'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Contratos que fazem aniversário este mês: hora de aplicar o IPCA de 12 meses (cláusula 6.4) e avisar o cliente.'),
+      h('div', { class: 'alerts' }, ...list.map((c) => alertRow('', `${c.name} · ${Number(month.slice(0, 4)) - Number(c.billing_start.slice(0, 4))} ano(s) de contrato`, `Mensalidade atual ${brl(c.monthly_fee_cents)}`, null, `#pasta/${c.id}`))));
+  }
+
+  if (!S.clients.length) return [hero, noClients()];
+  return [hero, h('div', { class: 'home-kpis' }, ...tiles),
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, delivCard, reaj, approvalReminders(), requestsInbox()))];
+}
+const kpi = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:12.5px' }, sub));
+function alertRow(tone, title, sub, onclick, href) {
+  const inner = [h('span', { class: `dot ${tone}` }), h('span', { class: 'al-main' }, h('b', {}, title), h('span', { class: 'muted' }, sub)), h('span', { class: 'muted' }, '→')];
+  return href ? h('a', { class: 'alert', href }, ...inner) : h('button', { class: 'alert', type: 'button', onclick }, ...inner);
+}
+
+// ───────────────────────── PROPOSTAS comerciais
+const PROP_LABEL = { draft: ['Rascunho', 'st-draft'], sent: ['Enviada', 'st-pending_approval'], accepted: ['Aceita', 'st-approved'], declined: ['Recusada', 'st-failed'] };
+function viewProposals() {
+  if (S.proposals === undefined) { S.proposals = null; api('/api/pasta?r=proposals').then((v) => { S.proposals = v; }).catch(() => { S.proposals = false; }).finally(() => render()); }
+  const head = h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Comercial'), h('h1', {}, 'Propostas')), h('div', { class: 'spacer' }),
+    h('button', { class: 'btn primary', onclick: () => openProposal() }, '+ Nova proposta'));
+  if (S.proposals === false) return [head, h('div', { class: 'banner' }, 'As propostas precisam da atualização do banco. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.')];
+  if (!S.proposals) return [head, h('p', { class: 'muted' }, 'Carregando…')];
+  if (!S.proposals.length) return [head, h('div', { class: 'empty' }, h('h3', {}, 'Nenhuma proposta ainda'),
+    h('p', { class: 'muted' }, 'Monte a proposta, mande o link pelo WhatsApp e, quando o cliente aceitar, o cadastro, a pasta, o contrato e a área do cliente já ficam prontos.'),
+    h('button', { class: 'btn primary', onclick: () => openProposal() }, '+ Nova proposta'))];
+  const sent = S.proposals.filter((p) => p.status === 'sent').reduce((s, p) => s + p.monthly_fee_cents, 0);
+  const won = S.proposals.filter((p) => p.status === 'accepted');
+  return [head,
+    h('div', { class: 'stats' },
+      stat('Em negociação', brl(sent), `${S.proposals.filter((p) => p.status === 'sent').length} proposta(s) enviada(s) / mês`),
+      stat('Fechadas', String(won.length), `${brl(won.reduce((s, p) => s + p.monthly_fee_cents, 0))} / mês`, 'good'),
+      stat('Conversão', S.proposals.filter((p) => p.status !== 'draft').length ? `${Math.round(100 * won.length / S.proposals.filter((p) => ['sent', 'accepted', 'declined'].includes(p.status)).length)}%` : '—', 'aceitas ÷ enviadas')),
+    h('div', { class: 'grid-clients' }, ...S.proposals.map((p) => {
+      const [label, cls] = PROP_LABEL[p.status];
+      const msg = `Olá${p.contact?.name ? `, ${p.contact.name.split(' ')[0]}` : ''}! Segue a nossa proposta para o Instagram de ${p.client_name}:\n${p.url}\n\nPor lá você vê tudo o que está incluso e já pode aceitar. Qualquer dúvida, me chama! 🙂`;
+      return h('article', { class: 'card' },
+        h('div', { style: 'display:flex;align-items:center;gap:10px' }, h('h3', { style: 'flex:1;min-width:0' }, p.client_name), h('span', { class: `pill ${cls}` }, label)),
+        h('div', { class: 'stat-v', style: 'font-size:24px' }, brl(p.monthly_fee_cents), h('span', { class: 'muted', style: 'font-size:14px;font-weight:600' }, ' /mês')),
+        h('div', { class: 'muted', style: 'font-size:13px' }, [p.entregas, p.valid_until ? `válida até ${fmtDay(p.valid_until)}` : null, p.accepted_at ? `aceita em ${fmtDay(partsInTz(p.accepted_at, S.tz).date)}` : null].filter(Boolean).join(' · ')),
+        p.status === 'declined' && p.accepted?.reason ? h('div', { class: 'feedback' }, h('b', {}, 'Motivo:'), h('span', {}, p.accepted.reason)) : null,
+        h('div', { class: 'actions' },
+          h('a', { class: 'btn sm', href: p.url, target: '_blank', rel: 'noopener' }, p.status === 'draft' ? 'Pré-visualizar' : 'Abrir'),
+          p.status === 'sent' ? h('button', { class: 'btn sm', onclick: () => copyText(p.url, 'Link copiado.') }, 'Copiar link') : null,
+          p.status === 'sent' && p.contact?.whatsapp ? h('a', { class: 'btn wa sm', href: waLink(p.contact.whatsapp, msg), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
+          p.status === 'accepted' && p.client_id ? h('a', { class: 'btn primary sm', href: `#pasta/${p.client_id}` }, 'Abrir pasta do cliente') : null,
+          p.status !== 'accepted' ? h('button', { class: 'btn sm', onclick: () => openProposal(p) }, 'Editar') : null,
+          h('button', { class: 'btn ghost sm', onclick: () => openProposal({ ...p, id: null, status: 'draft', client_name: `${p.client_name} (cópia)` }) }, 'Duplicar')));
+    }))];
+}
+
+const DEFAULT_ITEMS = [
+  { title: 'Planejamento editorial mensal', desc: 'Calendário com temas, formatos e datas alinhados aos objetivos do mês.' },
+  { title: 'Criação de artes e vídeos', desc: 'Posts, carrosséis e Reels com a identidade visual da marca.' },
+  { title: 'Legendas e hashtags', desc: 'Textos estratégicos no tom de voz da marca.' },
+  { title: 'Aprovação pelo celular', desc: 'Você aprova ou pede ajuste em um link, sem baixar nada.' },
+  { title: 'Publicação automática', desc: 'Tudo sai sozinho no melhor horário para o seu público.' },
+  { title: 'Relatório mensal', desc: 'Alcance, interações, seguidores e os melhores posts do mês.' },
+];
+function openProposal(p = null) {
+  const isNew = !p?.id;
+  const v = (x) => x ?? '';
+  const inp = (id, label, value, attrs = {}) => { const el = h(attrs.tag || 'input', { id, ...attrs, tag: null }); el.value = v(value); return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el)]; };
+  const [name, fName] = inp('pp-name', 'Cliente (empresa ou perfil)', p?.client_name, { placeholder: 'Ex.: MY PET' });
+  const [cname, fCname] = inp('pp-cname', 'Nome do contato', p?.contact?.name, { placeholder: 'Ex.: Christina' });
+  const [cwa, fCwa] = inp('pp-cwa', 'WhatsApp do contato', p?.contact?.whatsapp ? p.contact.whatsapp.replace(/^55/, '') : '', { type: 'tel', placeholder: '65 99999-9999' });
+  const [cmail, fCmail] = inp('pp-cmail', 'E-mail do contato', p?.contact?.email, { type: 'email' });
+  const [intro, fIntro] = inp('pp-intro', 'Mensagem de abertura (opcional)', p?.intro, { tag: 'textarea', style: 'min-height:80px', placeholder: 'Se deixar em branco, o app escreve uma abertura padrão com o nome do cliente.' });
+  const [qp, fQp] = inp('pp-qp', 'Posts de feed por mês', p?.quota_posts ?? 8, { type: 'number', min: 0 });
+  const [qr, fQr] = inp('pp-qr', 'Reels por mês', p?.quota_reels ?? 4, { type: 'number', min: 0 });
+  const [entr, fEntr] = inp('pp-entr', 'Entregas (texto que vai no contrato)', p?.entregas, { placeholder: 'calculado automaticamente' });
+  const [fee, fFee] = inp('pp-fee', 'Valor mensal (R$)', p?.monthly_fee_cents ? (p.monthly_fee_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.300,00' });
+  const [days, fDays] = inp('pp-days', 'Vencimento(s): dia(s) do mês', (p?.installments || [{ day: 10 }]).map((x) => x.day).join(', '), { placeholder: '10  ou  4, 14, 24 (parcelado)' });
+  const [forma, fForma] = inp('pp-forma', 'Forma de pagamento', p?.forma_pagamento ?? 'via Pix', {});
+  const [valid, fValid] = inp('pp-valid', 'Válida até', p?.valid_until || new Date(Date.now() + 15 * 864e5).toISOString().slice(0, 10), { type: 'date' });
+  const [notes, fNotes] = inp('pp-notes', 'Observações para o cliente (opcional)', p?.notes, { tag: 'textarea', style: 'min-height:70px', placeholder: 'Ex.: gravações presenciais 1x por mês incluídas; tráfego pago é orçado à parte.' });
+  let items = (p?.items?.length ? p.items : DEFAULT_ITEMS).map((x) => ({ ...x }));
+  const itemsBox = h('div', { class: 'pp-items' });
+  const drawItems = () => itemsBox.replaceChildren(...items.map((it, i) => h('div', { class: 'pp-item' },
+    h('input', { value: it.title, placeholder: 'Item', oninput: (e) => { it.title = e.target.value; } }),
+    h('input', { value: it.desc || '', placeholder: 'Descrição curta', oninput: (e) => { it.desc = e.target.value; } }),
+    h('button', { type: 'button', class: 'linkish', 'aria-label': 'Remover item', onclick: () => { items.splice(i, 1); drawItems(); } }, '✕'))),
+    items.length < 12 ? h('button', { type: 'button', class: 'btn sm', onclick: () => { items.push({ title: '', desc: '' }); drawItems(); } }, '+ Item') : null);
+  drawItems();
+  const autoEntregas = () => { const a = Number(qp.value) || 0, b = Number(qr.value) || 0; return [a ? `${a} posts no feed` : null, b ? `${b} Reels` : null].filter(Boolean).join(' e ') + (a + b ? ` por mês (até ${a + b} conteúdos)` : ''); };
+  entr.placeholder = autoEntregas();
+  [qp, qr].forEach((el) => el.addEventListener('input', () => { entr.placeholder = autoEntregas(); }));
+  const payload = () => {
+    const cents = Math.round(Number(fee.value.replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) * 100);
+    const ds = days.value.split(/[,;\s]+/).map(Number).filter((n) => n >= 1 && n <= 31).slice(0, 6);
+    const split = ds.length ? splitCents(cents || 0, ds.length) : [];
+    return {
+      client_name: name.value, contact: { name: cname.value, whatsapp: cwa.value, email: cmail.value }, intro: intro.value,
+      items: items.filter((i) => i.title.trim()), quota_posts: qp.value, quota_reels: qr.value, entregas: entr.value || autoEntregas(),
+      monthly_fee: fee.value, installments: ds.length ? ds.map((d, i) => ({ day: d, cents: split[i] })) : [{ day: 10, cents }],
+      forma_pagamento: forma.value, valid_until: valid.value, notes: notes.value,
+    };
+  };
+  const save = async (sendIt) => {
+    try {
+      const body = { ...payload(), send: sendIt };
+      const row = isNew ? await api('/api/pasta?r=proposals', { method: 'POST', body }) : await api('/api/pasta?r=proposals', { method: 'PATCH', body: { ...body, id: p.id } });
+      S.proposals = [row, ...(S.proposals || []).filter((x) => x.id !== row.id)];
+      close(); render();
+      toast(sendIt ? 'Proposta pronta para enviar. Copie o link ou mande pelo WhatsApp.' : 'Rascunho salvo.');
+      if (location.hash !== '#propostas') location.hash = '#propostas';
+    } catch (e) { toast(e.message, true); }
+  };
+  const foot = [];
+  if (!isNew) foot.push(confirmButton('Apagar', 'Confirmar exclusão', async () => { await api(`/api/pasta?r=proposals&id=${p.id}`, { method: 'DELETE' }); S.proposals = S.proposals.filter((x) => x.id !== p.id); close(); render(); toast('Proposta apagada.'); }, 'btn ghost danger'));
+  foot.push(h('span', { class: 'spacer' }), h('button', { class: 'btn', onclick: () => save(false) }, 'Salvar rascunho'), h('button', { class: 'btn primary', onclick: () => save(true) }, p?.status === 'sent' ? 'Salvar' : 'Salvar e liberar link'));
+  const close = drawer(isNew ? 'Nova proposta' : `Proposta · ${p.client_name}`, [
+    h('div', { class: 'eyebrow' }, 'Para quem'), fName, h('div', { class: 'grid-2 tight' }, fCname, fCwa), fCmail, fIntro,
+    h('div', { class: 'eyebrow' }, 'O que está incluso'), itemsBox,
+    h('div', { class: 'eyebrow' }, 'Entregas e investimento'), h('div', { class: 'grid-2 tight' }, fQp, fQr), fEntr,
+    h('div', { class: 'grid-2 tight' }, fFee, fDays), h('div', { class: 'grid-2 tight' }, fForma, fValid), fNotes,
+    h('p', { class: 'hint muted', style: 'margin:0' }, 'Quando o cliente aceitar, o app cria o cadastro com esses valores, a cota de entregas, as parcelas, os dados do contrato e o link da área do cliente.'),
+  ], foot);
+  name.focus();
 }

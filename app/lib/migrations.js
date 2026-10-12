@@ -138,3 +138,33 @@ create index if not exists requests_client on requests (client_id, created_at de
 alter table requests enable row level security;
 
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V7 = `-- MC DIGITAL: atualização 7 (Stories e propostas comerciais) — rode uma vez no SQL Editor do Supabase
+alter table posts drop constraint if exists posts_media_type_check;
+alter table posts add constraint posts_media_type_check check (media_type in ('IMAGE','CAROUSEL','REELS','STORY'));
+
+create table if not exists proposals (
+  id               uuid primary key default gen_random_uuid(),
+  token            text not null unique,
+  status           text not null default 'draft' check (status in ('draft','sent','accepted','declined')),
+  client_name      text not null,
+  contact          jsonb,
+  intro            text,
+  items            jsonb,
+  entregas         text,
+  quota_posts      int,
+  quota_reels      int,
+  monthly_fee_cents int not null,
+  installments     jsonb,
+  forma_pagamento  text,
+  valid_until      date,
+  notes            text,
+  accepted         jsonb,
+  accepted_at      timestamptz,
+  client_id        uuid references clients(id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+alter table proposals enable row level security;
+
+notify pgrst, 'reload schema';`;

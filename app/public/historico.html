@@ -39,6 +39,8 @@
 <div class="bar"><div class="bar-in"><h1 id="t">Histórico de aprovações</h1><button class="btn primary" id="pdf" type="button" hidden>Salvar PDF</button></div></div>
 <main id="doc"><p class="msg">Carregando…</p></main>
 <script type="module">
+// replaceChildren ignorando null/false (evita aparecer o texto "null" na tela)
+if (!Element.prototype.__mcSafe) { const rc = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...k) { return rc.apply(this, k.flat().filter((x) => x != null && x !== false)); }; Element.prototype.__mcSafe = true; }
 const q = new URLSearchParams(location.search);
 const $doc = document.getElementById('doc');
 const LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };

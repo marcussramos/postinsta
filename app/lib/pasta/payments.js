@@ -17,6 +17,18 @@ export default route({
   PUT: async (req, res) => {
     await requireAdmin(req);
     const b = await readJson(req);
+    // Em lote: marcar várias parcelas como pagas/isentas de uma vez (ex.: meses antigos ao cadastrar um cliente)
+    if (Array.isArray(b.items)) {
+      need(b.client_id && b.items.length <= 500, 400, 'Lote inválido.');
+      need(['paid', 'waived'].includes(b.status), 400, 'Situação inválida.');
+      const now = new Date().toISOString();
+      const rows = b.items.filter((i) => isMonth(i.ref_month)).map((i) => ({
+        client_id: b.client_id, ref_month: i.ref_month, installment: Number(i.installment) || 1, status: b.status,
+        amount_cents: i.amount_cents == null ? null : Math.round(Number(i.amount_cents)), paid_at: null, file_id: null, note: b.note ? String(b.note).slice(0, 500) : null, updated_at: now,
+      }));
+      if (rows.length) await db.upsert('payments', rows);
+      return send(res, 200, rows);
+    }
     need(b.client_id, 400, 'Cliente não informado.');
     need(isMonth(b.ref_month), 400, 'Mês inválido.');
     need(['paid', 'pending', 'waived'].includes(b.status || 'paid'), 400, 'Situação inválida.');

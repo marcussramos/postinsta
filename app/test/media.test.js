@@ -74,3 +74,16 @@ test('editar a mídia de um post aprovado volta para produção; histórico guar
   const r = (await call('/api/posts', { method: 'POST', body: { remind_client: c.id, channel: 'whatsapp' } })).data;
   assert.equal(r.reminded, 1);
 });
+
+test('Story: foto ou vídeo, sem legenda, publica como STORIES', async () => {
+  const none = await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'STORY', scheduled_at: soon(), approved: true } });
+  assert.equal(none.status, 400);
+  await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'STORY', image_url: 'https://x/story.jpg', scheduled_at: soon(), approved: true } });
+  await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'STORY', media: [{ url: 'https://x/s.mp4', kind: 'video' }], image_url: 'https://x/frame.jpg', scheduled_at: soon(), approved: true } });
+  const log = await runPublisher({ wait: async () => {} });
+  assert.equal(log.published.length, 2, JSON.stringify(log));
+  const st = [...S.fakes.ig.containers.values()].filter((x) => x.media_type === 'STORIES');
+  assert.equal(st.length, 2);
+  assert.ok(st.some((x) => x.image_url === 'https://x/story.jpg'));
+  assert.ok(st.some((x) => x.video_url === 'https://x/s.mp4'));
+});

@@ -1,4 +1,6 @@
 // Funções compartilhadas pelo painel e pela página de aprovação.
+// replaceChildren ignorando null/false (evita aparecer o texto "null" na tela)
+if (!Element.prototype.__mcSafe) { const rc = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...k) { return rc.apply(this, k.flat().filter((x) => x != null && x !== false)); }; Element.prototype.__mcSafe = true; }
 
 export const STATUS_LABEL = {
   idea: 'Ideia',
@@ -205,4 +207,4 @@ export async function uploadVideo(file, clientId, onProgress = () => {}) {
   return { url: sig.url, path: sig.path, kind: 'video' };
 }
 
-export const MEDIA_LABEL = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };
+export const MEDIA_LABEL = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels', STORY: 'Story' };

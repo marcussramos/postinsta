@@ -14,11 +14,11 @@ export async function deliveries(month = currentMonth(), { clientId, tz = TIMEZO
   ]);
   const out = {};
   for (const c of clients) {
-    out[c.id] = { month, posts: { published: 0, planned: 0, quota: c.contract_data?.quota_posts ?? null }, reels: { published: 0, planned: 0, quota: c.contract_data?.quota_reels ?? null } };
+    out[c.id] = { month, posts: { published: 0, planned: 0, quota: c.contract_data?.quota_posts ?? null }, reels: { published: 0, planned: 0, quota: c.contract_data?.quota_reels ?? null }, stories: { published: 0, planned: 0, quota: c.contract_data?.quota_stories ?? null } };
   }
   for (const p of posts) {
     const o = out[p.client_id]; if (!o) continue;
-    const k = (p.media_type || 'IMAGE') === 'REELS' ? 'reels' : 'posts';
+    const k = { REELS: 'reels', STORY: 'stories' }[p.media_type] || 'posts';
     o[k].planned++;
     if (p.status === 'published') o[k].published++;
   }

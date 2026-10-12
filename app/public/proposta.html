@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Proposta comercial</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314161B'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' font-size='14' fill='%23fff'%3EMC%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #F4F3EF; --surface: #fff; --surface-2: #F8F7F3; --ink: #121317; --muted: #5F6370; --line: #E3E1DA;
+    --accent: #2443C9; --accent-soft: #E8ECFB; --ok: #17703F; --ok-bg: #E2F4E9; --warn-bg: #FCF1D9;
+    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--display); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 18px; }
+  .top { padding: 18px 0; display: flex; align-items: center; gap: 12px; }
+  .brand b { display: block; font-weight: 800; letter-spacing: .14em; font-size: 14px; }
+  .brand span { font-size: 10.5px; letter-spacing: .12em; color: var(--muted); }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .hero { background: var(--ink); color: #fff; border-radius: 22px; padding: clamp(26px, 5vw, 52px); display: grid; gap: 14px; position: relative; overflow: hidden; }
+  .hero::after { content: ""; position: absolute; right: -80px; top: -80px; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(36,67,201,.55), transparent 70%); }
+  .hero .eyebrow { color: #A9AEBC; }
+  .hero h1 { margin: 0; font-size: clamp(30px, 6vw, 52px); line-height: 1.02; letter-spacing: -.02em; max-width: 14ch; }
+  .hero p { margin: 0; color: #D6D9E1; font-size: 16.5px; line-height: 1.55; max-width: 60ch; white-space: pre-wrap; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: #fff; }
+  section { margin-top: 30px; }
+  h2 { font-size: 22px; margin: 0 0 14px; letter-spacing: -.01em; }
+  .nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .num { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .num b { display: block; font-size: 40px; line-height: 1; letter-spacing: -.02em; }
+  .num span { color: var(--muted); font-size: 14px; }
+  .items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .item { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+  .check { width: 26px; height: 26px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .item b { display: block; font-size: 15.5px; }
+  .item span { color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .price { background: var(--surface); border: 2px solid var(--ink); border-radius: 20px; padding: 24px; display: grid; gap: 12px; }
+  .price .val { font-size: clamp(36px, 7vw, 54px); font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+  .price .val small { font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .parcels { display: flex; gap: 8px; flex-wrap: wrap; }
+  .parcels span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13.5px; font-weight: 600; }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; counter-reset: s; }
+  .step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: #fff; font-weight: 800; margin-bottom: 8px; }
+  .step b { display: block; color: var(--ink); }
+  .note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 18px; white-space: pre-wrap; line-height: 1.55; }
+  form.accept { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; display: grid; gap: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label { display: grid; gap: 5px; font-size: 13.5px; font-weight: 700; }
+  label small { font-weight: 400; color: var(--muted); }
+  input, textarea { font: inherit; font-weight: 400; color: inherit; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 11px 12px; width: 100%; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .agree { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; color: var(--muted); }
+  .agree input { width: 18px; height: 18px; margin-top: 2px; }
+  .btn { font: inherit; font-weight: 800; font-size: 16px; border: 0; background: var(--accent); color: #fff; border-radius: 12px; padding: 14px 20px; cursor: pointer; text-decoration: none; display: inline-flex; justify-content: center; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; font-size: 14px; justify-self: center; }
+  .banner { background: var(--warn-bg); border-radius: 12px; padding: 12px 14px; font-size: 14px; margin-bottom: 14px; }
+  .done { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 30px; text-align: center; display: grid; gap: 12px; justify-items: center; }
+  .done .big { font-size: 46px; }
+  .msg { text-align: center; padding: 90px 16px; color: var(--muted); }
+  .err { color: #B4232F; font-size: 14px; font-weight: 600; }
+  footer { margin: 40px 0 50px; text-align: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 700px) {
+    .nums { grid-template-columns: 1fr 1fr; } .items, .grid2 { grid-template-columns: 1fr; } .steps { grid-template-columns: 1fr 1fr; }
+    .num b { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="brand" id="brand"><b>MC DIGITAL</b></div></div>
+  <main id="app"><p class="msg">Carregando a proposta…</p></main>
+</div>
+<script type="module">
+// replaceChildren ignorando null/false (evita aparecer o texto "null" na tela)
+if (!Element.prototype.__mcSafe) { const rc = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...k) { return rc.apply(this, k.flat().filter((x) => x != null && x !== false)); }; Element.prototype.__mcSafe = true; }
+const t = new URLSearchParams(location.search).get('t');
+const $app = document.getElementById('app');
+const brl = (c) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dmy = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k.startsWith('on')) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? '' : v); }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; el.append(c instanceof Node ? c : document.createTextNode(String(c))); }
+  return el;
+}
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba' }).format(new Date());
+
+function render(P) {
+  document.getElementById('brand').replaceChildren(h('b', {}, P.agency.marca), P.agency.slogan ? h('span', {}, P.agency.slogan) : null);
+  document.title = `Proposta · ${P.client_name} · ${P.agency.marca}`;
+  if (P.status === 'accepted') return $app.replaceChildren(doneView(P));
+  const total = (P.quota_posts || 0) + (P.quota_reels || 0);
+  const inst = P.installments || [];
+  const hero = h('div', { class: 'hero' },
+    h('div', { class: 'eyebrow' }, 'Proposta comercial · Social media'),
+    h('h1', {}, `Instagram de ${P.client_name}`),
+    h('p', {}, P.intro || `${P.contact_name ? `Olá, ${P.contact_name.split(' ')[0]}! ` : ''}Esta é a nossa proposta para cuidar do Instagram de ${P.client_name}: planejamento, criação, aprovação simples pelo celular e publicação no horário certo, com relatório todo mês.`),
+    h('div', { class: 'chips' }, ...['Aprovação pelo celular', 'Publicação automática', 'Relatório mensal', 'Área exclusiva do cliente'].map((c) => h('span', { class: 'chip' }, c))));
+  const nums = total ? h('div', { class: 'nums' },
+    P.quota_posts ? h('div', { class: 'num' }, h('b', {}, P.quota_posts), h('span', {}, 'posts no feed por mês')) : null,
+    P.quota_reels ? h('div', { class: 'num' }, h('b', {}, P.quota_reels), h('span', {}, 'Reels por mês')) : null,
+    h('div', { class: 'num' }, h('b', {}, total), h('span', {}, 'conteúdos por mês'))) : null;
+  const items = (P.items || []).length ? h('section', {}, h('h2', {}, 'O que está incluso'),
+    h('div', { class: 'items' }, ...P.items.map((i) => h('div', { class: 'item' }, h('span', { class: 'check', 'aria-hidden': 'true' }, '✓'), h('div', {}, h('b', {}, i.title), i.desc ? h('span', {}, i.desc) : null))))) : null;
+  const price = h('section', {}, h('h2', {}, 'Investimento'),
+    h('div', { class: 'price' },
+      h('div', { class: 'val' }, brl(P.monthly_fee_cents), h('small', {}, ' /mês')),
+      P.entregas ? h('div', { class: 'muted' }, P.entregas) : null,
+      inst.length > 1 ? h('div', { class: 'parcels' }, ...inst.map((p, i) => h('span', {}, `${i + 1}ª ${brl(p.cents)} · dia ${p.day}`))) : inst[0] ? h('div', { class: 'parcels' }, h('span', {}, `Vencimento todo dia ${inst[0].day}`)) : null,
+      P.forma_pagamento ? h('div', { style: 'color:var(--muted);font-size:14.5px' }, `Pagamento ${P.forma_pagamento}.`) : null,
+      P.valid_until ? h('div', { class: 'eyebrow' }, `Proposta válida até ${dmy(P.valid_until)}`) : null));
+  const steps = h('section', {}, h('h2', {}, 'Como começamos'),
+    h('div', { class: 'steps' },
+      h('div', { class: 'step' }, h('b', {}, 'Aceite aqui'), 'Preencha os dados da empresa no fim desta página.'),
+      h('div', { class: 'step' }, h('b', {}, 'Contrato'), 'Enviamos o contrato pronto para assinatura eletrônica.'),
+      h('div', { class: 'step' }, h('b', {}, 'Conexão e briefing'), 'Você conecta o Instagram e conta o que precisa na sua área exclusiva.'),
+      h('div', { class: 'step' }, h('b', {}, 'Primeiros posts'), 'Você aprova pelo celular e eles saem sozinhos no horário.')));
+  const notes = P.notes ? h('section', {}, h('h2', {}, 'Observações'), h('div', { class: 'note' }, P.notes)) : null;
+  $app.replaceChildren(
+    P.preview ? h('div', { class: 'banner' }, 'Pré-visualização: esta proposta ainda é rascunho. O cliente só consegue abrir depois que você clicar em "Enviar".') : null,
+    hero, nums, items, price, steps, notes,
+    h('section', {}, P.status === 'sent' ? acceptForm(P) : h('div', { class: 'done' },
+      h('div', { class: 'big' }, P.status === 'declined' ? '🙏' : '⏳'),
+      h('b', {}, P.status === 'declined' ? 'Proposta recusada.' : P.status === 'expired' ? 'Esta proposta venceu.' : 'Proposta em preparação.'),
+      h('span', { style: 'color:var(--muted)' }, P.status === 'expired' ? 'Fale com a agência para receber uma versão atualizada.' : 'Obrigado pelo retorno. Se mudar de ideia, é só chamar a agência.'))),
+    h('footer', {}, `${P.agency.marca}${P.agency.representante ? ` · ${P.agency.representante}` : ''}${P.agency.email ? ` · ${P.agency.email}` : ''}`));
+}
+
+function acceptForm(P) {
+  const f = (name, label, attrs = {}, hint) => h('label', {}, label, hint ? h('small', {}, hint) : null, h('input', { name, ...attrs }));
+  const err = h('div', { class: 'err', role: 'alert' });
+  const btn = h('button', { class: 'btn', type: 'submit' }, 'Aceitar proposta');
+  const form = h('form', { class: 'accept', id: 'aceite', onsubmit: async (e) => {
+    e.preventDefault(); err.textContent = '';
+    const d = Object.fromEntries(new FormData(form));
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try {
+      const r = await fetch(`/api/pasta?r=proposal&t=${encodeURIComponent(t)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, aceite: Boolean(d.aceite) }) });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(out.error || 'Não foi possível concluir.');
+      render({ ...P, status: 'accepted', portal_url: out.portal_url, accepted_at: new Date().toISOString() });
+      scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (x) { err.textContent = x.message; btn.disabled = false; btn.textContent = 'Aceitar proposta'; }
+  } },
+    h('div', { class: 'eyebrow' }, 'Aceite da proposta'),
+    h('h2', { style: 'margin:0' }, 'Vamos começar?'),
+    h('span', { style: 'color:var(--muted);font-size:14.5px' }, 'Estes dados vão para o contrato. Leva 1 minuto.'),
+    h('div', { class: 'grid2' },
+      f('nome', 'Nome ou razão social', { required: true, autocomplete: 'organization', value: P.client_name }),
+      f('documento', 'CNPJ ou CPF', { required: true, inputmode: 'numeric', placeholder: '00.000.000/0001-00' })),
+    f('endereco', 'Endereço completo', { required: true, autocomplete: 'street-address', placeholder: 'Rua, número, bairro, cidade/UF, CEP' }),
+    h('div', { class: 'grid2' },
+      f('representante', 'Quem assina o contrato', { required: true, autocomplete: 'name', value: P.contact_name || '' }),
+      f('representante_cpf', 'CPF de quem assina', { inputmode: 'numeric', placeholder: '000.000.000-00' })),
+    h('div', { class: 'grid2' },
+      f('email', 'E-mail', { type: 'email', required: true, autocomplete: 'email' }),
+      f('whatsapp', 'WhatsApp com DDD', { type: 'tel', required: true, autocomplete: 'tel', placeholder: '65 99999-9999' })),
+    f('inicio', 'Quando quer começar?', { type: 'date', required: true, min: today, value: today }, 'A primeira mensalidade conta a partir deste mês.'),
+    h('label', { class: 'agree' }, h('input', { type: 'checkbox', name: 'aceite', required: true }), `Li e aceito esta proposta (${brl(P.monthly_fee_cents)}/mês). O contrato será enviado para assinatura.`),
+    err, btn,
+    h('button', { type: 'button', class: 'link', onclick: () => declineBox(form, P) }, 'Não tenho interesse agora'));
+  return form;
+}
+
+function declineBox(form, P) {
+  const ta = h('textarea', { rows: 3, placeholder: 'Se puder, conte o motivo (opcional). Ajuda a gente a melhorar.' });
+  const box = h('div', { class: 'accept', style: 'display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px' },
+    h('b', {}, 'Tudo bem! Quer deixar um comentário?'), ta,
+    h('button', { class: 'btn', style: 'background:var(--ink)', onclick: async () => {
+      const r = await fetch(`/api/pasta?r=proposal&t=${encodeURIComponent(t)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decline: true, reason: ta.value }) });
+      if (r.ok) render({ ...P, status: 'declined' });
+    } }, 'Recusar proposta'),
+    h('button', { class: 'link', type: 'button', onclick: () => box.replaceWith(form) }, 'Voltar'));
+  form.replaceWith(box);
+}
+
+function doneView(P) {
+  return h('div', { class: 'done', style: 'margin-top:10px' },
+    h('div', { class: 'big' }, '🎉'),
+    h('h2', { style: 'margin:0' }, 'Proposta aceita! Bem-vindo(a).'),
+    h('span', { style: 'color:var(--muted);max-width:52ch' }, `A ${P.agency.marca} vai enviar o contrato para assinatura. Enquanto isso, guarde o link da sua área exclusiva: lá ficam contrato, aprovações, relatórios, financeiro e o espaço para mandar pedidos e fotos.`),
+    P.portal_url ? h('a', { class: 'btn', href: P.portal_url }, 'Abrir minha área do cliente') : null,
+    P.portal_url ? h('span', { class: 'eyebrow' }, 'Dica: salve este link nos favoritos') : null);
+}
+
+try {
+  if (!t) throw new Error('Link incompleto.');
+  const r = await fetch(`/api/pasta?r=proposal&t=${encodeURIComponent(t)}`, { credentials: 'same-origin' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Proposta não encontrada.');
+  render(d);
+} catch (e) { $app.replaceChildren(h('p', { class: 'msg' }, e.message)); }
+</script>
+</body>
+</html>

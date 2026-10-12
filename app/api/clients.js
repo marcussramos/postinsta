@@ -64,7 +64,7 @@ function cleanClient(input) {
       need(Number.isInteger(p) && p > 0 && p <= 120, 400, 'Prazo do contrato deve ser em meses (1 a 120).');
       keep.prazo_meses = p;
     }
-    for (const q of ['quota_posts', 'quota_reels']) { // cota mensal de entregas (contador)
+    for (const q of ['quota_posts', 'quota_reels', 'quota_stories']) { // cota mensal de entregas (contador)
       if (k[q] !== undefined && k[q] !== '' && k[q] !== null) {
         const n = Number(k[q]);
         need(Number.isInteger(n) && n >= 0 && n <= 999, 400, 'Quantidade de entregas inválida.');
