@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contrato</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314161B'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' font-size='14' fill='%23fff'%3EMC%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --ink: #14161B; --muted: #646B78; --line: #E1E4EA; --bg: #E9EBEF; --accent: #2443C9; --warn: #8A5A00; --warn-bg: #FCF1D9; }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Schibsted Grotesk", Arial, sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid var(--line); }
+  .bar-in { max-width: 900px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .bar h1 { font-size: 15px; margin: 0; flex: 1; min-width: 180px; }
+  .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .note { max-width: 900px; margin: 14px auto 0; padding: 0 16px; }
+  .note div { background: var(--warn-bg); color: #3b2a00; border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.45; }
+  .sheet { background: #fff; width: min(210mm, 100% - 32px); margin: 18px auto 40px; padding: 22mm 20mm; box-shadow: 0 1px 2px rgba(20,22,27,.06), 0 8px 24px rgba(20,22,27,.08); border-radius: 4px;
+    font-family: "Source Serif 4", Georgia, serif; font-size: 11.5pt; line-height: 1.6; text-align: justify; hyphens: auto; }
+  .sheet h1 { font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 15pt; text-align: center; letter-spacing: .02em; margin: 0 0 18pt; line-height: 1.3; }
+  .sheet h2 { font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 11pt; text-transform: uppercase; letter-spacing: .04em; margin: 16pt 0 6pt; break-after: avoid; }
+  .sheet p { margin: 0 0 9pt; orphans: 3; widows: 3; }
+  .sheet .campo { font-weight: 600; }
+  .sheet .campo.longo { font-weight: 400; }
+  mark.falta { background: #FFE58A; color: #5a3d00; padding: 0 3px; border-radius: 3px; font-family: "Schibsted Grotesk", Arial, sans-serif; font-size: 9.5pt; font-weight: 700; }
+  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 34pt 28pt; margin-top: 34pt; break-inside: avoid; text-align: center; font-size: 10pt; line-height: 1.45; }
+  .ass-linha { border-top: 1px solid var(--ink); margin-bottom: 5pt; }
+  .msg { max-width: 560px; margin: 80px auto; text-align: center; padding: 0 16px; }
+  @media (max-width: 640px) { .sheet { padding: 20px 18px; font-size: 11pt; } .assinaturas { grid-template-columns: 1fr; } }
+  @page { size: A4; margin: 20mm 18mm; }
+  @media print {
+    body { background: #fff; }
+    .bar, .note { display: none; }
+    .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; border-radius: 0; }
+    mark.falta { background: none; border-bottom: 1px solid #000; color: #000; }
+  }
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in">
+  <h1 id="t">Contrato</h1>
+  <a class="btn" id="back" href="/#clientes">Voltar ao painel</a>
+  <button class="btn primary" id="pdf" type="button" disabled>Salvar PDF</button>
+</div></div>
+<div class="note" id="note" hidden><div></div></div>
+<main id="doc"><p class="msg">Montando o contrato…</p></main>
+<script type="module">
+const id = new URLSearchParams(location.search).get('client');
+const doc = document.getElementById('doc');
+const btn = document.getElementById('pdf');
+const msg = (t, link) => { doc.innerHTML = ''; const p = Object.assign(document.createElement('p'), { className: 'msg', textContent: t }); if (link) { p.append(document.createElement('br'), document.createElement('br'), Object.assign(document.createElement('a'), { className: 'btn primary', href: '/', textContent: 'Entrar no painel' })); } doc.append(p); };
+if (id) document.getElementById('back').href = `/#pasta/${encodeURIComponent(id)}`;
+btn.onclick = () => window.print();
+try {
+  if (!id) throw Object.assign(new Error('Abra o contrato pela pasta do cliente.'), { status: 400 });
+  const r = await fetch(`/api/contract?client=${encodeURIComponent(id)}`, { credentials: 'same-origin' });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || `Erro ${r.status}.`), { status: r.status });
+  document.title = data.title; // vira o nome do arquivo ao salvar o PDF
+  document.getElementById('t').textContent = data.title;
+  const sheet = document.createElement('article');
+  sheet.className = 'sheet';
+  sheet.innerHTML = data.html; // HTML montado no servidor com todo texto escapado
+  doc.replaceChildren(sheet);
+  const notes = [];
+  if (data.missing?.length) notes.push(`<b>Faltam ${data.missing.length} dado(s)</b>, marcados em amarelo: ${data.missing.map((m) => m.replace(/[<>&]/g, '')).join(' · ')}. Preencha em "Editar dados" na pasta do cliente (ou em Ajustes, para os dados da agência). Se imprimir assim, eles saem como linha em branco para preencher à mão.`);
+  if (data.template_is_default) notes.push('Este é o <b>modelo provisório</b>. Cole o seu modelo em Ajustes → Modelo de contrato.');
+  if (notes.length) { const n = document.getElementById('note'); n.hidden = false; n.firstElementChild.innerHTML = notes.join('<br><br>'); }
+  btn.disabled = false;
+} catch (e) {
+  msg(e.status === 401 ? 'Sua sessão expirou. Entre no painel e abra o contrato de novo.' : e.message, e.status === 401);
+}
+</script>
+</body>
+</html>

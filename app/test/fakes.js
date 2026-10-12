@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [], app_state: [] };
+  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail };
   const realFetch = globalThis.fetch;
@@ -11,6 +11,8 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     clients: () => ({ id: crypto.randomUUID(), approval_token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString(),
       contact_whatsapp: null, contact_email: null, brand_voice: null, ig_user_id: null, ig_username: null, ig_token: null, ig_token_expires_at: null, ig_connected_at: null }),
     app_state: () => ({ updated_at: new Date().toISOString() }),
+    client_files: () => ({ id: crypto.randomUUID(), ref_month: null, created_at: new Date().toISOString() }),
+    payments: () => ({ status: 'paid', amount_cents: null, paid_at: null, file_id: null, note: null, updated_at: new Date().toISOString() }),
     posts: () => ({ id: crypto.randomUUID(), status: 'draft', title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
       ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
@@ -52,10 +54,16 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
 
   async function supa(url, init) {
     const u = new URL(url); const method = init?.method || 'GET';
+    if (u.pathname.startsWith('/storage/v1/object/sign/')) {
+      const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/sign/', ''));
+      if (!files.has(key)) return json(400, { message: 'Object not found' });
+      return json(200, { signedURL: `/object/sign/${key}?token=tok-${encodeURIComponent(key)}` });
+    }
     if (u.pathname.startsWith('/storage/v1/object/')) {
-      const path = u.pathname.replace('/storage/v1/object/posts/', '');
-      if (method === 'POST') { files.set(path, init.body); return json(200, { Key: `posts/${path}` }); }
-      if (method === 'DELETE') { files.delete(path); return json(200, {}); }
+      const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/', ''));
+      const k = key.replace(/^posts\//, ''); // imagens dos posts ficam sem o prefixo (como nos testes antigos); documentos com "docs/"
+      if (method === 'POST') { files.set(k, init.body); return json(200, { Key: key }); }
+      if (method === 'DELETE') { files.delete(k); return json(200, {}); }
     }
     const table = u.pathname.replace('/rest/v1/', '');
     const rows = tables[table];
@@ -71,6 +79,11 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     if (method === 'POST') {
       const row = { ...defaults[table](), ...JSON.parse(init.body) };
       if (table === 'app_state') { tables.app_state = rows.filter((r) => r.key !== row.key); tables.app_state.push(row); return json(201, []); }
+      if (table === 'payments') { // upsert pela chave (client_id, ref_month)
+        const old = rows.find((r) => r.client_id === row.client_id && r.ref_month === row.ref_month);
+        if (old) Object.assign(old, JSON.parse(init.body)); else rows.push(row);
+        return json(201, []);
+      }
       rows.push(row); return json(201, [{ ...row }]);
     }
     if (method === 'PATCH') {

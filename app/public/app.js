@@ -1,14 +1,19 @@
 // MC DIGITAL — painel da agência (JavaScript puro, sem build).
-import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL } from '/shared.js';
+import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize } from '/shared.js';
 
 const VIEWS = ['agenda', 'calendario', 'fluxo', 'clientes', 'ajustes'];
 const S = {
   admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '',
+  payments: [], folderId: null, folder: { id: null, files: [], preview: null, loading: false, error: null, tab: 'contract' }, settings: undefined,
   cal: { month: null, posts: [], day: null, loading: false, mode: savedPref('mc_cal_mode', 'thumbs') },
 };
 function savedPref(key, fallback) { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } }
 function savePref(key, value) { try { localStorage.setItem(key, value); } catch { /* navegador sem armazenamento: só não lembra */ } }
-const viewFromHash = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'agenda');
+function viewFromHash() {
+  const v = location.hash.slice(1);
+  if (v.startsWith('pasta/')) { S.folderId = v.slice(6); return 'pasta'; }
+  return VIEWS.includes(v) ? v : 'agenda';
+}
 const root = document.getElementById('app');
 const sinceISO = () => new Date(Date.now() - 7 * 86400e3).toISOString();
 
@@ -33,6 +38,7 @@ async function loadAll() {
   try {
     const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
     S.clients = clients; S.posts = posts;
+    S.payments = await api('/api/payments').catch(() => []); // vazio até a atualização do banco
   } catch (e) {
     if (e.status === 401) { S.admin = false; return renderLogin(); }
     toast(e.message, true);
@@ -80,7 +86,7 @@ const brand = () => h('div', { class: 'brand', 'aria-label': 'MC DIGITAL' }, h('
 
 // ───────────────────────── estrutura
 function render() {
-  const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id ? 'page' : null }, label);
+  const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
     h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), tab('ajustes', 'Ajustes')),
@@ -91,7 +97,7 @@ function render() {
   const page = h('main', { class: `page${S.view === 'fluxo' ? ' wide' : ''}` });
   const pend = setupPending();
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
-  const views = { clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda };
+  const views = { clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder };
   page.append(...views[S.view]().filter(Boolean));
   root.replaceChildren(top, page);
 }
@@ -622,7 +628,8 @@ function cardClient(c) {
     : h('span', { class: exp !== null && exp < 5 ? 'ig-warn' : 'ig-ok' }, `@${c.ig_username || 'conectado'}`);
   return h('article', { class: 'card' },
     h('div', { style: 'display:flex;align-items:center;gap:10px' }, h('h3', { style: 'flex:1;min-width:0' }, c.name),
-      pend ? h('span', { class: 'pill st-pending_approval' }, `${pend} aguardando`) : null),
+      pend ? h('span', { class: 'pill st-pending_approval' }, `${pend} aguardando`) : null,
+      lateCount(c) ? h('span', { class: 'pill st-failed', title: 'Mensalidades vencidas sem pagamento' }, `${lateCount(c)} em atraso`) : null),
     h('dl', { class: 'kv' },
       h('dt', {}, 'Instagram'), h('dd', {}, ig),
       h('dt', {}, 'WhatsApp'), h('dd', {}, c.contact_whatsapp ? `+${c.contact_whatsapp}` : h('span', { class: 'muted' }, '—')),
@@ -634,6 +641,7 @@ function cardClient(c) {
       c.ig_connected && !expired ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
       c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, approvalMessage(c)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
       c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, approvalSubject(c), approvalMessage(c)) }, 'E-mail') : null,
+      h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, '🔒 Pasta'),
       h('button', { class: 'btn sm', onclick: () => openClient(c) }, 'Editar')));
 }
 
@@ -670,7 +678,7 @@ function openClient(c = null) {
     } catch (e) { toast(e.message, true); }
   }
   const foot = [];
-  if (c) foot.push(confirmButton('Remover cliente', 'Confirmar: apaga os posts dele', async () => {
+  if (c) foot.push(confirmButton('Remover cliente', 'Confirmar: apaga posts e a pasta dele', async () => {
     await api(`/api/clients?id=${c.id}`, { method: 'DELETE' });
     S.clients = S.clients.filter((x) => x.id !== c.id); S.posts = S.posts.filter((p) => p.client_id !== c.id);
     close(); render(); toast('Cliente removido.');
@@ -744,5 +752,335 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsContract(),
   ];
+}
+
+// Ajustes → dados da agência e modelo de contrato
+function settingsContract() {
+  if (S.settings === undefined) {
+    S.settings = null;
+    api('/api/settings').then((v) => { S.settings = v; }).catch(() => { S.settings = false; }).finally(() => { if (S.view === 'ajustes') render(); });
+  }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Pastas dos clientes'), h('h2', { style: 'font-size:22px' }, 'Contrato')));
+  if (!S.settings) return [head, h('p', { class: 'muted' }, S.settings === false ? 'Disponível depois da atualização do banco de dados.' : 'Carregando…')];
+  const A = S.settings.agency || {};
+  const fields = [['razao_social', 'Razão social', 'MC Digital Ltda'], ['cnpj', 'CNPJ', '00.000.000/0001-00'], ['endereco', 'Endereço', 'Rua, número, bairro, cidade/UF, CEP'],
+    ['cidade', 'Cidade/UF (foro e assinatura)', 'Cuiabá/MT'], ['representante', 'Representante legal', 'Marcus Ramos'], ['email', 'E-mail', 'contato@…'], ['pix', 'Chave PIX', '']];
+  const inputs = {};
+  const agencyCard = h('article', { class: 'card', style: 'grid-column:1/-1' },
+    h('div', { class: 'eyebrow' }, 'Contratada'), h('h3', {}, 'Dados da agência'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Use os dados do CNPJ que vai assinar os contratos. Entram em todos os contratos gerados.'),
+    h('div', { class: 'grid-2 tight' }, ...fields.map(([k, label, ph]) => { inputs[k] = h('input', { id: `ag-${k}`, value: A[k] || '', placeholder: ph }); return h('div', { class: 'field' }, h('label', { for: `ag-${k}` }, label), inputs[k]); })),
+    h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async (e) => {
+      e.target.disabled = true;
+      try { S.settings = await api('/api/settings', { method: 'PUT', body: { agency: Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])) } }); S.folder.id = null; toast('Dados da agência salvos.'); render(); }
+      catch (err) { toast(err.message, true); e.target.disabled = false; }
+    } }, 'Salvar dados'));
+  const ta = h('textarea', { id: 'tpl', class: 'mono tpl', spellcheck: 'false', translate: 'no', value: S.settings.contract_template });
+  const insert = (key) => {
+    const tag = `{{${key}}}`; const a = ta.selectionStart ?? ta.value.length;
+    ta.setRangeText(tag, a, ta.selectionEnd ?? a, 'end'); ta.focus();
+  };
+  const tplCard = h('article', { class: 'card', style: 'grid-column:1/-1' },
+    h('div', { class: 'eyebrow' }, S.settings.template_is_default ? 'Modelo provisório' : 'Seu modelo'), h('h3', {}, 'Modelo de contrato'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cole o texto do seu contrato e troque os dados variáveis pelos campos abaixo (clique num campo para inseri-lo onde está o cursor). Linha começando com "# " vira título, "## " vira cláusula, **texto** fica em negrito e {{assinaturas}} sozinho numa linha cria as linhas de assinatura.'),
+    h('div', { class: 'pick tpl-fields' }, ...Object.entries({ ...S.settings.fields, assinaturas: 'Linhas de assinatura' }).map(([k, label]) =>
+      h('button', { class: 'chip', type: 'button', title: label, onclick: () => insert(k) }, label))),
+    ta,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn primary sm', onclick: async (e) => {
+        e.target.disabled = true;
+        try { S.settings = await api('/api/settings', { method: 'PUT', body: { contract_template: ta.value } }); S.folder.id = null; toast('Modelo salvo. Os próximos contratos já saem com ele.'); render(); }
+        catch (err) { toast(err.message, true); e.target.disabled = false; }
+      } }, 'Salvar modelo'),
+      S.settings.template_is_default ? null : confirmButton('Voltar ao modelo provisório', 'Confirmar: apaga o seu modelo', async () => {
+        S.settings = await api('/api/settings', { method: 'PUT', body: { contract_template: '' } }); render(); toast('Modelo provisório restaurado.');
+      }, 'btn ghost sm')));
+  return [head, h('div', { class: 'grid-clients' }, agencyCard, tplCard)];
+}
+
+// ───────────────────────── pasta privada do cliente (contrato, financeiro, relatórios)
+const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['other', 'Outros']];
+const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt';
+const todayLocal = () => partsInTz(new Date().toISOString(), S.tz).date;
+const nextMonth = (m) => shiftMonth(m, 1);
+
+// Situação de cada mês desde o início da cobrança: paid | waived | open (ainda no prazo) | late (venceu)
+function billingMonths(c) {
+  if (!c.billing_start) return [];
+  const today = todayLocal(), cur = today.slice(0, 7);
+  const pays = new Map(S.payments.filter((p) => p.client_id === c.id).map((p) => [p.ref_month, p]));
+  let last = cur; for (const k of pays.keys()) if (k > last) last = k;
+  const out = [];
+  for (let m = c.billing_start.slice(0, 7); m <= last && out.length < 240; m = nextMonth(m)) {
+    const [y, mo] = m.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    const due = `${m}-${String(Math.min(c.due_day || lastDay, lastDay)).padStart(2, '0')}`;
+    const p = pays.get(m) || null;
+    const st = p?.status === 'paid' ? 'paid' : p?.status === 'waived' ? 'waived' : today > due ? 'late' : 'open';
+    out.push({ month: m, due, payment: p, status: st });
+  }
+  return out.reverse();
+}
+const lateCount = (c) => billingMonths(c).filter((m) => m.status === 'late').length;
+const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'], open: ['Em aberto', 'st-pending_approval'], late: ['Atrasado', 'st-failed'] };
+
+async function loadFolder(id) {
+  try {
+    const [files, payments, preview] = await Promise.all([
+      api(`/api/files?client=${id}`), api('/api/payments'), api(`/api/contract?client=${id}`)]);
+    Object.assign(S.folder, { files, preview, loading: false, error: null }); S.payments = payments;
+  } catch (e) {
+    Object.assign(S.folder, { loading: false, error: e.message });
+  }
+  if (S.view === 'pasta' && S.folderId === id) render();
+}
+
+function viewFolder() {
+  const c = clientById(S.folderId);
+  if (!c) return [h('div', { class: 'empty' }, h('h3', {}, 'Cliente não encontrado'), h('a', { class: 'btn', href: '#clientes' }, 'Voltar para Clientes'))];
+  const F = S.folder;
+  if (F.id !== c.id) { Object.assign(F, { id: c.id, files: [], preview: null, loading: true, error: null }); loadFolder(c.id); }
+  const count = (cat) => F.files.filter((f) => f.category === cat).length;
+  const late = lateCount(c);
+  const head = h('div', { class: 'page-head' },
+    h('div', {}, h('a', { class: 'eyebrow back', href: '#clientes' }, '← Clientes'), h('h1', {}, c.name)),
+    h('div', { class: 'spacer' }),
+    h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, '🔒 Pasta privada · só você vê'));
+  const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
+    ...FOLDER_TABS.map(([k, l]) => {
+      const n = k === 'finance' ? late : k === 'contract' ? count('contract') : count(k);
+      return h('button', { class: 'seg-btn', 'aria-pressed': String(F.tab === k), onclick: () => { F.tab = k; render(); } },
+        l, n ? h('span', { class: `seg-n${k === 'finance' ? ' bad' : ''}` }, String(n)) : null);
+    }));
+  if (F.loading) return [head, tabs, h('p', { class: 'muted' }, 'Abrindo a pasta…')];
+  if (F.error) {
+    const needsDb = S.setup?.migration_sql || /client_files|payments|relation|schema cache|bucket/i.test(F.error);
+    return [head, h('article', { class: 'card', style: 'border-color:var(--s-wait)' },
+      h('h3', {}, needsDb ? 'A pasta precisa da atualização do banco' : 'Não consegui abrir a pasta'),
+      h('span', { class: 'muted' }, needsDb ? 'Rode o comando de atualização que aparece em Ajustes (1 segundo, não apaga nada) e volte aqui.' : F.error),
+      h('div', { class: 'actions' }, needsDb ? h('a', { class: 'btn primary sm', href: '#ajustes' }, 'Ir para Ajustes') : null,
+        h('button', { class: 'btn sm', onclick: () => { F.id = null; render(); } }, 'Tentar de novo')))];
+  }
+  const body = { contract: folderContract, finance: folderFinance, report: folderReports, other: folderOther }[F.tab](c);
+  return [head, tabs, ...body];
+}
+
+// ── Contrato
+function folderContract(c) {
+  const P = S.folder.preview || {};
+  const k = c.contract_data || {};
+  const dd = (v) => (v ? h('dd', {}, v) : h('dd', {}, h('span', { class: 'muted' }, '—')));
+  return [
+    h('div', { class: 'grid-2' },
+      h('article', { class: 'card' },
+        h('div', { class: 'eyebrow' }, 'Contrato gerado'),
+        h('h3', {}, 'Contrato de prestação de serviços'),
+        P.template_is_default ? h('div', { class: 'banner', style: 'font-size:13.5px' }, 'Usando o modelo provisório. Cole o seu modelo em ', h('a', { href: '#ajustes' }, 'Ajustes → Modelo de contrato'), '.') : null,
+        P.missing?.length
+          ? h('div', { class: 'feedback' }, h('b', {}, `Faltam ${P.missing.length} dado(s) — vão aparecer marcados no contrato:`), h('span', { style: 'font-size:13.5px' }, P.missing.join(' · ')))
+          : h('span', { class: 'ig-ok' }, '✓ Todos os dados preenchidos'),
+        h('div', { class: 'actions' },
+          h('a', { class: 'btn primary', href: `/contrato?client=${c.id}`, target: '_blank', rel: 'noopener' }, 'Gerar PDF do contrato'),
+          h('button', { class: 'btn', onclick: () => openContractData(c) }, 'Editar dados')),
+        h('span', { class: 'hint muted', style: 'font-size:12.5px' }, 'Abre o contrato pronto. Clique em "Salvar PDF", mande para o cliente assinar (gov.br, Clicksign, D4Sign…) e envie a versão assinada aqui embaixo.')),
+      h('article', { class: 'card' },
+        h('div', { class: 'eyebrow' }, 'Dados do contrato'),
+        h('dl', { class: 'kv' },
+          h('dt', {}, 'Contratante'), dd(k.nome || c.name),
+          h('dt', {}, 'CPF/CNPJ'), dd(k.documento),
+          h('dt', {}, 'Representante'), dd(k.representante),
+          h('dt', {}, 'Mensalidade'), dd(c.monthly_fee_cents != null ? `${brl(c.monthly_fee_cents)}${c.due_day ? ` · vence dia ${c.due_day}` : ''}` : ''),
+          h('dt', {}, 'Início'), dd(c.billing_start ? fmtDay(c.billing_start) : ''),
+          h('dt', {}, 'Prazo'), dd(k.prazo_meses ? `${k.prazo_meses} meses` : '')),
+        h('button', { class: 'btn sm', style: 'justify-self:start', onclick: () => openContractData(c) }, 'Editar dados'))),
+    filesSection(c, 'contract', 'Contratos assinados e aditivos', 'Envie aqui o PDF assinado pelo cliente.'),
+  ];
+}
+const fmtDay = (iso) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+
+function openContractData(c) {
+  const k = c.contract_data || {};
+  const inp = (id, label, value, attrs = {}, hint) => {
+    const el = h(attrs.tag || 'input', { id, value: value ?? '', ...attrs, tag: null });
+    if (attrs.tag === 'textarea') el.value = value ?? '';
+    return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el, hint ? h('span', { class: 'hint' }, hint) : null)];
+  };
+  const [nome, fNome] = inp('k-nome', 'Nome ou razão social do contratante', k.nome || c.name);
+  const [doc, fDoc] = inp('k-doc', 'CPF ou CNPJ', k.documento, { placeholder: '00.000.000/0001-00' });
+  const [end, fEnd] = inp('k-end', 'Endereço completo', k.endereco, { placeholder: 'Rua, número, bairro, cidade/UF, CEP' });
+  const [rep, fRep] = inp('k-rep', 'Representante (quem assina)', k.representante, { placeholder: 'Nome e CPF' });
+  const [serv, fServ] = inp('k-serv', 'Serviços contratados', k.servicos, { tag: 'textarea', style: 'min-height:110px', placeholder: 'Ex.: Gestão do Instagram com 12 posts por mês (arte + legenda), agendamento, aprovação e relatório mensal.' });
+  const [fee, fFee] = inp('k-fee', 'Valor mensal (R$)', c.monthly_fee_cents != null ? (c.monthly_fee_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.500,00' });
+  const [due, fDue] = inp('k-due', 'Dia do vencimento', c.due_day, { type: 'number', min: 1, max: 31, placeholder: '10' });
+  const [start, fStart] = inp('k-start', 'Início do contrato', c.billing_start, { type: 'date' }, 'A cobrança mensal começa neste mês.');
+  const [prazo, fPrazo] = inp('k-prazo', 'Prazo (meses)', k.prazo_meses, { type: 'number', min: 1, max: 120, placeholder: '12' });
+  const [forma, fForma] = inp('k-forma', 'Forma de pagamento', k.forma_pagamento, { placeholder: 'PIX ou boleto' });
+  const close = drawer(`Dados do contrato · ${c.name}`, [
+    h('div', { class: 'eyebrow' }, 'Contratante'), fNome, fDoc, fEnd, fRep,
+    h('div', { class: 'eyebrow' }, 'Serviço e cobrança'), fServ,
+    h('div', { class: 'grid-2 tight' }, fFee, fDue), h('div', { class: 'grid-2 tight' }, fStart, fPrazo), fForma,
+  ], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async (e) => {
+    e.target.disabled = true;
+    try {
+      const saved = await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: {
+        monthly_fee: fee.value, due_day: due.value, billing_start: start.value,
+        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
+      } });
+      const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
+      close(); toast('Dados do contrato salvos.');
+      S.folder.preview = await api(`/api/contract?client=${c.id}`).catch(() => S.folder.preview);
+      render();
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  } }, 'Salvar')]);
+  nome.focus();
+}
+
+// ── Financeiro
+function folderFinance(c) {
+  if (!c.billing_start || c.monthly_fee_cents == null) {
+    return [h('div', { class: 'empty' }, h('h3', {}, 'Defina a mensalidade'),
+      h('p', { class: 'muted' }, 'Informe o valor, o dia do vencimento e o início do contrato. A partir daí cada mês aparece aqui como pago, em aberto ou atrasado.'),
+      h('button', { class: 'btn primary', onclick: () => openContractData(c) }, 'Preencher dados'))];
+  }
+  const months = billingMonths(c);
+  const late = months.filter((m) => m.status === 'late');
+  const paidYear = months.filter((m) => m.status === 'paid' && m.month.startsWith(todayLocal().slice(0, 4)))
+    .reduce((s, m) => s + (m.payment.amount_cents ?? c.monthly_fee_cents), 0);
+  const fileName = (id) => S.folder.files.find((f) => f.id === id)?.name;
+  return [
+    h('div', { class: 'stats' },
+      stat('Mensalidade', brl(c.monthly_fee_cents), c.due_day ? `vence todo dia ${c.due_day}` : 'vence no fim do mês'),
+      stat('Em atraso', late.length ? brl(late.length * c.monthly_fee_cents) : 'Nada', late.length ? `${late.length} mês(es)` : 'tudo em dia', late.length ? 'bad' : 'good'),
+      stat(`Recebido em ${todayLocal().slice(0, 4)}`, brl(paidYear), 'pela marcação de pagos')),
+    h('div', { class: 'months' }, ...months.map((m) => {
+      const [label, cls] = PAY_LABEL[m.status];
+      const p = m.payment;
+      const sub = m.status === 'paid' ? `Pago${p.paid_at ? ` em ${fmtDay(p.paid_at)}` : ''} · ${brl(p.amount_cents ?? c.monthly_fee_cents)}`
+        : m.status === 'waived' ? (p.note || 'Sem cobrança neste mês')
+        : `Vence ${fmtDay(m.due)} · ${brl(c.monthly_fee_cents)}`;
+      return h('div', { class: `month-row${m.status === 'late' ? ' is-late' : ''}` },
+        h('div', { class: 'month-name' }, monthLabel(m.month)),
+        h('span', { class: `pill ${cls}` }, label),
+        h('div', { class: 'month-sub muted' }, sub, p?.note && m.status === 'paid' ? ` · ${p.note}` : ''),
+        h('div', { class: 'month-act' },
+          p?.file_id && fileName(p.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/files?id=${p.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(p.file_id) }, '📎 Comprovante') : null,
+          h('button', { class: `btn sm${m.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m) }, m.status === 'paid' || m.status === 'waived' ? 'Editar' : 'Registrar pagamento')));
+    })),
+    filesSection(c, 'receipt', 'Todos os comprovantes', 'Comprovantes enviados ao registrar pagamentos aparecem aqui. Também dá para enviar direto.', { month: true }),
+  ];
+}
+const stat = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:13px' }, sub));
+
+function openPayment(c, m) {
+  const p = m.payment;
+  let status = p?.status === 'waived' ? 'waived' : 'paid';
+  const paidAt = h('input', { type: 'date', id: 'p-date', value: p?.paid_at || todayLocal() });
+  const amount = h('input', { id: 'p-amount', inputmode: 'decimal', value: ((p?.amount_cents ?? c.monthly_fee_cents) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) });
+  const note = h('input', { id: 'p-note', value: p?.note || '', placeholder: status === 'waived' ? 'Ex.: mês de cortesia' : 'Ex.: pago via PIX' });
+  const file = h('input', { type: 'file', id: 'p-file', accept: ACCEPT });
+  const paidFields = h('div', { style: 'display:grid;gap:14px' },
+    h('div', { class: 'grid-2 tight' },
+      h('div', { class: 'field' }, h('label', { for: 'p-date' }, 'Data do pagamento'), paidAt),
+      h('div', { class: 'field' }, h('label', { for: 'p-amount' }, 'Valor recebido (R$)'), amount)),
+    h('div', { class: 'field' }, h('label', { for: 'p-file' }, p?.file_id ? 'Trocar comprovante (opcional)' : 'Comprovante (opcional)'), file,
+      h('span', { class: 'hint' }, 'PDF ou print do PIX/boleto, até 4 MB. Fica guardado na pasta do cliente.')));
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Situação' },
+    ...[['paid', 'Pago'], ['waived', 'Isento / cortesia']].map(([k, l]) => h('button', { class: 'seg-btn', type: 'button', 'aria-pressed': String(status === k),
+      onclick: (e) => { status = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); paidFields.hidden = k !== 'paid'; } }, l)));
+  paidFields.hidden = status !== 'paid';
+  const save = h('button', { class: 'btn primary', onclick: async () => {
+    save.disabled = true;
+    try {
+      let fileId = p?.file_id || null;
+      if (status === 'paid' && file.files[0]) {
+        const up = await uploadDoc(c, file.files[0], 'receipt', m.month);
+        S.folder.files.unshift(up); fileId = up.id;
+      }
+      const cents = Math.round(Number(amount.value.replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) * 100);
+      if (status === 'paid' && !Number.isFinite(cents)) throw new Error('Valor inválido.');
+      const row = await api('/api/payments', { method: 'PUT', body: {
+        client_id: c.id, ref_month: m.month, status, note: note.value,
+        ...(status === 'paid' ? { paid_at: paidAt.value || null, amount_cents: cents, file_id: fileId } : { file_id: null }),
+      } });
+      S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month)).concat(row);
+      close(); render(); toast(status === 'paid' ? `${monthLabel(m.month)} marcado como pago.` : `${monthLabel(m.month)} marcado como isento.`);
+    } catch (e) { toast(e.message, true); save.disabled = false; }
+  } }, 'Salvar');
+  const foot = [];
+  if (p) foot.push(confirmButton('Voltar para em aberto', 'Confirmar', async () => {
+    await api(`/api/payments?client=${c.id}&month=${m.month}`, { method: 'DELETE' });
+    S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month));
+    close(); render(); toast('Pagamento desfeito.');
+  }, 'btn ghost'));
+  foot.push(h('span', { class: 'spacer' }), save);
+  const close = drawer(`${c.name} · ${monthLabel(m.month)}`, [
+    h('div', { class: 'muted', style: 'font-size:14px' }, `Mensalidade de ${brl(c.monthly_fee_cents)} com vencimento em ${fmtDay(m.due)}.`),
+    seg, paidFields,
+    h('div', { class: 'field' }, h('label', { for: 'p-note' }, 'Observação'), note),
+  ], foot);
+}
+
+// ── Relatórios e Outros
+function folderReports(c) {
+  return [filesSection(c, 'report', 'Relatórios mensais', 'Envie o relatório de cada mês (PDF de desempenho, prints de métricas, planilhas). Escolha o mês antes de enviar.', { month: true, group: true })];
+}
+function folderOther(c) {
+  return [filesSection(c, 'other', 'Outros documentos', 'Briefing, manual de marca, notas fiscais, propostas, acessos documentados…')];
+}
+
+async function uploadDoc(c, file, category, refMonth) {
+  if (file.size > 4 * 1024 * 1024) throw new Error(`"${file.name}" tem mais de 4 MB. Comprima e tente de novo.`);
+  const qs = new URLSearchParams({ client: c.id, category });
+  if (refMonth) qs.set('ref_month', refMonth);
+  return api(`/api/files?${qs}`, { method: 'POST', raw: file, headers: { 'x-file-name': encodeURIComponent(file.name) } });
+}
+
+const FILE_ICON = (f) => (f.mime === 'application/pdf' ? 'PDF' : f.mime.startsWith('image/') ? 'IMG' : /sheet|excel|csv/.test(f.mime) ? 'XLS' : /word/.test(f.mime) ? 'DOC' : 'TXT');
+
+function filesSection(c, category, title, hint, { month = false, group = false } = {}) {
+  const list = S.folder.files.filter((f) => f.category === category);
+  const monthInput = month ? h('input', { type: 'month', value: todayLocal().slice(0, 7), 'aria-label': 'Mês de referência', class: 'month-in' }) : null;
+  const status = h('span', { class: 'muted', style: 'font-size:13px' });
+  const input = h('input', { type: 'file', accept: ACCEPT, multiple: true, hidden: true, onchange: () => send([...input.files]) });
+  async function send(files) {
+    if (!files.length) return;
+    let ok = 0;
+    for (const [i, f] of files.entries()) {
+      status.textContent = `Enviando ${i + 1} de ${files.length}…`;
+      try { S.folder.files.unshift(await uploadDoc(c, f, category, monthInput?.value || null)); ok++; }
+      catch (e) { toast(e.message, true); }
+    }
+    input.value = ''; status.textContent = '';
+    if (ok) { toast(ok > 1 ? `${ok} arquivos guardados.` : 'Arquivo guardado.'); render(); }
+  }
+  const row = (f) => h('div', { class: 'file' },
+    h('span', { class: `file-ic ic-${FILE_ICON(f).toLowerCase()}`, 'aria-hidden': 'true' }, FILE_ICON(f)),
+    h('div', { class: 'file-main' },
+      h('a', { class: 'file-name', href: `/api/files?id=${f.id}&open=1`, target: '_blank', rel: 'noopener' }, f.name),
+      h('span', { class: 'muted' }, [f.ref_month && !group ? monthLabel(f.ref_month, true) : null, fileSize(f.size), `enviado em ${fmtDay(partsInTz(f.created_at, S.tz).date)}`].filter(Boolean).join(' · '))),
+    h('div', { class: 'file-act' },
+      h('a', { class: 'btn ghost sm', href: `/api/files?id=${f.id}&download=1`, title: 'Baixar' }, 'Baixar'),
+      confirmButton('Apagar', 'Confirmar', async () => {
+        await api(`/api/files?id=${f.id}`, { method: 'DELETE' });
+        S.folder.files = S.folder.files.filter((x) => x.id !== f.id); render(); toast('Arquivo apagado.');
+      }, 'btn ghost sm danger')));
+  let content;
+  if (!list.length) content = h('p', { class: 'muted files-empty' }, 'Nada aqui ainda. Arraste arquivos para cá ou clique em Enviar.');
+  else if (group) {
+    const by = new Map();
+    for (const f of list) { const k = f.ref_month || 'sem-mes'; if (!by.has(k)) by.set(k, []); by.get(k).push(f); }
+    content = h('div', { class: 'files' }, ...[...by.keys()].sort().reverse().map((k) => [
+      h('div', { class: 'files-month eyebrow' }, k === 'sem-mes' ? 'Sem mês' : monthLabel(k)), ...by.get(k).map(row)]).flat());
+  } else content = h('div', { class: 'files' }, ...list.map(row));
+  const box = h('section', { class: 'card dropzone',
+    ondragover: (e) => { e.preventDefault(); box.classList.add('over'); },
+    ondragleave: () => box.classList.remove('over'),
+    ondrop: (e) => { e.preventDefault(); box.classList.remove('over'); send([...e.dataTransfer.files]); } },
+    h('div', { class: 'files-head' },
+      h('div', { style: 'flex:1;min-width:200px' }, h('h3', {}, title), h('span', { class: 'muted', style: 'font-size:13.5px' }, hint)),
+      monthInput, h('button', { class: 'btn primary sm', onclick: () => input.click() }, '+ Enviar arquivo'), input),
+    status, content);
+  return box;
 }

@@ -4,7 +4,7 @@ import { isAdmin, checkPassword, sessionCookie, clearCookie } from '../lib/auth.
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
-import { MIGRATION_WORKFLOW } from '../lib/migrations.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -34,9 +34,13 @@ async function setupInfo() {
     info.cron_sql = cronSql(info.app_url, cronSecret());
     try { info.publisher_last_run = (await db.one('app_state', { select: 'value', key: 'eq.publisher' }))?.value?.at || null; }
     catch (e) { info.publisher_state_error = e.message; /* tabela app_state ainda não existe ou não visível */ }
-    // banco desatualizado? (colunas da atualização 2)
+    // banco desatualizado? os comandos são seguros de rodar de novo, então junta o que faltar
+    const parts = [];
     try { await db.select('posts', { select: 'title', limit: 1 }); await db.select('clients', { select: 'brand_voice', limit: 1 }); }
-    catch { info.migration_sql = MIGRATION_WORKFLOW; }
+    catch { parts.push(MIGRATION_WORKFLOW); }
+    try { await db.select('client_files', { select: 'id', limit: 1 }); await db.select('payments', { select: 'ref_month', limit: 1 }); await db.select('clients', { select: 'monthly_fee_cents', limit: 1 }); }
+    catch { parts.push(MIGRATION_FOLDERS); }
+    if (parts.length) info.migration_sql = parts.join('\n\n');
   }
   return info;
 }

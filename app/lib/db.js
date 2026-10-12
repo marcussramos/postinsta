@@ -65,6 +65,33 @@ export const db = {
   }),
 };
 
+// Bucket PRIVADO dos documentos dos clientes (contratos, comprovantes, relatórios).
+// Nada aqui é público: para abrir, o servidor gera um link temporário só para a agência.
+const DOCS = 'docs';
+export const docs = {
+  async upload(path, buffer, contentType = 'application/octet-stream') {
+    await call(`/storage/v1/object/${DOCS}/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType, 'x-upsert': 'false' },
+      body: buffer,
+    });
+    return path;
+  },
+  async signedUrl(path, { expiresIn = 300, downloadName } = {}) {
+    const r = await call(`/storage/v1/object/sign/${DOCS}/${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn }),
+    });
+    const rel = r.signedURL || r.signedUrl;
+    const url = `${env('SUPABASE_URL')}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`;
+    return downloadName ? `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(downloadName)}` : url;
+  },
+  async remove(path) {
+    if (!path) return;
+    try { await call(`/storage/v1/object/${DOCS}/${path}`, { method: 'DELETE' }); }
+    catch (e) { console.warn('Não foi possível apagar o documento', path, e.message); }
+  },
+};
+
 export const storage = {
   async upload(path, buffer, contentType = 'image/jpeg') {
     await call(`/storage/v1/object/${BUCKET}/${path}`, {

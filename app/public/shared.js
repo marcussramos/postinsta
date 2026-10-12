@@ -30,8 +30,8 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-export async function api(path, { method = 'GET', body, raw } = {}) {
-  const init = { method, headers: {}, credentials: 'same-origin' };
+export async function api(path, { method = 'GET', body, raw, headers = {} } = {}) {
+  const init = { method, headers: { ...headers }, credentials: 'same-origin' };
   if (raw) { init.body = raw; init.headers['Content-Type'] = 'application/octet-stream'; }
   else if (body !== undefined) { init.body = JSON.stringify(body); init.headers['Content-Type'] = 'application/json'; }
   let res;
@@ -142,3 +142,14 @@ export const mailLink = (to, subject, body) => `mailto:${encodeURIComponent(to |
 export function blobToDataUrl(blob) {
   return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(blob); });
 }
+
+// ── dinheiro e meses
+export const brl = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+export function monthLabel(ym, short = false) { // '2026-10' → 'outubro de 2026' / 'out/26'
+  const [y, m] = ym.split('-').map(Number);
+  if (short) return `${MESES[m - 1].slice(0, 3)}/${String(y).slice(2)}`;
+  const t = `${MESES[m - 1]} de ${y}`;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+export function fileSize(n) { return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1).replace('.', ',')} MB`; }
