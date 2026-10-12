@@ -1,5 +1,6 @@
 // MC DIGITAL — painel da agência (JavaScript puro, sem build).
-import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize } from '/shared.js';
+import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
+import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
 const VIEWS = ['agenda', 'calendario', 'fluxo', 'clientes', 'ajustes'];
 const S = {
@@ -28,9 +29,10 @@ async function boot() {
   S.view = viewFromHash();
   try {
     const s = await api('/api/session');
-    Object.assign(S, { admin: s.admin, tz: s.timezone, setup: s.setup || null });
+    Object.assign(S, { admin: s.admin, staff: s.staff ?? s.admin, role: s.role || (s.admin ? 'admin' : null), userName: s.name, tz: s.timezone, setup: s.setup || null });
   } catch { /* mostra o login */ }
-  if (!S.admin) return renderLogin();
+  if (!S.staff) return renderLogin();
+  if (S.role !== 'admin' && S.view === 'ajustes') { S.view = 'agenda'; history.replaceState(null, '', '#agenda'); }
   await loadAll();
 }
 
@@ -38,9 +40,10 @@ async function loadAll() {
   try {
     const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
     S.clients = clients; S.posts = posts;
-    S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
+    if (S.role === 'admin') S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
+    await loadExtras();
   } catch (e) {
-    if (e.status === 401) { S.admin = false; return renderLogin(); }
+    if (e.status === 401) { S.admin = false; S.staff = false; return renderLogin(); }
     toast(e.message, true);
   }
   render();
@@ -50,11 +53,12 @@ window.addEventListener('hashchange', () => { S.view = viewFromHash(); render();
 
 // Mantém tudo em dia com as decisões dos clientes: atualiza ao voltar para a aba e a cada minuto.
 async function refresh() {
-  if (!S.admin || document.hidden || document.querySelector('.drawer')) return;
+  if (!S.staff || document.hidden || document.querySelector('.drawer')) return;
   try {
     const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
     const changed = JSON.stringify(posts) !== JSON.stringify(S.posts) || JSON.stringify(clients) !== JSON.stringify(S.clients);
     S.clients = clients; S.posts = posts;
+    await loadExtras();
     if (S.view === 'calendario') await loadMonth(S.cal.month, true);
     if (changed) render();
   } catch { /* tenta de novo na próxima */ }
@@ -62,20 +66,32 @@ async function refresh() {
 document.addEventListener('visibilitychange', refresh);
 setInterval(refresh, 60_000);
 
+// Contador de entregas do mês e pedidos abertos dos clientes (falham em silêncio antes da atualização do banco).
+async function loadExtras() {
+  const [deliv, reqs] = await Promise.all([
+    api(`/api/pasta?r=deliveries&month=${todayLocal().slice(0, 7)}`).catch(() => null),
+    api('/api/pasta?r=requests&open=1').catch(() => null),
+  ]);
+  S.deliv = deliv || {}; S.requests = reqs || [];
+}
+
 // ───────────────────────── login
 function renderLogin() {
+  const email = h('input', { type: 'email', id: 'em', autocomplete: 'username', placeholder: 'só para contas da equipe' });
   const pw = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password', required: true });
   const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Entrar');
   root.replaceChildren(h('main', { class: 'login' },
     h('form', { onsubmit: async (e) => {
       e.preventDefault(); btn.disabled = true;
       try {
-        const s = await api('/api/session', { method: 'POST', body: { password: pw.value } });
-        S.admin = true; S.tz = s.timezone; await boot();
+        const body = email.value.trim() ? { email: email.value.trim(), password: pw.value } : { password: pw.value };
+        const s = await api('/api/session', { method: 'POST', body });
+        S.admin = s.admin; S.staff = true; S.role = s.role; S.tz = s.timezone; await boot();
       } catch (err) { toast(err.message, true); btn.disabled = false; pw.select(); }
     } },
       brand(),
       h('h1', {}, 'Entrar no painel'),
+      h('div', { class: 'field' }, h('label', { for: 'em' }, 'E-mail'), email, h('span', { class: 'hint' }, 'Administrador principal: deixe em branco e use a senha do painel.')),
       h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Senha'), pw),
       btn,
     )));
@@ -89,16 +105,19 @@ function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
-    h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), tab('ajustes', 'Ajustes')),
+    h('nav', { class: 'tabs' }, tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),
-    h('button', { class: 'btn ghost sm', onclick: logout, title: 'Sair' }, 'Sair'),
+    h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
   const page = h('main', { class: `page${S.view === 'fluxo' ? ' wide' : ''}` });
-  const pend = setupPending();
+  if (S.view === 'ajustes' && S.role !== 'admin') S.view = 'agenda';
+  const pend = S.role === 'admin' ? setupPending() : [];
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
   const views = { clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder };
-  page.append(...views[S.view]().filter(Boolean));
+  const main = views[S.view]().filter(Boolean);
+  if (S.view === 'agenda' && S.clients.length) main.splice(1, 0, ...[approvalReminders(), requestsInbox()].filter(Boolean));
+  page.append(...main);
   root.replaceChildren(top, page);
 }
 
@@ -116,6 +135,24 @@ function clientFilter() {
     ...S.clients.map((c) => h('button', { class: 'chip', 'aria-pressed': String(S.fClient === c.id), onclick: () => { S.fClient = c.id; render(); } }, c.name)));
 }
 
+// "Out: 6/8 posts · 2/4 Reels" — publicados/programados no mês contra a cota do contrato
+function deliveryLine(cid, { big = false } = {}) {
+  const d = S.deliv?.[cid];
+  if (!d) return null;
+  const part = (x, name) => {
+    if (x.quota == null && !x.planned) return null;
+    const pct = x.quota ? Math.min(100, Math.round((x.planned / x.quota) * 100)) : 0;
+    return h('div', { class: `dl${x.quota && x.planned > x.quota ? ' over' : ''}` },
+      h('div', { class: 'dl-top' }, h('b', {}, x.quota != null ? `${x.planned}/${x.quota}` : `${x.planned}`), ` ${name}`,
+        h('span', { class: 'muted' }, ` · ${x.published} no ar`)),
+      x.quota ? h('div', { class: 'dl-bar' }, h('span', { style: `width:${pct}%` })) : null);
+  };
+  const a = part(d.posts, 'posts'), b = part(d.reels, 'Reels');
+  if (!a && !b) return null;
+  return h('div', { class: `deliv${big ? ' big' : ''}`, title: 'Programados/publicados no mês contra a cota do contrato' },
+    h('span', { class: 'eyebrow' }, `Entregas · ${monthLabel(d.month, true)}`), a, b);
+}
+const typeBadge = (p) => (p.media_type === 'REELS' ? h('span', { class: 'type-badge' }, '▶ Reels') : p.media_type === 'CAROUSEL' ? h('span', { class: 'type-badge' }, `❐ ${(p.media || []).length || ''}`.trim()) : null);
 const thumb = (p, cls = 'thumb') => p.image_url
   ? h('img', { class: cls, src: p.image_url, alt: '', loading: 'lazy' })
   : h('span', { class: `${cls} thumb-empty`, 'aria-hidden': 'true' }, p.status === 'idea' ? '💡' : '🖼');
@@ -173,7 +210,7 @@ function rowPost(p) {
   return h('button', { class: 'row', onclick: () => openPost(p) },
     thumb(p),
     h('div', { class: 'time' }, p.scheduled_at ? fmtTime(p.scheduled_at, S.tz) : '—'),
-    h('div', { class: 'main' }, h('div', { class: 'client' }, clientName(p.client_id)), h('div', { class: 'cap' }, p.title ? p.title : (p.caption || 'Sem legenda')), note),
+    h('div', { class: 'main' }, h('div', { class: 'client' }, clientName(p.client_id), ' ', typeBadge(p)), h('div', { class: 'cap' }, p.title ? p.title : (p.caption || 'Sem legenda')), note),
     h('div', { class: 'side' }, h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]), isLate(p) ? h('span', { class: 'late' }, 'Horário já passou') : null));
 }
 
@@ -254,7 +291,7 @@ function viewCalendar() {
               ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`,
                 onclick: () => (i === 3 && list.length > 4 ? (S.cal.day = d, render()) : openPost(p)) },
                 p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
-                h('span', { class: 'cal-tile-time mono' }, fmtTime(p.scheduled_at, S.tz)),
+                h('span', { class: 'cal-tile-time mono' }, `${p.media_type === 'REELS' ? '▶ ' : p.media_type === 'CAROUSEL' ? '❐ ' : ''}${fmtTime(p.scheduled_at, S.tz)}`),
                 h('span', { class: 'cal-tile-dot', 'aria-hidden': 'true' }),
                 i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null)))
           : h('div', { class: 'cal-list' },
@@ -383,7 +420,7 @@ function openPost(post = null, opts = {}) {
   let img = post?.image_url ? { url: post.image_url } : null; // { blob, url, note } quando trocada
 
   // Clientes: no post novo dá para escolher vários (um post por cliente).
-  const picked = new Set([post?.client_id || S.fClient || S.clients[0].id]);
+  const picked = new Set([post?.client_id || opts.client || S.fClient || S.clients[0].id]);
   const clientBox = h('div', { class: 'pick' });
   const drawClients = () => clientBox.replaceChildren(...S.clients.map((c) => h('button', {
     type: 'button', class: 'chip', 'aria-pressed': String(picked.has(c.id)), disabled: !isNew,
@@ -391,29 +428,110 @@ function openPost(post = null, opts = {}) {
   }, c.name)));
   drawClients();
 
-  const title = h('input', { type: 'text', id: 'f-title', value: post?.title || '', disabled: locked, placeholder: 'Ex.: Frase motivacional de segunda', maxlength: 140 });
-  const notes = h('textarea', { id: 'f-notes', disabled: locked, placeholder: 'Briefing, referências, observações para a equipe. O cliente não vê.', style: 'min-height:70px' }, post?.notes || '');
+  const title = h('input', { type: 'text', id: 'f-title', value: post?.title || opts.title || '', disabled: locked, placeholder: 'Ex.: Frase motivacional de segunda', maxlength: 140 });
+  const notes = h('textarea', { id: 'f-notes', disabled: locked, placeholder: 'Briefing, referências, observações para a equipe. O cliente não vê.', style: 'min-height:70px' }, post?.notes || opts.notes || '');
 
+  // ── mídia: Foto (1 imagem) | Carrossel (2 a 10 imagens) | Reels (vídeo + capa)
+  let mtype = post?.media_type || 'IMAGE';
+  let mediaDirty = false;
+  let items = mtype === 'CAROUSEL' ? (post.media || []).filter((m) => m.kind === 'image').map((m) => ({ url: m.url, path: m.path })) : [];
+  let video = mtype === 'REELS' ? ((post.media || []).find((m) => m.kind === 'video') || null) : null; // { url, path } ou { file, url, duration }
+  let coverT = 1;
   const fileIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => fileIn.files[0] && takeFile(fileIn.files[0]) });
-  const imgBox = h('div', {});
+  const multiIn = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: () => addItems([...multiIn.files]) });
+  const videoIn = h('input', { type: 'file', accept: 'video/mp4,video/quicktime,.mp4,.mov,.m4v', hidden: true, onchange: () => videoIn.files[0] && takeVideo(videoIn.files[0]) });
+  const imgBox = h('div', { class: 'media-box' });
+  const typeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Formato do post' });
+  const drawSeg = () => typeSeg.replaceChildren(...Object.entries(MEDIA_LABEL).map(([k, l]) => h('button', {
+    type: 'button', class: 'seg-btn', 'aria-pressed': String(mtype === k), disabled: locked,
+    onclick: () => { if (mtype === k) return; if (mtype === 'REELS') img = null; mtype = k; mediaDirty = true; if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); },
+  }, { IMAGE: '🖼 ', CAROUSEL: '❐ ', REELS: '▶ ' }[k] + l)));
+  const dropZone = (title, hint, onPick, onFiles) => {
+    const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => !locked && onPick(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } },
+      h('b', {}, title), h('span', { class: 'muted' }, hint));
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files.length) onFiles([...e.dataTransfer.files]); });
+    return drop;
+  };
   const drawImage = () => {
-    if (!img) {
-      const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => !locked && fileIn.click(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } } },
-        h('b', {}, 'Escolha a imagem do post'), h('span', { class: 'muted' }, 'Arraste aqui, cole (Ctrl+V) ou clique. Pode deixar para depois se ainda é ideia.'));
-      drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
-      drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-      drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) takeFile(f); });
-      return imgBox.replaceChildren(drop, fileIn);
-    }
+    if (mtype === 'CAROUSEL') return drawCarousel();
+    if (mtype === 'REELS') return drawReels();
+    if (!img) return imgBox.replaceChildren(dropZone('Escolha a imagem do post', 'Arraste aqui, cole (Ctrl+V) ou clique. Pode deixar para depois se ainda é ideia.', () => fileIn.click(), (fs) => takeFile(fs[0])), fileIn);
     imgBox.replaceChildren(h('div', { class: 'preview' }, h('img', { src: img.url, alt: 'Prévia do post' }),
       h('div', { style: 'display:grid;gap:8px' },
         h('span', { class: 'hint muted' }, img.note || 'Como vai aparecer no feed.'),
         locked ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => fileIn.click() }, 'Trocar imagem'))), fileIn);
   };
-  const takeFile = async (f) => { try { img = await prepareImage(f); drawImage(); } catch (e) { toast(e.message, true); } };
-  const onPaste = (e) => { const f = [...(e.clipboardData?.files || [])][0]; if (f && !locked) takeFile(f); };
+  const drawCarousel = () => {
+    const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; mediaDirty = true; drawImage(); };
+    const tiles = items.map((it, i) => h('div', { class: 'car-item' },
+      h('img', { src: it.url, alt: `Imagem ${i + 1}` }), h('span', { class: 'car-n' }, String(i + 1)),
+      locked ? null : h('div', { class: 'car-act' },
+        h('button', { type: 'button', title: 'Mover para a esquerda', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
+        h('button', { type: 'button', title: 'Remover', onclick: () => { items.splice(i, 1); mediaDirty = true; drawImage(); } }, '✕'),
+        h('button', { type: 'button', title: 'Mover para a direita', disabled: i === items.length - 1, onclick: () => move(i, 1) }, '→'))));
+    const add = items.length < 10 && !locked ? h('button', { type: 'button', class: 'car-add', onclick: () => multiIn.click() }, h('b', {}, '+'), h('span', {}, items.length ? 'Adicionar' : 'Escolher imagens')) : null;
+    const box = h('div', { class: 'car-grid' }, ...tiles, add);
+    box.addEventListener('dragover', (e) => e.preventDefault());
+    box.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) addItems([...e.dataTransfer.files]); });
+    imgBox.replaceChildren(box, h('span', { class: 'hint muted' }, `${items.length}/10 imagens · a 1ª é a capa · o Instagram usa a proporção da 1ª em todas (use o mesmo formato, de preferência 4:5).`), multiIn);
+  };
+  const addItems = async (files) => {
+    for (const f of files.slice(0, 10 - items.length)) {
+      try { items.push(await prepareImage(f)); mediaDirty = true; } catch (e) { toast(e.message, true); }
+    }
+    multiIn.value = ''; drawImage();
+  };
+  const drawReels = () => {
+    if (!video) return imgBox.replaceChildren(dropZone('Escolha o vídeo do Reels', 'MP4 ou MOV, vertical 9:16, de 3 s a 15 min, até 50 MB.', () => videoIn.click(), (fs) => takeVideo(fs[0])), videoIn);
+    const v = h('video', { src: video.url, controls: true, playsinline: true, muted: true, preload: 'metadata', class: 'reel-video', poster: img?.url || null });
+    const coverImg = img ? h('img', { src: img.url, alt: 'Capa do Reels', class: 'reel-cover' }) : h('div', { class: 'reel-cover thumb-empty' }, 'sem capa');
+    const slider = video.duration ? h('input', { type: 'range', min: 0, max: Math.max(0, Math.floor(video.duration * 10) / 10), step: 0.1, value: coverT, 'aria-label': 'Momento da capa',
+      onchange: async (e) => { coverT = Number(e.target.value); v.currentTime = coverT; try { img = await videoFrame(video.url, coverT); mediaDirty = true; drawImage(); } catch (err) { toast(err.message, true); } } }) : null;
+    imgBox.replaceChildren(h('div', { class: 'reel-wrap' }, v,
+      h('div', { class: 'reel-side' },
+        h('span', { class: 'label' }, 'Capa'), coverImg,
+        slider ? h('label', { class: 'hint muted' }, 'Arraste para escolher o quadro da capa', slider) : null,
+        locked ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => fileIn.click() }, 'Usar outra imagem como capa'),
+        locked ? null : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => videoIn.click() }, 'Trocar vídeo'),
+        video.duration ? h('span', { class: 'hint muted' }, `${Math.round(video.duration)} s${video.file ? ` · ${fileSize(video.file.size)}` : ''}`) : null)), fileIn, videoIn);
+  };
+  const takeVideo = async (f) => {
+    try {
+      if (f.size > 50 * 1024 * 1024) throw new Error(`Vídeo com ${fileSize(f.size)}: o máximo é 50 MB. Exporte em 1080p no CapCut/celular e tente de novo.`);
+      const info = await videoInfo(f);
+      if (info.duration < 3) throw new Error('O Reels precisa ter pelo menos 3 segundos.');
+      if (info.duration > 900) throw new Error('O Reels pode ter no máximo 15 minutos.');
+      video = { file: f, url: info.url, duration: info.duration };
+      coverT = Math.min(1, info.duration / 2);
+      img = await videoFrame(info.url, coverT);
+      mediaDirty = true;
+      if (info.width > info.height) toast('Dica: vídeo horizontal aparece com faixas no Reels. O ideal é vertical 9:16.');
+    } catch (e) { toast(e.message, true); }
+    videoIn.value = ''; drawImage();
+  };
+  const takeFile = async (f) => {
+    try {
+      if (mtype === 'REELS') { img = await videoFrameFromImage(f); } else { img = await prepareImage(f); }
+      mediaDirty = true; drawImage();
+    } catch (e) { toast(e.message, true); }
+  };
+  // capa do Reels enviada pela agência: JPEG sem cortar (pode ser 9:16)
+  const videoFrameFromImage = async (f) => {
+    if (!f.type.startsWith('image/')) throw new Error('Escolha uma imagem para a capa.');
+    const url = URL.createObjectURL(f);
+    const bmp = await createImageBitmap(f);
+    const scale = Math.min(1, 1080 / bmp.width);
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+    URL.revokeObjectURL(url);
+    return { blob, url: URL.createObjectURL(blob) };
+  };
+  const onPaste = (e) => { const fs = [...(e.clipboardData?.files || [])]; if (!fs.length || locked) return; if (mtype === 'CAROUSEL') addItems(fs); else takeFile(fs[0]); };
   document.addEventListener('paste', onPaste);
-  drawImage();
+  drawSeg(); drawImage();
 
   const cap = h('textarea', { id: 'f-cap', disabled: locked, placeholder: 'Legenda, emojis e hashtags…' }, post?.caption || '');
   const counter = h('div', { class: 'counter' });
@@ -433,6 +551,21 @@ function openPost(post = null, opts = {}) {
   const tIn = h('input', { type: 'time', id: 'f-time', value: when.time, disabled: locked });
   const alt = h('input', { type: 'text', id: 'f-alt', value: post?.alt_text || '', disabled: locked, placeholder: 'Ex.: Card escuro com a frase “Não é sorte, é corre.”' });
 
+  // ── melhores horários do cliente (clique para usar a próxima data com aquele dia/hora)
+  const bestBox = h('div', { class: 'best' });
+  const loadBest = async () => {
+    const cid = [...picked][0];
+    bestBox.replaceChildren(h('span', { class: 'muted' }, 'Calculando melhores horários…'));
+    try {
+      const r = await api(`/api/pasta?r=besttime&client=${cid}`);
+      const nextDate = (wd) => { const t = new Date(`${todayLocal()}T12:00:00Z`); for (let i = 1; i <= 7; i++) { const d = new Date(t.getTime() + i * 864e5); if (d.getUTCDay() === wd) return d.toISOString().slice(0, 10); } return todayLocal(); };
+      bestBox.replaceChildren(h('span', { class: 'label' }, '⏱ Melhores horários'),
+        ...r.slots.map((sl) => h('button', { type: 'button', class: 'chip', title: sl.lift ? `${sl.lift}× o desempenho médio do perfil (${sl.n} post${sl.n > 1 ? 's' : ''})` : 'Sugestão geral', onclick: () => { dIn.value = nextDate(sl.weekday); tIn.value = `${String(sl.hour).padStart(2, '0')}:00`; toast(`Agendado para ${sl.label}.`); } }, sl.label)),
+        h('span', { class: 'hint muted' }, r.source === 'perfil' ? `com base em ${r.based_on} posts do perfil (curtidas e comentários)` : 'sugestão geral; o app aprende com os posts do perfil'));
+    } catch { bestBox.replaceChildren(); }
+  };
+  if (!locked) loadBest();
+
   const body = [];
   if (post) {
     body.push(h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
@@ -448,14 +581,16 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('span', { class: 'label' }, isNew ? 'Cliente(s)' : 'Cliente'), clientBox,
       isNew ? h('span', { class: 'hint' }, 'Escolha mais de um para criar o mesmo post em vários perfis.') : null),
     h('div', { class: 'field' }, h('label', { for: 'f-title' }, 'Pauta (uso interno)'), title),
-    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Imagem'), imgBox,
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Formato e mídia'), typeSeg, imgBox,
+      h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? items[0]?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
       locked ? null : h('div', { class: 'canva-row' },
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
-        h('span', { class: 'hint' }, 'Crie a arte em 1080×1350, baixe em PNG/JPG e arraste aqui.'))),
+        h('span', { class: 'hint' }, 'Feed 1080×1350 · Reels 1080×1920. Baixe e arraste aqui.'))),
     h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), cap, counter, locked ? null : aiPanel()),
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
       h('div', { class: 'field' }, h('label', { for: 'f-time' }, 'Hora'), tIn)),
+    locked ? null : bestBox,
     h('div', { class: 'field' }, h('label', { for: 'f-notes' }, 'Notas da equipe'), notes),
     h('div', { class: 'field' }, h('label', { for: 'f-alt' }, 'Texto alternativo (opcional)'), alt, h('span', { class: 'hint' }, 'Descrição da imagem para pessoas com deficiência visual.')),
   );
@@ -475,8 +610,10 @@ function openPost(post = null, opts = {}) {
       go.disabled = true; results.replaceChildren(h('p', { class: 'muted', style: 'margin:0' }, img ? 'Lendo a imagem e escrevendo…' : 'Escrevendo…'));
       try {
         const payload = { client_id: [...picked][0], brief: brief.value, title: title.value, current: cap.value };
-        if (img?.blob) payload.image_base64 = await blobToDataUrl(img.blob);
-        else if (img?.url) payload.image_url = img.url;
+        const aiImg = mtype === 'CAROUSEL' ? items[0] : img;
+        if (aiImg?.blob) payload.image_base64 = await blobToDataUrl(aiImg.blob);
+        else if (aiImg?.url && /^https:/.test(aiImg.url)) payload.image_url = aiImg.url;
+        payload.media_type = mtype;
         const r = await api('/api/ai/caption', { method: 'POST', body: payload });
         results.replaceChildren(...r.options.map((o) => h('div', { class: 'ai-opt' },
           h('span', { class: 'eyebrow' }, o.label || 'Opção'),
@@ -501,14 +638,30 @@ function openPost(post = null, opts = {}) {
   async function save(mode) {
     const data = collect();
     const needsComplete = mode === 'send' || mode === 'approve';
-    if (needsComplete && !img) return toast('Para enviar ou aprovar, o post precisa de imagem.', true);
+    if (needsComplete && mtype === 'CAROUSEL' && items.length < 2) return toast('O carrossel precisa de pelo menos 2 imagens.', true);
+    if (needsComplete && mtype === 'REELS' && !video) return toast('Escolha o vídeo do Reels.', true);
+    if (needsComplete && mtype !== 'CAROUSEL' && !img) return toast(mtype === 'REELS' ? 'Falta a capa do Reels.' : 'Para enviar ou aprovar, o post precisa de imagem.', true);
     if (needsComplete && !data.scheduled_at) return toast('Para enviar ou aprovar, escolha a data e a hora.', true);
     if (needsComplete && new Date(data.scheduled_at) < Date.now() + 60e3 && !confirmLate) {
       confirmLate = true; return toast('Esse horário já passou: o post sai na próxima rodada (até 5 min). Clique de novo para confirmar.');
     }
     footBtns.forEach((b) => (b.disabled = true));
     try {
-      if (img?.blob) Object.assign(data, await api(`/api/upload?client=${[...picked][0]}`, { method: 'POST', raw: img.blob }));
+      const cid = [...picked][0];
+      const up = (blob) => api(`/api/upload?client=${cid}`, { method: 'POST', raw: blob });
+      if (mtype === 'CAROUSEL') {
+        for (const [i, it] of items.entries()) if (it.blob) { toast(`Enviando imagem ${i + 1} de ${items.length}…`); const r = await up(it.blob); Object.assign(it, { url: r.image_url, path: r.image_path, blob: null }); }
+        data.media = items.map((it) => ({ url: it.url, path: it.path, kind: 'image' }));
+        if (items[0]) Object.assign(data, { image_url: items[0].url, image_path: items[0].path });
+      } else {
+        if (img?.blob) { const r = await up(img.blob); Object.assign(data, r); img = { url: r.image_url, path: r.image_path }; }
+        else if (img) Object.assign(data, { image_url: img.url, image_path: img.path ?? post?.image_path ?? null });
+        if (mtype === 'REELS' && video) {
+          if (video.file) { const v = await uploadVideo(video.file, cid, (pr) => toast(`Enviando vídeo… ${Math.round(pr * 100)}%`)); video = { url: v.url, path: v.path, duration: video.duration }; }
+          data.media = [{ url: video.url, path: video.path, kind: 'video' }];
+        } else data.media = null;
+      }
+      data.media_type = mtype;
       let saved;
       if (isNew) {
         const stage = mode === 'idea' ? 'idea' : mode === 'review' ? 'internal_review' : 'draft';
@@ -520,7 +673,7 @@ function openPost(post = null, opts = {}) {
         const oldT = post.scheduled_at ? new Date(post.scheduled_at).getTime() : null;
         const newT = data.scheduled_at ? new Date(data.scheduled_at).getTime() : null;
         if (oldT !== newT) diff.scheduled_at = data.scheduled_at ?? '';
-        if (data.image_url) Object.assign(diff, { image_url: data.image_url, image_path: data.image_path });
+        if (mediaDirty) Object.assign(diff, { image_url: data.image_url || null, image_path: data.image_path || null, media_type: data.media_type, media: data.media });
         saved = Object.keys(diff).length
           ? await api(`/api/posts?id=${post.id}`, { method: 'PATCH', body: { ...diff, send: mode === 'send' } })
           : post;
@@ -611,15 +764,15 @@ function viewClients() {
   const out = [h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, `${S.clients.length} de 10 clientes`), h('h1', {}, 'Clientes')),
     h('div', { class: 'spacer' }),
-    h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente'))];
+    S.role === 'admin' ? h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente') : null)];
   if (!S.clients.length) {
     out.push(h('div', { class: 'empty' }, h('h3', {}, 'Nenhum cliente ainda'),
       h('p', { class: 'muted' }, 'Cadastre o cliente, conecte o Instagram dele e mande o link de aprovação.'),
       h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente')));
     return out;
   }
-  out.push(h('div', { class: 'grid-clients' }, ...S.clients.map(cardClient)));
-  return out;
+  out.push(chargesCard(), approvalReminders(), requestsInbox(), h('div', { class: 'grid-clients' }, ...S.clients.map(cardClient)));
+  return out.filter(Boolean);
 }
 
 function cardClient(c) {
@@ -633,6 +786,7 @@ function cardClient(c) {
     h('div', { style: 'display:flex;align-items:center;gap:10px' }, h('h3', { style: 'flex:1;min-width:0' }, c.name),
       pend ? h('span', { class: 'pill st-pending_approval' }, `${pend} aguardando`) : null,
       lateCount(c) ? h('span', { class: 'pill st-failed', title: 'Mensalidades vencidas sem pagamento' }, `${lateCount(c)} em atraso`) : null),
+    deliveryLine(c.id),
     h('dl', { class: 'kv' },
       h('dt', {}, 'Instagram'), h('dd', {}, ig),
       h('dt', {}, 'WhatsApp'), h('dd', {}, c.contact_whatsapp ? `+${c.contact_whatsapp}` : h('span', { class: 'muted' }, '—')),
@@ -641,11 +795,11 @@ function cardClient(c) {
     h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Link fixo de aprovação'),
       h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.approval_url), h('button', { class: 'btn sm', onclick: () => copyText(c.approval_url, 'Link copiado.') }, 'Copiar'))),
     h('div', { class: 'actions' },
-      c.ig_connected && !expired ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
+      c.ig_connected && !expired || S.role !== 'admin' ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
       c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, approvalMessage(c)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
       c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, approvalSubject(c), approvalMessage(c)) }, 'E-mail') : null,
-      h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, '🔒 Pasta'),
-      h('button', { class: 'btn sm', onclick: () => openClient(c) }, 'Editar')));
+      S.role === 'admin' ? h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, '🔒 Pasta') : h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, 'Marca e pedidos'),
+      S.role === 'admin' ? h('button', { class: 'btn sm', onclick: () => openClient(c) }, 'Editar') : null));
 }
 
 function openClient(c = null) {
@@ -755,6 +909,7 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsTeam(),
     ...settingsContract(),
   ];
 }
@@ -812,32 +967,23 @@ function settingsContract() {
 }
 
 // ───────────────────────── pasta privada do cliente (contrato, financeiro, relatórios)
-const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['other', 'Outros']];
+const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['history', 'Aprovações'], ['requests', 'Pedidos'], ['brand', 'Marca'], ['other', 'Outros']];
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt';
 const todayLocal = () => partsInTz(new Date().toISOString(), S.tz).date;
 const nextMonth = (m) => shiftMonth(m, 1);
 
-// Situação de cada mês desde o início da cobrança: paid | waived | open (ainda no prazo) | late (venceu)
-function billingMonths(c) {
-  if (!c.billing_start) return [];
-  const today = todayLocal(), cur = today.slice(0, 7);
-  const pays = new Map(S.payments.filter((p) => p.client_id === c.id).map((p) => [p.ref_month, p]));
-  let last = cur; for (const k of pays.keys()) if (k > last) last = k;
-  const out = [];
-  for (let m = c.billing_start.slice(0, 7); m <= last && out.length < 240; m = nextMonth(m)) {
-    const [y, mo] = m.split('-').map(Number);
-    const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-    const due = `${m}-${String(Math.min(c.due_day || lastDay, lastDay)).padStart(2, '0')}`;
-    const p = pays.get(m) || null;
-    const st = p?.status === 'paid' ? 'paid' : p?.status === 'waived' ? 'waived' : today > due ? 'late' : 'open';
-    out.push({ month: m, due, payment: p, status: st });
-  }
-  return out.reverse();
-}
+// Situação de cada mês (com parcelas) — mesma regra do servidor e da área do cliente (/billing.js)
+const billingMonths = (c) => billingMonthsShared(c, S.payments.filter((p) => p.client_id === c.id), todayLocal());
 const lateCount = (c) => billingMonths(c).filter((m) => m.status === 'late').length;
 const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'], open: ['Em aberto', 'st-pending_approval'], late: ['Atrasado', 'st-failed'] };
 
 async function loadFolder(id) {
+  if (S.role !== 'admin') { // equipe: só marca e pedidos
+    try { S.folder.files = await api(`/api/pasta?r=files&client=${id}`); S.folder.error = null; } catch (e) { S.folder.error = e.message; }
+    S.folder.loading = false; if (!['brand', 'requests'].includes(S.folder.tab)) S.folder.tab = 'requests';
+    if (S.view === 'pasta' && S.folderId === id) render();
+    return;
+  }
   try {
     const [files, payments, preview, reports] = await Promise.all([
       api(`/api/pasta?r=files&client=${id}`), api('/api/pasta?r=payments'), api(`/api/pasta?r=contract&client=${id}`),
@@ -860,13 +1006,15 @@ function viewFolder() {
     h('div', {}, h('a', { class: 'eyebrow back', href: '#clientes' }, '← Clientes'), h('h1', {}, c.name)),
     h('div', { class: 'spacer' }),
     h('div', { class: 'actions' },
-      h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, '🔒 Pasta privada'),
-      h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente')));
+      h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, S.role === 'admin' ? '🔒 Pasta privada' : '🔒 Marca e pedidos'),
+      S.role === 'admin' ? h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente') : null));
   const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
-    ...FOLDER_TABS.map(([k, l]) => {
-      const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0) : count(k);
+    ...FOLDER_TABS.filter(([k]) => S.role === 'admin' || ['requests', 'brand'].includes(k)).map(([k, l]) => {
+      const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0)
+        : k === 'requests' ? (S.requests || []).filter((r) => r.client_id === c.id && r.status !== 'done').length
+        : ['history', 'brand'].includes(k) ? 0 : count(k);
       return h('button', { class: 'seg-btn', 'aria-pressed': String(F.tab === k), onclick: () => { F.tab = k; render(); } },
-        l, n ? h('span', { class: `seg-n${k === 'finance' ? ' bad' : ''}` }, String(n)) : null);
+        l, n ? h('span', { class: `seg-n${k === 'finance' || k === 'requests' ? ' bad' : ''}` }, String(n)) : null);
     }));
   if (F.loading) return [head, tabs, h('p', { class: 'muted' }, 'Abrindo a pasta…')];
   if (F.error) {
@@ -877,8 +1025,8 @@ function viewFolder() {
       h('div', { class: 'actions' }, needsDb ? h('a', { class: 'btn primary sm', href: '#ajustes' }, 'Ir para Ajustes') : null,
         h('button', { class: 'btn sm', onclick: () => { F.id = null; render(); } }, 'Tentar de novo')))];
   }
-  const body = { contract: folderContract, finance: folderFinance, report: folderReports, other: folderOther }[F.tab](c);
-  return [head, tabs, ...body];
+  const body = { contract: folderContract, finance: folderFinance, report: folderReports, other: folderOther, history: folderHistory, brand: folderBrand, requests: folderRequests }[F.tab](c);
+  return [head, deliveryLine(c.id, { big: true }), tabs, ...body];
 }
 
 // ── Contrato
@@ -926,25 +1074,59 @@ function openContractData(c) {
   const [end, fEnd] = inp('k-end', 'Endereço completo', k.endereco, { placeholder: 'Rua, número, bairro, cidade/UF, CEP' });
   const [rep, fRep] = inp('k-rep', 'Representante (quem assina)', k.representante, { placeholder: 'Nome completo' });
   const [repCpf, fRepCpf] = inp('k-repcpf', 'CPF do representante', k.representante_cpf, { placeholder: '000.000.000-00' });
+  const [qp, fQp] = inp('k-qp', 'Posts de feed por mês (foto + carrossel)', k.quota_posts, { type: 'number', min: 0, max: 999, placeholder: '8' });
+  const [qr, fQr] = inp('k-qr', 'Reels por mês', k.quota_reels, { type: 'number', min: 0, max: 999, placeholder: '4' });
   const [entr, fEntr] = inp('k-entr', 'Entregas mensais', k.entregas, { placeholder: '8 (oito) posts estáticos e 4 (quatro) Reels' });
   const [total, fTotal] = inp('k-total', 'Total de conteúdos/mês', k.total_conteudos, { type: 'number', min: 1, max: 999, placeholder: '12' });
   const [serv, fServ] = inp('k-serv', 'Serviços contratados (opcional)', k.servicos, { tag: 'textarea', style: 'min-height:80px', placeholder: 'Só se o seu modelo usar o campo "Serviços contratados".' });
-  const [fee, fFee] = inp('k-fee', 'Valor mensal (R$)', c.monthly_fee_cents != null ? (c.monthly_fee_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.500,00' });
+  const [fee0, fFee] = inp('k-fee', 'Valor mensal (R$)', c.monthly_fee_cents != null ? (c.monthly_fee_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.500,00' });
   const [due, fDue] = inp('k-due', 'Dia do vencimento', c.due_day, { type: 'number', min: 1, max: 31, placeholder: '10' });
   const [start, fStart] = inp('k-start', 'Início do contrato', c.billing_start, { type: 'date' }, 'A cobrança mensal começa neste mês.');
+  // Parcelas da mensalidade (ex.: 3 parcelas nos dias 4, 14 e 24)
+  const centsOf = (v) => Math.round(Number(String(v || '').replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) * 100);
+  const reais = (cts) => (cts / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  let parts = Array.isArray(c.installments) && c.installments.length > 1 ? c.installments.map((x) => ({ ...x })) : [];
+  const nSel = h('select', { id: 'k-nparc', 'aria-label': 'Parcelas por mês' }, ...[1, 2, 3, 4].map((n) => h('option', { value: n, selected: (parts.length || 1) === n }, n === 1 ? '1 (à vista)' : `${n} parcelas`)));
+  const partsBox = h('div', { class: 'parts' });
+  const drawParts = () => {
+    const n = Number(nSel.value);
+    if (n === 1) { parts = []; partsBox.replaceChildren(); due.disabled = false; return; }
+    due.disabled = true;
+    const fee = centsOf(fee0.value) || 0;
+    if (parts.length !== n) {
+      const split = splitCents(fee, n), days = [Number(due.value) || 5, 15, 25, 28].slice(0, n);
+      parts = split.map((cents, i) => ({ day: parts[i]?.day || (n === 3 ? [4, 14, 24][i] : days[i] || 10 + i * 10), cents }));
+    }
+    partsBox.replaceChildren(...parts.map((pt, i) => h('div', { class: 'part-row' },
+      h('span', { class: 'muted' }, `${i + 1}ª`),
+      h('label', {}, 'dia ', h('input', { type: 'number', min: 1, max: 31, value: pt.day, oninput: (e) => { pt.day = Number(e.target.value); } })),
+      h('label', {}, 'R$ ', h('input', { inputmode: 'decimal', value: reais(pt.cents), onchange: (e) => { pt.cents = centsOf(e.target.value); check(); } })))),
+      sumNote);
+    check();
+  };
+  const sumNote = h('span', { class: 'hint' });
+  const check = () => {
+    const sum = parts.reduce((a, b) => a + (b.cents || 0), 0), fee = centsOf(fee0.value) || 0;
+    sumNote.textContent = sum === fee ? `Soma ${brl(sum)} ✓` : `Atenção: as parcelas somam ${brl(sum)}, a mensalidade é ${brl(fee)}.`;
+    sumNote.style.color = sum === fee ? '' : 'var(--s-fail)';
+  };
+  nSel.addEventListener('change', () => { parts = []; drawParts(); });
+  const fParts = h('div', { class: 'field' }, h('label', { for: 'k-nparc' }, 'Como o cliente paga a mensalidade'), nSel, partsBox,
+    h('span', { class: 'hint' }, 'Com parcelas, cada uma aparece no Financeiro com vencimento, status e comprovante próprios.'));
   const [prazo, fPrazo] = inp('k-prazo', 'Prazo (meses, opcional)', k.prazo_meses, { type: 'number', min: 1, max: 120, placeholder: 'vazio = indeterminado' });
   const [forma, fForma] = inp('k-forma', 'Forma de pagamento', k.forma_pagamento, { tag: 'textarea', style: 'min-height:70px', placeholder: 'via Pix, em 3 (três) parcelas mensais: R$ 433,34 no dia 4; R$ 433,33 no dia 14; e R$ 433,33 no dia 24 de cada mês' },
     'Escreva começando com letra minúscula: entra no meio da frase do contrato.');
   const close = drawer(`Dados do contrato · ${c.name}`, [
     h('div', { class: 'eyebrow' }, 'Contratante'), fNome, fDoc, fEnd, h('div', { class: 'grid-2 tight' }, fRep, fRepCpf),
     h('div', { class: 'eyebrow' }, 'Serviço e cobrança'), h('div', { class: 'grid-2 tight' }, fEntr, fTotal), fServ,
-    h('div', { class: 'grid-2 tight' }, fFee, fDue), h('div', { class: 'grid-2 tight' }, fStart, fPrazo), fForma,
+    h('div', { class: 'grid-2 tight' }, fFee, fDue), fParts, h('div', { class: 'grid-2 tight' }, fStart, fPrazo), fForma,
+    h('div', { class: 'eyebrow' }, 'Cota mensal (contador de entregas)'), h('div', { class: 'grid-2 tight' }, fQp, fQr),
   ], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async (e) => {
     e.target.disabled = true;
     try {
       const saved = await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: {
-        monthly_fee: fee.value, due_day: due.value, billing_start: start.value,
-        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, representante_cpf: repCpf.value, entregas: entr.value, total_conteudos: total.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
+        monthly_fee: fee0.value, due_day: due.value, billing_start: start.value, installments: parts.length > 1 ? parts : (c.installments ? [] : undefined),
+        contract_data: { nome: nome.value, documento: doc.value, endereco: end.value, representante: rep.value, representante_cpf: repCpf.value, entregas: entr.value, total_conteudos: total.value, quota_posts: qp.value, quota_reels: qr.value, servicos: serv.value, prazo_meses: prazo.value, forma_pagamento: forma.value },
       } });
       const i = S.clients.findIndex((x) => x.id === saved.id); if (i >= 0) S.clients[i] = saved;
       close(); toast('Dados do contrato salvos.');
@@ -952,6 +1134,7 @@ function openContractData(c) {
       render();
     } catch (err) { toast(err.message, true); e.target.disabled = false; }
   } }, 'Salvar')]);
+  drawParts(); fee0.addEventListener('change', () => { if (parts.length) { parts = []; drawParts(); } });
   nome.focus();
 }
 
@@ -959,55 +1142,113 @@ function openContractData(c) {
 function folderFinance(c) {
   if (!c.billing_start || c.monthly_fee_cents == null) {
     return [h('div', { class: 'empty' }, h('h3', {}, 'Defina a mensalidade'),
-      h('p', { class: 'muted' }, 'Informe o valor, o dia do vencimento e o início do contrato. A partir daí cada mês aparece aqui como pago, em aberto ou atrasado.'),
+      h('p', { class: 'muted' }, 'Informe o valor, as parcelas/vencimento e o início do contrato. A partir daí cada mês aparece aqui como pago, em aberto ou atrasado.'),
       h('button', { class: 'btn primary', onclick: () => openContractData(c) }, 'Preencher dados'))];
   }
+  ensureSettings();
   const months = billingMonths(c);
-  const late = months.filter((m) => m.status === 'late');
-  const paidYear = months.filter((m) => m.status === 'paid' && m.month.startsWith(todayLocal().slice(0, 4)))
-    .reduce((s, m) => s + (m.payment.amount_cents ?? c.monthly_fee_cents), 0);
+  const lateCents = months.reduce((s, m) => s + m.late_cents, 0);
+  const lateParcels = months.flatMap((m) => m.parcels).filter((p) => p.status === 'late').length;
+  const year = todayLocal().slice(0, 4);
+  const paidYear = months.filter((m) => m.month.startsWith(year)).flatMap((m) => m.parcels).filter((p) => p.status === 'paid').reduce((s, p) => s + (p.cents || 0), 0);
+  const plan = planOf(c);
   const fileName = (id) => S.folder.files.find((f) => f.id === id)?.name;
+  const soon = new Set(dueSoon(months, todayLocal()).map((p) => `${p.month}#${p.n}`));
+  const parcelChip = (m, p) => {
+    const [label, cls] = PAY_LABEL[p.status];
+    const pay = p.payment;
+    return h('div', { class: `parcel${p.status === 'late' ? ' is-late' : ''}` },
+      h('div', { class: 'parcel-top' },
+        h('b', {}, p.of > 1 ? `${p.n}ª parcela` : 'Mensalidade'),
+        h('span', { class: `pill ${cls}` }, label)),
+      h('div', { class: 'muted parcel-sub' }, p.status === 'paid' ? `Pago${pay?.paid_at ? ` em ${fmtDay(pay.paid_at)}` : ''} · ${brl(p.cents)}`
+        : p.status === 'waived' ? (pay?.note || 'Isento') : `Vence ${fmtDay(p.due)} · ${brl(p.cents)}`),
+      h('div', { class: 'parcel-act' },
+        pay?.file_id && fileName(pay.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${pay.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(pay.file_id) }, '📎') : null,
+        soon.has(`${m.month}#${p.n}`) ? chargeButton(c, m, p) : null,
+        h('button', { class: `btn sm${p.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m, p) }, p.status === 'paid' || p.status === 'waived' ? 'Editar' : 'Registrar')));
+  };
   return [
     h('div', { class: 'stats' },
-      stat('Mensalidade', brl(c.monthly_fee_cents), c.due_day ? `vence todo dia ${c.due_day}` : 'vence no fim do mês'),
-      stat('Em atraso', late.length ? brl(late.length * c.monthly_fee_cents) : 'Nada', late.length ? `${late.length} mês(es)` : 'tudo em dia', late.length ? 'bad' : 'good'),
-      stat(`Recebido em ${todayLocal().slice(0, 4)}`, brl(paidYear), 'pela marcação de pagos')),
+      stat('Mensalidade', brl(c.monthly_fee_cents), plan.length > 1 ? `${plan.length} parcelas: dias ${plan.map((x) => x.day).join(', ')}` : c.due_day ? `vence todo dia ${c.due_day}` : 'vence no fim do mês'),
+      stat('Em atraso', lateCents ? brl(lateCents) : 'Nada', lateParcels ? `${lateParcels} parcela(s)` : 'tudo em dia', lateCents ? 'bad' : 'good'),
+      stat(`Recebido em ${year}`, brl(paidYear), 'pela marcação de pagos')),
     h('div', { class: 'months' }, ...months.map((m) => {
       const [label, cls] = PAY_LABEL[m.status];
-      const p = m.payment;
-      const sub = m.status === 'paid' ? `Pago${p.paid_at ? ` em ${fmtDay(p.paid_at)}` : ''} · ${brl(p.amount_cents ?? c.monthly_fee_cents)}`
-        : m.status === 'waived' ? (p.note || 'Sem cobrança neste mês')
-        : `Vence ${fmtDay(m.due)} · ${brl(c.monthly_fee_cents)}`;
-      return h('div', { class: `month-row${m.status === 'late' ? ' is-late' : ''}` },
-        h('div', { class: 'month-name' }, monthLabel(m.month)),
-        h('span', { class: `pill ${cls}` }, label),
-        h('div', { class: 'month-sub muted' }, sub, p?.note && m.status === 'paid' ? ` · ${p.note}` : ''),
-        h('div', { class: 'month-act' },
-          p?.file_id && fileName(p.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${p.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(p.file_id) }, '📎 Comprovante') : null,
-          h('button', { class: `btn sm${m.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m) }, m.status === 'paid' || m.status === 'waived' ? 'Editar' : 'Registrar pagamento')));
+      return h('div', { class: `month-block${m.status === 'late' ? ' is-late' : ''}` },
+        h('div', { class: 'month-head' },
+          h('div', { class: 'month-name' }, monthLabel(m.month)),
+          h('span', { class: `pill ${cls}` }, label),
+          h('span', { class: 'muted', style: 'font-size:13px' }, m.parcels.length > 1 ? `${m.paid_count}/${m.parcels.length} pagas · ${brl(m.amount_cents)}` : brl(m.amount_cents))),
+        h('div', { class: `parcels n${m.parcels.length}` }, ...m.parcels.map((p) => parcelChip(m, p))));
     })),
     filesSection(c, 'receipt', 'Todos os comprovantes', 'Comprovantes enviados ao registrar pagamentos aparecem aqui. Também dá para enviar direto.', { month: true }),
   ];
 }
 const stat = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:13px' }, sub));
 
-function openPayment(c, m) {
-  const p = m.payment;
+// Dados da agência (PIX para a cobrança). Carrega uma vez.
+function ensureSettings() {
+  if (S.settings !== undefined || S.role !== 'admin') return;
+  S.settings = null;
+  api('/api/pasta?r=settings').then((v) => { S.settings = v; }).catch(() => { S.settings = false; }).finally(() => render());
+}
+
+// Mensagem de cobrança pronta (lembrete 2 dias antes ou aviso de atraso).
+function chargeMessage(c, m, p) {
+  const pix = S.settings?.agency?.pix;
+  const what = p.of > 1 ? `a ${p.n}ª parcela (${brl(p.cents)}) da mensalidade de ${monthLabel(m.month).toLowerCase()}` : `a mensalidade de ${monthLabel(m.month).toLowerCase()} (${brl(p.cents)})`;
+  const head = p.status === 'late' ? `Olá! Tudo bem? Passando para lembrar que ${what} venceu em ${fmtDay(p.due)} e ainda consta em aberto por aqui.` : `Olá! Tudo bem? Lembrete: ${what} vence em ${fmtDay(p.due)}.`;
+  return `${head}${pix ? `\n\nChave PIX: ${pix}` : ''}\n\nSe já pagou, pode desconsiderar e, se puder, me mande o comprovante. Obrigado! 🙂`;
+}
+function chargeButton(c, m, p) {
+  const msg = chargeMessage(c, m, p);
+  if (c.contact_whatsapp) return h('a', { class: `btn wa sm`, href: waLink(c.contact_whatsapp, msg), target: '_blank', rel: 'noopener', title: 'Mandar lembrete de cobrança pelo WhatsApp' }, p.status === 'late' ? 'Cobrar' : 'Lembrar');
+  return h('button', { class: 'btn sm', onclick: () => copyText(msg, 'Mensagem de cobrança copiada.') }, 'Copiar cobrança');
+}
+
+// Painel de cobranças (aba Clientes): parcelas vencidas e vencendo em 2 dias, de todos os clientes.
+function chargesCard() {
+  if (S.role !== 'admin') return null;
+  ensureSettings();
+  const rows = [];
+  for (const c of S.clients) {
+    if (!c.billing_start) continue;
+    for (const p of dueSoon(billingMonths(c), todayLocal())) rows.push({ c, p, m: { month: p.month } });
+  }
+  if (!rows.length) return null;
+  const late = rows.filter((r) => r.p.status === 'late');
+  return h('section', { class: 'card charges' },
+    h('div', { class: 'files-head' }, h('div', { style: 'flex:1' }, h('h3', {}, 'Cobranças'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, `${late.length ? `${late.length} atrasada(s) · ` : ''}${rows.length - late.length} vencendo em até 2 dias. Clique em Cobrar/Lembrar para abrir o WhatsApp com a mensagem pronta.`))),
+    h('div', { class: 'charge-list' }, ...rows.map(({ c, p, m }) => h('div', { class: `charge${p.status === 'late' ? ' is-late' : ''}` },
+      h('div', { style: 'min-width:0' }, h('b', {}, c.name), h('div', { class: 'muted', style: 'font-size:13px' },
+        `${p.of > 1 ? `${p.n}ª parcela · ` : ''}${monthLabel(m.month)} · ${brl(p.cents)} · ${p.status === 'late' ? 'venceu' : 'vence'} ${fmtDay(p.due)}`)),
+      h('div', { class: 'actions' }, chargeButton(c, { month: m.month }, p),
+        h('a', { class: 'btn ghost sm', href: `#pasta/${c.id}`, onclick: () => { S.folder.tab = 'finance'; } }, 'Abrir'))))));
+}
+
+function openPayment(c, m, parcel) {
+  const p = parcel.payment;
+  const n = parcel.n;
   let status = p?.status === 'waived' ? 'waived' : 'paid';
   const paidAt = h('input', { type: 'date', id: 'p-date', value: p?.paid_at || todayLocal() });
-  const amount = h('input', { id: 'p-amount', inputmode: 'decimal', value: ((p?.amount_cents ?? c.monthly_fee_cents) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) });
-  const note = h('input', { id: 'p-note', value: p?.note || '', placeholder: status === 'waived' ? 'Ex.: mês de cortesia' : 'Ex.: pago via PIX' });
+  const amount = h('input', { id: 'p-amount', inputmode: 'decimal', value: ((p?.amount_cents ?? parcel.cents ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) });
+  const note = h('input', { id: 'p-note', value: p?.note || '', placeholder: 'Ex.: pago via PIX / mês de cortesia' });
   const file = h('input', { type: 'file', id: 'p-file', accept: ACCEPT });
+  const allWaive = parcel.of > 1 ? h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'p-all' }), ' Isentar todas as parcelas deste mês') : null;
   const paidFields = h('div', { style: 'display:grid;gap:14px' },
     h('div', { class: 'grid-2 tight' },
       h('div', { class: 'field' }, h('label', { for: 'p-date' }, 'Data do pagamento'), paidAt),
       h('div', { class: 'field' }, h('label', { for: 'p-amount' }, 'Valor recebido (R$)'), amount)),
     h('div', { class: 'field' }, h('label', { for: 'p-file' }, p?.file_id ? 'Trocar comprovante (opcional)' : 'Comprovante (opcional)'), file,
       h('span', { class: 'hint' }, 'PDF ou print do PIX/boleto, até 4 MB. Fica guardado na pasta do cliente.')));
+  const waiveFields = h('div', {}, allWaive);
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Situação' },
     ...[['paid', 'Pago'], ['waived', 'Isento / cortesia']].map(([k, l]) => h('button', { class: 'seg-btn', type: 'button', 'aria-pressed': String(status === k),
-      onclick: (e) => { status = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); paidFields.hidden = k !== 'paid'; } }, l)));
-  paidFields.hidden = status !== 'paid';
+      onclick: (e) => { status = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); paidFields.hidden = k !== 'paid'; waiveFields.hidden = k !== 'waived'; } }, l)));
+  paidFields.hidden = status !== 'paid'; waiveFields.hidden = status !== 'waived';
+  const keyOf = (x) => `${x.client_id}#${x.ref_month}#${x.installment || 1}`;
   const save = h('button', { class: 'btn primary', onclick: async () => {
     save.disabled = true;
     try {
@@ -1018,24 +1259,29 @@ function openPayment(c, m) {
       }
       const cents = Math.round(Number(amount.value.replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) * 100);
       if (status === 'paid' && !Number.isFinite(cents)) throw new Error('Valor inválido.');
-      const row = await api('/api/pasta?r=payments', { method: 'PUT', body: {
-        client_id: c.id, ref_month: m.month, status, note: note.value,
-        ...(status === 'paid' ? { paid_at: paidAt.value || null, amount_cents: cents, file_id: fileId } : { file_id: null }),
-      } });
-      S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month)).concat(row);
-      close(); render(); toast(status === 'paid' ? `${monthLabel(m.month)} marcado como pago.` : `${monthLabel(m.month)} marcado como isento.`);
+      const targets = status === 'waived' && document.getElementById('p-all')?.checked ? m.parcels.map((x) => x.n) : [n];
+      for (const k of targets) {
+        const row = await api('/api/pasta?r=payments', { method: 'PUT', body: {
+          client_id: c.id, ref_month: m.month, installment: k, status, note: note.value,
+          ...(status === 'paid' ? { paid_at: paidAt.value || null, amount_cents: cents, file_id: fileId } : { file_id: null }),
+        } });
+        row.installment = row.installment || k;
+        S.payments = S.payments.filter((x) => keyOf(x) !== keyOf(row)).concat(row);
+      }
+      const what = parcel.of > 1 && targets.length === 1 ? `${n}ª parcela de ${monthLabel(m.month).toLowerCase()}` : monthLabel(m.month);
+      close(); render(); toast(status === 'paid' ? `${what} marcada como paga.` : `${what}: isento.`);
     } catch (e) { toast(e.message, true); save.disabled = false; }
   } }, 'Salvar');
   const foot = [];
   if (p) foot.push(confirmButton('Voltar para em aberto', 'Confirmar', async () => {
-    await api(`/api/pasta?r=payments&client=${c.id}&month=${m.month}`, { method: 'DELETE' });
-    S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month));
+    await api(`/api/pasta?r=payments&client=${c.id}&month=${m.month}&n=${n}`, { method: 'DELETE' });
+    S.payments = S.payments.filter((x) => !(x.client_id === c.id && x.ref_month === m.month && (x.installment || 1) === n));
     close(); render(); toast('Pagamento desfeito.');
   }, 'btn ghost'));
   foot.push(h('span', { class: 'spacer' }), save);
-  const close = drawer(`${c.name} · ${monthLabel(m.month)}`, [
-    h('div', { class: 'muted', style: 'font-size:14px' }, `Mensalidade de ${brl(c.monthly_fee_cents)} com vencimento em ${fmtDay(m.due)}.`),
-    seg, paidFields,
+  const close = drawer(`${c.name} · ${monthLabel(m.month)}${parcel.of > 1 ? ` · ${n}ª parcela` : ''}`, [
+    h('div', { class: 'muted', style: 'font-size:14px' }, `${parcel.of > 1 ? `Parcela ${n} de ${parcel.of}` : 'Mensalidade'}: ${brl(parcel.cents)}, vencimento em ${fmtDay(parcel.due)}.`),
+    seg, paidFields, waiveFields,
     h('div', { class: 'field' }, h('label', { for: 'p-note' }, 'Observação'), note),
   ], foot);
 }
@@ -1205,4 +1451,214 @@ function openPortal(c) {
           confirmButton('Desativar', 'Confirmar desativar', () => save('disable', 'Link desativado.'), 'btn ghost sm danger'))));
   }
   const close = drawer(`Link do cliente · ${c.name}`, body, foot);
+}
+
+// ───────────────────────── histórico de aprovações (prova)
+const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };
+const EVENT_TONE = { approved: 'st-approved', changes_requested: 'st-changes_requested', published: 'st-published', failed: 'st-failed', approved_by_agency: 'st-internal_review', sent: 'st-pending_approval', reminded: 'st-draft' };
+function folderHistory(c) {
+  const F = S.folder;
+  if (F.history === undefined || F.historyFor !== c.id) {
+    F.history = null; F.historyFor = c.id;
+    api(`/api/pasta?r=history&client=${c.id}`).then((v) => { F.history = v; }).catch(() => { F.history = false; }).finally(() => render());
+    return [h('p', { class: 'muted' }, 'Carregando o histórico…')];
+  }
+  if (F.history === false) return [h('div', { class: 'banner' }, 'O histórico precisa da atualização do banco. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.')];
+  if (!F.history) return [h('p', { class: 'muted' }, 'Carregando o histórico…')];
+  const list = F.history;
+  return [h('section', { class: 'card' },
+    h('div', { class: 'files-head' },
+      h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Histórico de aprovações'),
+        h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Registro com data e hora de cada envio, lembrete, decisão do cliente e publicação. Serve de prova (cláusulas 5.3 e 5.5) e fica guardado mesmo se o post for apagado.')),
+      h('a', { class: 'btn sm', href: `/historico?client=${c.id}`, target: '_blank', rel: 'noopener' }, 'Gerar PDF')),
+    list.length ? h('div', { class: 'events' }, ...list.map((e) => h('div', { class: 'event' },
+      e.snapshot?.image_url ? h('img', { src: e.snapshot.image_url, alt: '', loading: 'lazy' }) : h('span', { class: 'thumb-empty' }),
+      h('div', { style: 'min-width:0' },
+        h('div', {}, h('span', { class: `pill ${EVENT_TONE[e.type] || 'st-draft'}` }, EVENT_LABEL[e.type] || e.type), ' ',
+          h('span', { class: 'muted', style: 'font-size:13px' }, `${fmtDay(partsInTz(e.created_at, S.tz).date)} às ${fmtTime(e.created_at, S.tz)}`)),
+        h('div', { class: 'ev-cap' }, e.snapshot?.title || e.snapshot?.caption || 'Post'),
+        e.note ? h('div', { class: 'muted', style: 'font-size:13px' }, `“${e.note}”`) : null))))
+      : h('p', { class: 'muted files-empty' }, 'Ainda não há registros. Eles começam a aparecer nos próximos envios.'))];
+}
+
+// Agenda/Clientes: posts esperando o cliente há 2+ dias → lembrete pronto
+function approvalReminders() {
+  const limit = Date.now() - 2 * 864e5;
+  const by = new Map();
+  for (const p of S.posts) if (p.status === 'pending_approval' && p.sent_for_approval_at && new Date(p.sent_for_approval_at).getTime() < limit) by.set(p.client_id, [...(by.get(p.client_id) || []), p]);
+  if (!by.size) return null;
+  const log = (c, channel) => api('/api/posts', { method: 'POST', body: { remind_client: c.id, channel } }).catch(() => {});
+  return h('section', { class: 'card charges' },
+    h('h3', {}, 'Aprovações paradas'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Posts esperando o cliente há mais de 2 dias. Sem resposta não é aprovação automática (cláusula 5.5): mande um lembrete; fica registrado no histórico.'),
+    h('div', { class: 'charge-list' }, ...[...by.entries()].map(([cid, posts]) => {
+      const c = clientById(cid); if (!c) return null;
+      const days = Math.floor((Date.now() - Math.min(...posts.map((p) => new Date(p.sent_for_approval_at).getTime()))) / 864e5);
+      const msg = `Oi! Passando para lembrar: ${posts.length > 1 ? `${posts.length} posts estão` : '1 post está'} esperando sua aprovação há ${days} dias.\n${c.approval_url}\n\nSem a aprovação eles não são publicados e o calendário precisa ser reorganizado. 🙂`;
+      return h('div', { class: 'charge' },
+        h('div', {}, h('b', {}, c.name), h('div', { class: 'muted', style: 'font-size:13px' }, `${posts.length} post(s) · há ${days} dias`)),
+        h('div', { class: 'actions' },
+          c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, msg), target: '_blank', rel: 'noopener', onclick: () => { log(c, 'whatsapp'); toast('Lembrete registrado no histórico.'); } }, 'Lembrar no WhatsApp') : null,
+          c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, `Posts de ${c.name} aguardando aprovação`, msg), onclick: () => log(c, 'e-mail') }, 'E-mail') : null,
+          h('button', { class: 'btn ghost sm', onclick: () => { copyText(msg, 'Lembrete copiado.'); log(c, 'cópia'); } }, 'Copiar')));
+    })));
+}
+
+// ───────────────────────── identidade da marca (equipe e admin)
+function folderBrand(c) {
+  const F = S.folder;
+  if (F.brandFor !== c.id) {
+    F.brandFor = c.id; F.brand = null;
+    api(`/api/pasta?r=brand&client=${c.id}`).then((v) => { F.brand = v; }).catch(() => { F.brand = false; }).finally(() => render());
+  }
+  if (F.brand === false) return [h('div', { class: 'banner' }, 'A identidade da marca precisa da atualização do banco. ', S.role === 'admin' ? h('a', { href: '#ajustes' }, 'Ver em Ajustes') : 'Peça ao administrador.')];
+  if (!F.brand) return [h('p', { class: 'muted' }, 'Carregando…')];
+  const k = F.brand.brand_kit || {};
+  let colors = [...(k.colors || [])];
+  const colorsBox = h('div', { class: 'swatches' });
+  const drawColors = () => colorsBox.replaceChildren(...colors.map((col, i) => h('div', { class: 'swatch' },
+    h('input', { type: 'color', value: col, 'aria-label': `Cor ${i + 1}`, oninput: (e) => { colors[i] = e.target.value; e.target.nextSibling.textContent = e.target.value.toUpperCase(); } }),
+    h('code', { translate: 'no' }, col.toUpperCase()),
+    h('button', { type: 'button', class: 'linkish', 'aria-label': 'Remover cor', onclick: () => { colors.splice(i, 1); drawColors(); } }, '✕'))),
+    colors.length < 8 ? h('button', { type: 'button', class: 'btn sm', onclick: () => { colors.push('#2443C9'); drawColors(); } }, '+ Cor') : null);
+  drawColors();
+  const ta = (id, label, val, ph, hint) => { const el = h('textarea', { id, placeholder: ph, style: 'min-height:70px' }); el.value = val || ''; return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el, hint ? h('span', { class: 'hint' }, hint) : null)]; };
+  const fonts = h('input', { id: 'b-fonts', value: k.fonts || '', placeholder: 'Ex.: títulos em Montserrat ExtraBold, textos em Inter' });
+  const [voice, fVoice] = ta('b-voice', 'Tom de voz', F.brand.brand_voice, 'Ex.: próximo, carinhoso com os pets, divertido sem ser bobo. Fala com tutores de 25–45.', 'A IA de legendas usa isto.');
+  const [style, fStyle] = ta('b-style', 'Estilo visual e posicionamento', k.style, 'Ex.: fotos claras e naturais, muito pet real (nada de banco de imagens), fundos limpos.');
+  const [dos, fDos] = ta('b-dos', 'Sempre', k.dos, 'Ex.: mostrar o nome do pet, usar emojis de patinha, citar o endereço nos posts de promoção.');
+  const [donts, fDonts] = ta('b-donts', 'Nunca', k.donts, 'Ex.: falar de preço sem aprovação, usar a palavra "barato", fotos de pets tristes.', 'A IA evita estes temas e palavras.');
+  const [refs, fRefs] = ta('b-refs', 'Referências (links)', k.references, 'Perfis, pastas do Drive, Pinterest…');
+  const [notes, fNotes] = ta('b-notes', 'Outras observações', k.notes, 'Datas importantes, produtos-estrela, concorrentes…');
+  const save = h('button', { class: 'btn primary', onclick: async () => {
+    save.disabled = true;
+    try {
+      const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, brand_voice: voice.value, brand_kit: { colors, fonts: fonts.value, style: style.value, dos: dos.value, donts: donts.value, references: refs.value, notes: notes.value } } });
+      F.brand = { ...F.brand, ...r };
+      const i = S.clients.findIndex((x) => x.id === c.id); if (i >= 0) S.clients[i] = { ...S.clients[i], brand_voice: r.brand_voice };
+      toast('Identidade da marca salva.');
+    } catch (e) { toast(e.message, true); }
+    save.disabled = false;
+  } }, 'Salvar identidade');
+  return [
+    h('section', { class: 'card' },
+      h('div', { class: 'eyebrow' }, 'Manual rápido da marca'), h('h3', {}, `Identidade de ${c.name}`),
+      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Paleta de cores'), colorsBox),
+      h('div', { class: 'field' }, h('label', { for: 'b-fonts' }, 'Tipografia'), fonts),
+      fVoice, h('div', { class: 'grid-2 tight' }, fStyle, fRefs), h('div', { class: 'grid-2 tight' }, fDos, fDonts), fNotes,
+      h('div', { class: 'actions' }, save)),
+    filesSection(c, 'brand', 'Logo e referências visuais', 'Logo em PNG/PDF, fontes, fotos de referência, manual da marca.'),
+  ];
+}
+
+// ───────────────────────── pedidos do cliente (vindos da área do cliente)
+const REQ_LABEL = { open: ['Novo', 'st-pending_approval'], doing: ['Em andamento', 'st-internal_review'], done: ['Concluído', 'st-approved'] };
+function folderRequests(c) {
+  const F = S.folder;
+  if (F.reqFor !== c.id) {
+    F.reqFor = c.id; F.reqs = null;
+    api(`/api/pasta?r=requests&client=${c.id}`).then((v) => { F.reqs = v; }).catch(() => { F.reqs = false; }).finally(() => render());
+  }
+  if (F.reqs === false) return [h('div', { class: 'banner' }, 'Os pedidos precisam da atualização do banco.')];
+  if (!F.reqs) return [h('p', { class: 'muted' }, 'Carregando…')];
+  const setStatus = async (r, status) => {
+    try {
+      const row = await api('/api/pasta?r=requests', { method: 'PATCH', body: { id: r.id, status } });
+      Object.assign(r, row); S.requests = (S.requests || []).filter((x) => x.id !== r.id).concat(status === 'done' ? [] : [{ ...r }]);
+      render();
+    } catch (e) { toast(e.message, true); }
+  };
+  return [h('section', { class: 'card' },
+    h('div', {}, h('h3', {}, 'Pedidos do cliente'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, c.portal_url !== undefined ? 'O cliente envia pela área do cliente (link exclusivo): ideias, fotos, datas e promoções.' : 'Pedidos enviados pelo cliente na área exclusiva dele.')),
+    F.reqs.length ? h('div', { class: 'reqs' }, ...F.reqs.map((r) => {
+      const [label, cls] = REQ_LABEL[r.status];
+      return h('article', { class: `req${r.status === 'done' ? ' done' : ''}` },
+        h('div', { class: 'req-top' }, h('span', { class: `pill ${cls}` }, label),
+          h('span', { class: 'muted', style: 'font-size:12.5px' }, `enviado ${fmtDay(partsInTz(r.created_at, S.tz).date)}${r.wanted_date ? ` · para ${fmtDay(r.wanted_date)}` : ''}`)),
+        h('p', { class: 'req-text' }, r.text),
+        r.files?.length ? h('div', { class: 'req-files' }, ...r.files.map((f) => h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${f.id}&open=1`, target: '_blank', rel: 'noopener' }, `📎 ${f.name}`))) : null,
+        h('div', { class: 'actions' },
+          h('button', { class: 'btn sm', onclick: () => openPost(null, { stage: 'idea', client: c.id, title: r.text.split('\n')[0].slice(0, 120), notes: `Pedido do cliente (${fmtDay(partsInTz(r.created_at, S.tz).date)}):\n${r.text}`, date: r.wanted_date || undefined }) }, '💡 Virar ideia de post'),
+          r.status !== 'doing' && r.status !== 'done' ? h('button', { class: 'btn ghost sm', onclick: () => setStatus(r, 'doing') }, 'Em andamento') : null,
+          r.status !== 'done' ? h('button', { class: 'btn ghost sm', onclick: () => setStatus(r, 'done') }, '✓ Concluir') : h('button', { class: 'btn ghost sm', onclick: () => setStatus(r, 'open') }, 'Reabrir')));
+    })) : h('p', { class: 'muted files-empty' }, 'Nenhum pedido ainda. Mande o link da área do cliente para ele usar.')),
+    filesSection(c, 'briefing', 'Arquivos enviados pelo cliente', 'Fotos e documentos que vieram junto com os pedidos.')];
+}
+
+// Clientes: caixa de entrada de pedidos novos
+function requestsInbox() {
+  const open = (S.requests || []).filter((r) => r.status === 'open');
+  if (!open.length) return null;
+  return h('section', { class: 'card' },
+    h('h3', {}, `Pedidos novos dos clientes (${open.length})`),
+    h('div', { class: 'charge-list' }, ...open.slice(0, 6).map((r) => h('div', { class: 'charge' },
+      h('div', { style: 'min-width:0;flex:1' }, h('b', {}, clientName(r.client_id)), h('div', { class: 'muted clamp2', style: 'font-size:13px' }, r.text)),
+      h('a', { class: 'btn sm', href: `#pasta/${r.client_id}`, onclick: () => { S.folder.tab = 'requests'; S.folder.reqFor = null; } }, 'Ver')))));
+}
+
+// ───────────────────────── Ajustes → equipe
+function settingsTeam() {
+  if (S.team === undefined) {
+    S.team = null;
+    api('/api/pasta?r=users').then((v) => { S.team = v; }).catch(() => { S.team = false; }).finally(() => { if (S.view === 'ajustes') render(); });
+  }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Acessos'), h('h2', { style: 'font-size:22px' }, 'Equipe')),
+    h('div', { class: 'spacer' }), S.team ? h('button', { class: 'btn primary sm', onclick: () => openMember() }, '+ Adicionar pessoa') : null);
+  if (S.team === false) return [head, h('p', { class: 'muted' }, 'Disponível depois da atualização do banco de dados.')];
+  if (!S.team) return [head, h('p', { class: 'muted' }, 'Carregando…')];
+  return [head, h('article', { class: 'card' },
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cada pessoa entra com o próprio e-mail e senha. "Equipe" cria e edita posts, usa a agenda, a IA, a marca e os pedidos dos clientes, mas não vê financeiro, contratos, relatórios, pastas nem Ajustes. "Administrador" vê tudo. Você (senha principal) é sempre administrador.'),
+    S.team.length ? h('div', { class: 'charge-list' }, ...S.team.map((u) => h('div', { class: 'charge' },
+      h('div', {}, h('b', {}, u.name), ' ', h('span', { class: `pill ${u.active ? (u.role === 'admin' ? 'st-published' : 'st-internal_review') : 'st-draft'}` }, u.active ? (u.role === 'admin' ? 'Administrador' : 'Equipe') : 'Desativado'),
+        h('div', { class: 'muted', style: 'font-size:13px' }, u.email)),
+      h('button', { class: 'btn sm', onclick: () => openMember(u) }, 'Editar'))))
+      : h('p', { class: 'muted files-empty' }, 'Só você por enquanto.'))];
+}
+function openMember(u = null) {
+  const name = h('input', { id: 'u-name', value: u?.name || '', placeholder: 'Nome' });
+  const email = h('input', { id: 'u-email', type: 'email', value: u?.email || '', placeholder: 'pessoa@email.com', disabled: Boolean(u) });
+  const pw = h('input', { id: 'u-pw', type: 'password', autocomplete: 'new-password', placeholder: u ? 'deixe em branco para manter' : 'mínimo 8 caracteres' });
+  let role = u?.role || 'team';
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Papel' }, ...[['team', 'Equipe'], ['admin', 'Administrador']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn', 'aria-pressed': String(role === k),
+    onclick: (e) => { role = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); } }, l)));
+  const done = (row, msg) => { S.team = [...S.team.filter((x) => x.id !== row.id), row].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')); close(); render(); toast(msg); };
+  const foot = [];
+  if (u) foot.push(
+    confirmButton('Excluir', 'Confirmar exclusão', async () => { await api(`/api/pasta?r=users&id=${u.id}`, { method: 'DELETE' }); S.team = S.team.filter((x) => x.id !== u.id); close(); render(); toast('Conta excluída.'); }, 'btn ghost danger'),
+    h('button', { class: 'btn ghost', onclick: async () => { try { done(await api('/api/pasta?r=users', { method: 'PATCH', body: { id: u.id, active: !u.active } }), u.active ? 'Acesso desativado.' : 'Acesso reativado.'); } catch (e) { toast(e.message, true); } } }, u.active ? 'Desativar' : 'Reativar'));
+  foot.push(h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async () => {
+    try {
+      const row = u
+        ? await api('/api/pasta?r=users', { method: 'PATCH', body: { id: u.id, name: name.value, role, password: pw.value || undefined } })
+        : await api('/api/pasta?r=users', { method: 'POST', body: { name: name.value, email: email.value, role, password: pw.value } });
+      done(row, u ? 'Conta atualizada.' : `Conta criada. Mande o e-mail e a senha para ${row.name} entrar.`);
+    } catch (e) { toast(e.message, true); }
+  } }, u ? 'Salvar' : 'Criar conta'));
+  const close = drawer(u ? `Equipe · ${u.name}` : 'Nova pessoa na equipe', [
+    h('div', { class: 'field' }, h('label', { for: 'u-name' }, 'Nome'), name),
+    h('div', { class: 'field' }, h('label', { for: 'u-email' }, 'E-mail (login)'), email),
+    h('div', { class: 'field' }, h('label', { for: 'u-pw' }, u ? 'Nova senha' : 'Senha inicial'), pw, h('span', { class: 'hint' }, 'Combine a senha com a pessoa por um canal seguro.')),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Papel'), seg),
+  ], foot);
+  name.focus();
+}
+
+// ───────────────────────── prévia da grade do feed (painel)
+async function openFeedPreview(clientId, current) {
+  const c = clientById(clientId);
+  const grid = h('div', { class: 'g-grid' }, h('p', { class: 'muted' }, 'Buscando o feed…'));
+  drawer(`Feed · ${c?.name || ''}`, [h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Os posts com borda são os programados (na ordem em que vão sair). O post que você está editando fica destacado.'), grid], []);
+  const [feed, upcoming] = await Promise.all([
+    api(`/api/pasta?r=feed&client=${clientId}`).catch(() => []),
+    api(`/api/posts?client=${clientId}&status=pending_approval,approved,changes_requested,draft,internal_review&from=${encodeURIComponent(new Date().toISOString())}`).catch(() => []),
+  ]);
+  const list = upcoming.filter((p) => p.image_url && p.scheduled_at && p.id !== current.id);
+  if (current.image_url) list.push({ ...current, scheduled_at: current.scheduled_at || new Date(Date.now() + 365 * 864e5).toISOString(), _current: true });
+  list.sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+  const tile = (src, cls, tag) => h('div', { class: `g-tile ${cls}` }, h('img', { src, alt: '', loading: 'lazy' }), tag ? h('span', { class: 'g-tag' }, tag) : null);
+  grid.replaceChildren(
+    ...list.map((p) => tile(p.image_url, `new ${p._current ? 'current' : p.status}`, p._current ? 'este post' : p.scheduled_at ? fmtDay(partsInTz(p.scheduled_at, S.tz).date).slice(0, 5) : '')),
+    ...feed.slice(0, Math.max(0, 15 - list.length)).map((f) => tile(f.thumb, 'old', f.type === 'REELS' ? '▶' : f.type === 'CAROUSEL' ? '❐' : null)));
+  if (!list.length && !feed.length) grid.replaceChildren(h('p', { class: 'muted' }, 'Sem posts para mostrar ainda.'));
 }

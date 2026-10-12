@@ -1,22 +1,32 @@
 // Posts. GET lista | POST cria (um ou vários clientes) | PATCH ?id= edita ou executa ação | DELETE ?id= remove
 import { route, send, readJson, query, need } from '../lib/http.js';
-import { requireAdmin } from '../lib/auth.js';
+import { requireStaff } from '../lib/auth.js';
 import { db, storage } from '../lib/db.js';
+import { logEvent } from '../lib/events.js';
 import { cleanPostInput, actionPatch, statusAfterEdit, readyProblem, EDITABLE, CONTENT_FIELDS } from '../lib/posts.js';
 
 // '*' (e não uma lista fixa) para o painel continuar abrindo mesmo antes da atualização do banco.
 const LIST_FIELDS = '*';
 
-// A mesma imagem pode estar em posts de vários clientes: só apaga quando ninguém mais usa.
+// A mesma mídia pode estar em posts de vários clientes: só apaga quando ninguém mais usa.
 async function removeImageIfUnused(path) {
   if (!path) return;
   const still = await db.select('posts', { select: 'id', image_path: `eq.${path}`, limit: 1 });
   if (!still.length) await storage.remove(path);
 }
+async function removeMediaIfUnused(media) {
+  for (const m of media || []) {
+    if (!m?.path) continue;
+    const still = await db.select('posts', { select: 'id', media: `cs.${JSON.stringify([{ path: m.path }])}`, limit: 1 }).catch(() => [1]);
+    const asCover = await db.select('posts', { select: 'id', image_path: `eq.${m.path}`, limit: 1 }).catch(() => [1]);
+    if (!still.length && !asCover.length) await storage.remove(m.path);
+  }
+}
+const pathsOf = (media) => new Set((media || []).map((m) => m.path).filter(Boolean));
 
 export default route({
   GET: async (req, res) => {
-    requireAdmin(req);
+    await requireStaff(req);
     const q = query(req);
     const params = { select: LIST_FIELDS, order: 'scheduled_at.asc.nullslast', limit: 1000 };
     if (q.client) params.client_id = `eq.${q.client}`;
@@ -28,8 +38,14 @@ export default route({
   },
 
   POST: async (req, res) => {
-    requireAdmin(req);
+    await requireStaff(req);
     const body = await readJson(req);
+    // Lembrete de aprovação: registra no histórico de cada post pendente do cliente (o envio é pelo WhatsApp/e-mail do painel).
+    if (body.remind_client) {
+      const pend = await db.select('posts', { select: '*', client_id: `eq.${body.remind_client}`, status: 'eq.pending_approval' });
+      for (const p of pend) await logEvent(p, 'reminded', body.channel ? `por ${String(body.channel).slice(0, 20)}` : null);
+      return send(res, 200, { reminded: pend.length });
+    }
     const data = cleanPostInput(body);
     const ids = [...new Set((Array.isArray(body.client_ids) ? body.client_ids : [body.client_id]).filter(Boolean))];
     need(ids.length, 400, 'Escolha pelo menos um cliente.');
@@ -52,11 +68,12 @@ export default route({
         decided_at: status === 'approved' ? now : null,
       }));
     }
+    for (const r of rows) if (status === 'pending_approval') await logEvent(r, 'sent'); else if (status === 'approved') await logEvent(r, 'approved_by_agency');
     send(res, 201, Array.isArray(body.client_ids) ? rows : rows[0]);
   },
 
   PATCH: async (req, res) => {
-    requireAdmin(req);
+    await requireStaff(req);
     const { id } = query(req);
     need(id, 400, 'Post não informado.');
     const body = await readJson(req);
@@ -65,12 +82,14 @@ export default route({
       const a = actionPatch(body.action);
       need(a, 400, 'Ação desconhecida.');
       if (a.complete) {
-        const cur = await db.one('posts', { select: 'image_url,scheduled_at', id: `eq.${id}` });
+        const cur = await db.one('posts', { select: '*', id: `eq.${id}` });
         need(cur, 404, 'Post não encontrado.');
         need(!readyProblem(cur), 400, readyProblem(cur));
       }
       const [row] = await db.update('posts', { id: `eq.${id}`, status: `in.(${a.from.join(',')})` }, a.patch);
       need(row, 409, 'Este post não pode ir para essa etapa agora. Atualize a página e tente de novo.');
+      if (body.action === 'send') await logEvent(row, 'sent');
+      if (body.action === 'approve') await logEvent(row, 'approved_by_agency');
       return send(res, 200, row);
     }
 
@@ -78,8 +97,9 @@ export default route({
     // para o cliente aprovar a versão nova (ou já reenvia, com send: true).
     const patch = cleanPostInput(body);
     need(Object.keys(patch).length || body.send, 400, 'Nada para alterar.');
-    const old = await db.one('posts', { select: 'status,image_path,image_url,scheduled_at', id: `eq.${id}` });
+    const old = await db.one('posts', { select: '*', id: `eq.${id}` });
     need(old, 404, 'Post não encontrado.');
+    if (!('media_type' in old) && (patch.media_type || 'IMAGE') === 'IMAGE' && !patch.media) { delete patch.media_type; delete patch.media; }
     need(EDITABLE.includes(old.status), 409, 'Post publicado ou publicando não pode ser editado.');
     const contentChanged = CONTENT_FIELDS.some((k) => k in patch);
     const next = statusAfterEdit(old.status, contentChanged, Boolean(body.send));
@@ -93,18 +113,20 @@ export default route({
     if (old.status === 'failed') Object.assign(patch, { attempts: 0, last_error: null, ig_container_id: null });
     const [row] = await db.update('posts', { id: `eq.${id}`, status: `in.(${EDITABLE.join(',')})` }, patch);
     need(row, 409, 'Este post mudou de status. Atualize a página e tente de novo.');
-    if (patch.image_path && old.image_path && patch.image_path !== old.image_path) await removeImageIfUnused(old.image_path);
+    if (next === 'pending_approval') await logEvent(row, 'sent');
+    if (patch.image_path !== undefined && old.image_path && patch.image_path !== old.image_path) await removeImageIfUnused(old.image_path);
+    if (patch.media !== undefined) { const keep = pathsOf(row.media); await removeMediaIfUnused((old.media || []).filter((m) => !keep.has(m.path))); }
     send(res, 200, row);
   },
 
   DELETE: async (req, res) => {
-    requireAdmin(req);
+    await requireStaff(req);
     const { id } = query(req);
     need(id, 400, 'Post não informado.');
     const [row] = await db.remove('posts', { id: `eq.${id}`, status: 'neq.publishing' });
     need(row, 409, 'Post em publicação não pode ser apagado agora.');
     // Post já publicado: apaga do painel, mas mantém a imagem (o Instagram já tem a dele).
-    if (row.status !== 'published') await removeImageIfUnused(row.image_path);
+    if (row.status !== 'published') { await removeImageIfUnused(row.image_path); await removeMediaIfUnused(row.media); }
     send(res, 200, { ok: true });
   },
 });

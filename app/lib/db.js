@@ -101,6 +101,16 @@ export const storage = {
     });
     return { path, url: `${env('SUPABASE_URL')}/storage/v1/object/public/${BUCKET}/${path}` };
   },
+  // Link para o NAVEGADOR enviar um arquivo grande (vídeo) direto ao Supabase, sem passar pela Vercel (limite de 4,5 MB).
+  async signUpload(path) {
+    const r = await call(`/storage/v1/object/upload/sign/${BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const rel = r.url || r.signedURL || r.signedUrl;
+    return {
+      path,
+      upload_url: `${env('SUPABASE_URL')}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`,
+      url: `${env('SUPABASE_URL')}/storage/v1/object/public/${BUCKET}/${path}`,
+    };
+  },
   async remove(path) {
     if (!path) return;
     try { await call(`/storage/v1/object/${BUCKET}/${path}`, { method: 'DELETE' }); }

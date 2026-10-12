@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [] };
+  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail,
     // métricas simuladas: feed extra, métricas por post e totais da conta
@@ -19,8 +19,11 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     client_files: () => ({ id: crypto.randomUUID(), ref_month: null, created_at: new Date().toISOString() }),
     reports: () => ({ id: crypto.randomUUID(), note: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     ig_daily: () => ({}),
+    post_events: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
+    users: () => ({ id: crypto.randomUUID(), active: true, created_at: new Date().toISOString() }),
+    requests: () => ({ id: crypto.randomUUID(), status: 'open', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     payments: () => ({ status: 'paid', amount_cents: null, paid_at: null, file_id: null, note: null, updated_at: new Date().toISOString() }),
-    posts: () => ({ id: crypto.randomUUID(), status: 'draft', title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
+    posts: () => ({ id: crypto.randomUUID(), status: 'draft', media_type: 'IMAGE', media: null, title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
       ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   };
@@ -40,6 +43,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       case 'lt': return asTime(v) < asTime(arg);
       case 'gt': return asTime(v) > asTime(arg);
       case 'is': return v === val(arg);
+      case 'cs': { const want = JSON.parse(arg); return Array.isArray(v) && want.every((w) => v.some((x) => Object.entries(w).every(([k2, v2]) => x?.[k2] === v2))); }
       case 'not': { const [op2, a2] = [rest[0], rest.slice(1).join('.')]; return !test(row, col, `${op2}.${a2}`); }
       default: throw new Error(`filtro não suportado: ${expr}`);
     }
@@ -61,6 +65,10 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
 
   async function supa(url, init) {
     const u = new URL(url); const method = init?.method || 'GET';
+    if (u.pathname.startsWith('/storage/v1/object/upload/sign/')) { // link assinado para o navegador enviar vídeo
+      const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/upload/sign/', ''));
+      return json(200, { url: `/object/upload/sign/${key}?token=up-${encodeURIComponent(key)}` });
+    }
     if (u.pathname.startsWith('/storage/v1/object/sign/')) {
       const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/sign/', ''));
       if (!files.has(key)) return json(400, { message: 'Object not found' });
@@ -88,7 +96,8 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       if (table === 'app_state') { tables.app_state = rows.filter((r) => r.key !== row.key); tables.app_state.push(row); return json(201, []); }
       if (table === 'payments' || table === 'ig_daily') { // upsert pela chave composta
         const k2 = table === 'payments' ? 'ref_month' : 'day';
-        const old = rows.find((r) => r.client_id === row.client_id && r[k2] === row[k2]);
+        if (table === 'payments') row.installment = row.installment || 1;
+        const old = rows.find((r) => r.client_id === row.client_id && r[k2] === row[k2] && (table !== 'payments' || (r.installment || 1) === row.installment));
         if (old) Object.assign(old, JSON.parse(init.body)); else rows.push(row);
         return json(201, []);
       }
@@ -135,7 +144,9 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       return json(200, { data: metrics.filter((m) => vals[m] != null).map((m) => ({ name: m, values: [{ value: vals[m] }] })) });
     }
     if (u.pathname.endsWith('/media') && method === 'POST') {
-      const id = `C${ig.containers.size + 1}`; ig.containers.set(id, { status: 'FINISHED', image_url: body.get('image_url'), caption: body.get('caption') });
+      const id = `C${ig.containers.size + 1}`;
+      ig.containers.set(id, { status: ig.videoInProgress && body.get('media_type') === 'REELS' ? 'IN_PROGRESS' : 'FINISHED', image_url: body.get('image_url'), caption: body.get('caption'),
+        media_type: body.get('media_type') || (body.get('is_carousel_item') ? 'ITEM' : 'IMAGE'), video_url: body.get('video_url'), cover_url: body.get('cover_url'), children: body.get('children') });
       return json(200, { id });
     }
     if (u.pathname.endsWith('/media_publish')) {

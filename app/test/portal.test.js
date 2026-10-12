@@ -51,7 +51,7 @@ test('link do cliente mostra só a pasta dele e só as seções liberadas', asyn
   assert.equal(p.data.agency.pix, 'chave-pix@x.com');
   const aug = p.data.billing.months.find((m) => m.month === '2026-08');
   assert.equal(aug.status, 'paid');
-  assert.equal(aug.receipt_id, comp.id);
+  assert.equal(aug.parcels[0].receipt_id, comp.id);
   assert.ok(p.data.billing.months.some((m) => m.status === 'late'), 'setembro/outubro vencidos aparecem como atrasados');
   assert.match(p.data.approval.url, /\/aprovar\?t=/);
 

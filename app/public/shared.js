@@ -153,3 +153,56 @@ export function monthLabel(ym, short = false) { // '2026-10' → 'outubro de 202
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 export function fileSize(n) { return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1).replace('.', ',')} MB`; }
+
+// ── vídeo (Reels): lê duração/tamanho, tira um quadro para a capa e envia direto ao armazenamento
+export function videoInfo(file) {
+  return new Promise((ok, bad) => {
+    if (!/^video\//.test(file.type) && !/\.(mp4|mov|m4v)$/i.test(file.name)) return bad(new Error('Escolha um vídeo MP4 ou MOV.'));
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+    v.onloadedmetadata = () => ok({ url, duration: v.duration, width: v.videoWidth, height: v.videoHeight });
+    v.onerror = () => bad(new Error('Não consegui abrir esse vídeo. Use MP4 (H.264) ou MOV.'));
+    v.src = url;
+  });
+}
+
+// Capa do Reels: quadro do vídeo no segundo t, em JPEG (até 1080 px de largura, sem cortar).
+export function videoFrame(url, t = 0) {
+  return new Promise((ok, bad) => {
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+    v.onloadeddata = () => { v.currentTime = Math.min(Math.max(0, t), Math.max(0, v.duration - 0.1)); };
+    v.onseeked = async () => {
+      const scale = Math.min(1, 1080 / v.videoWidth);
+      const c = document.createElement('canvas');
+      c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      let q = 0.9, blob;
+      do { blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', q)); q -= 0.1; } while (blob && blob.size > 3.5 * 1024 * 1024 && q > 0.5);
+      if (!blob) return bad(new Error('Não consegui gerar a capa.'));
+      ok({ blob, url: URL.createObjectURL(blob) });
+    };
+    v.onerror = () => bad(new Error('Não consegui ler o vídeo para a capa.'));
+    v.src = url;
+  });
+}
+
+// Envia o vídeo direto ao Supabase com um link assinado (não passa pelo limite de 4,5 MB da Vercel).
+export async function uploadVideo(file, clientId, onProgress = () => {}) {
+  const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+  const sig = await api(`/api/upload?kind=video&ext=${encodeURIComponent(ext)}&client=${clientId}`, { method: 'POST' });
+  await new Promise((ok, bad) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', sig.upload_url);
+    x.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    x.setRequestHeader('x-upsert', 'false');
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    x.onload = () => (x.status < 300 ? ok() : bad(new Error(x.status === 413 ? 'Vídeo grande demais para o armazenamento (máx. 50 MB).' : `Falha ao enviar o vídeo (${x.status}).`)));
+    x.onerror = () => bad(new Error('Sem conexão ao enviar o vídeo.'));
+    x.send(file);
+  });
+  return { url: sig.url, path: sig.path, kind: 'video' };
+}
+
+export const MEDIA_LABEL = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };

@@ -100,6 +100,34 @@ export async function createContainer(igUserId, token, { image_url, caption, alt
   }
 }
 
+// Cria o container certo para cada formato de post.
+//   IMAGE    → uma imagem (image_url)
+//   CAROUSEL → um container por imagem (is_carousel_item) + o container "pai" com children
+//   REELS    → video_url + capa (cover_url); o Instagram processa o vídeo por alguns minutos
+export async function createPostContainer(igUserId, token, post, { wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const type = post.media_type || 'IMAGE';
+  if (type === 'IMAGE') return createContainer(igUserId, token, { image_url: post.image_url, caption: post.caption, alt_text: post.alt_text });
+  const create = (fields) => igFetch(`${graph()}/${igUserId}/media`, { method: 'POST', body: form({ ...fields, access_token: token }) }).then((r) => r.id);
+  if (type === 'REELS') {
+    const video = (post.media || []).find((m) => m.kind === 'video');
+    if (!video) throw new IgError('O Reels está sem vídeo.', { transient: false });
+    return create({ media_type: 'REELS', video_url: video.url, cover_url: post.image_url, caption: post.caption, share_to_feed: 'true' });
+  }
+  // CAROUSEL
+  const items = (post.media || []).filter((m) => m.kind === 'image').slice(0, 10);
+  if (items.length < 2) throw new IgError('O carrossel precisa de pelo menos 2 imagens.', { transient: false });
+  const children = [];
+  for (const it of items) children.push(await create({ image_url: it.url, is_carousel_item: 'true' }));
+  // espera os itens ficarem prontos (imagens costumam levar segundos)
+  for (let i = 0; i < 6; i++) {
+    const st = await Promise.all(children.map((id) => containerStatus(id, token)));
+    if (st.some((x) => x.code === 'ERROR' || x.code === 'EXPIRED')) throw new IgError('O Instagram recusou uma das imagens do carrossel.', { transient: false });
+    if (st.every((x) => x.code === 'FINISHED')) break;
+    await wait(2000);
+  }
+  return create({ media_type: 'CAROUSEL', children: children.join(','), caption: post.caption });
+}
+
 // FINISHED = pronto; IN_PROGRESS = processando; ERROR/EXPIRED = falhou.
 export async function containerStatus(containerId, token) {
   const r = await igFetch(`${graph()}/${containerId}?${form({ fields: 'status_code,status', access_token: token })}`);

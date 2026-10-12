@@ -1,7 +1,7 @@
 // IA: sugere legendas + hashtags olhando a imagem do post (API do Claude, com visão).
 // Precisa da variável ANTHROPIC_API_KEY na Vercel (console.anthropic.com → API Keys).
 import { route, send, readJson, need } from '../../lib/http.js';
-import { requireAdmin } from '../../lib/auth.js';
+import { requireStaff } from '../../lib/auth.js';
 import { db } from '../../lib/db.js';
 
 const MODEL = () => process.env.AI_MODEL || 'claude-sonnet-5-5';
@@ -18,11 +18,12 @@ function imageBlock(body) {
   return null;
 }
 
-function buildPrompt({ client, brief, title, current }) {
+function buildPrompt({ client, brief, title, current, format }) {
   return `Você é redator(a) sênior de social media de uma agência brasileira. Escreva legendas para um post de feed do Instagram.
 
 Marca/cliente: ${client?.name || 'não informado'}${client?.ig_username ? ` (@${client.ig_username})` : ''}
 Tom de voz da marca: ${client?.brand_voice || 'não definido — deduza pelo visual do post e mantenha natural'}
+${client?.brand_kit?.style ? `Estilo/posicionamento: ${client.brand_kit.style}\n` : ''}${client?.brand_kit?.dos ? `Sempre: ${client.brand_kit.dos}\n` : ''}${client?.brand_kit?.donts ? `Nunca (palavras/temas proibidos): ${client.brand_kit.donts}\n` : ''}${client?.brand_kit?.notes ? `Observações da marca: ${client.brand_kit.notes}\n` : ''}${format ? `Formato do post: ${format}` : ''}
 Pauta / título interno: ${title || '—'}
 O que o post precisa comunicar (briefing): ${brief || '—'}
 ${current ? `Legenda atual (melhore, não repita): ${current}` : ''}
@@ -43,18 +44,18 @@ Responda SOMENTE com JSON válido, neste formato:
 
 export default route({
   POST: async (req, res) => {
-    requireAdmin(req);
+    await requireStaff(req);
     need(process.env.ANTHROPIC_API_KEY, 503, 'A IA ainda não está ligada: falta ANTHROPIC_API_KEY na Vercel (veja a aba Ajustes).');
     const body = await readJson(req);
     const client = body.client_id
-      ? await db.one('clients', { select: 'name,ig_username,brand_voice', id: `eq.${body.client_id}` })
+      ? await db.one('clients', { select: '*', id: `eq.${body.client_id}` })
       : null;
     const img = imageBlock(body);
     need(img || body.brief || body.title, 400, 'Envie a imagem ou escreva sobre o que é o post.');
 
     const content = [];
     if (img) content.push(img); // imagem antes do texto: a IA entende melhor
-    content.push({ type: 'text', text: buildPrompt({ client, brief: String(body.brief || '').slice(0, 1500), title: body.title, current: String(body.current || '').slice(0, 2200) }) });
+    content.push({ type: 'text', text: buildPrompt({ client, brief: String(body.brief || '').slice(0, 1500), title: body.title, current: String(body.current || '').slice(0, 2200), format: { CAROUSEL: 'carrossel (a imagem é a capa; a legenda pode convidar a deslizar)', REELS: 'Reels (a imagem é a capa do vídeo)' }[body.media_type] || '' }) });
 
     let r;
     try {

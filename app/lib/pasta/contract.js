@@ -8,7 +8,7 @@ import { loadSettings } from './settings.js';
 
 export default route({
   GET: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const { client: id } = query(req);
     need(id, 400, 'Cliente não informado.');
     const client = await db.one('clients', { select: '*', id: `eq.${id}` });

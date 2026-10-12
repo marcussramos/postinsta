@@ -4,6 +4,7 @@
 // 3) publica os posts aprovados cujo horário chegou
 import { db } from './db.js';
 import * as ig from './ig.js';
+import { logEvent } from './events.js';
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -57,12 +58,10 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
       continue;
     }
     try {
-      const containerId = await ig.createContainer(c.ig_user_id, c.ig_token, {
-        image_url: claimed.image_url, caption: claimed.caption, alt_text: claimed.alt_text,
-      });
+      const containerId = await ig.createPostContainer(c.ig_user_id, c.ig_token, claimed, { wait });
       await db.update('posts', { id: `eq.${claimed.id}` }, { ig_container_id: containerId });
       claimed.ig_container_id = containerId;
-      await wait(3000); // imagens costumam processar em poucos segundos
+      await wait((claimed.media_type || 'IMAGE') === 'REELS' ? 8000 : 3000); // vídeo demora mais; se não ficar pronto, termina na próxima rodada
       await finish(claimed, c, log, now);
     } catch (e) {
       await handleError(claimed, e, log);
@@ -88,14 +87,16 @@ async function finish(p, c, log, now) {
   try {
     const st = await ig.containerStatus(p.ig_container_id, c.ig_token);
     if (st.code === 'IN_PROGRESS') {
-      if (now() - new Date(p.updated_at || p.scheduled_at).getTime() > STUCK_MS) {
-        return handleError(p, new ig.IgError('O Instagram demorou demais para processar a imagem.', { transient: true }), log);
+      const limit = p.media_type === 'REELS' ? STUCK_MS * 2 : STUCK_MS; // vídeo pode levar mais tempo
+      if (now() - new Date(p.updated_at || p.scheduled_at).getTime() > limit) {
+        return handleError(p, new ig.IgError(p.media_type === 'REELS' ? 'O Instagram demorou demais para processar o vídeo.' : 'O Instagram demorou demais para processar a imagem.', { transient: true }), log);
       }
       log.waiting.push(p.id);
       return;
     }
     if (st.code === 'ERROR' || st.code === 'EXPIRED') {
-      return handleError(p, new ig.IgError(`O Instagram recusou a imagem (${st.detail || st.code}).`, { transient: st.code === 'EXPIRED' }), log);
+      const what = p.media_type === 'REELS' ? 'o vídeo (confira: MP4/MOV, H.264, 3 s a 15 min, até 50 MB)' : p.media_type === 'CAROUSEL' ? 'o carrossel' : 'a imagem';
+      return handleError(p, new ig.IgError(`O Instagram recusou ${what} (${st.detail || st.code}).`, { transient: st.code === 'EXPIRED' }), log);
     }
     if (st.code === 'PUBLISHED') { // já saiu numa rodada anterior que caiu antes de registrar
       await db.update('posts', { id: `eq.${p.id}` }, { status: 'published', published_at: new Date().toISOString(), last_error: null });
@@ -108,6 +109,7 @@ async function finish(p, c, log, now) {
       status: 'published', ig_media_id: mediaId, ig_permalink: link, published_at: new Date().toISOString(), last_error: null,
     });
     log.published.push({ id: p.id, client: c.name, permalink: link });
+    await logEvent({ ...p, ig_permalink: link }, 'published');
   } catch (e) {
     await handleError(p, e, log);
   }
@@ -131,4 +133,5 @@ async function fail(p, message, log, keepTrying = false) {
     : { status: 'failed', last_error: message };
   await db.update('posts', { id: `eq.${p.id}` }, patch);
   log.failed.push({ id: p.id, error: message });
+  if (patch.status === 'failed') await logEvent(p, 'failed', message);
 }

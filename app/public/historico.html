@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Histórico de aprovações</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
+<style>
+  :root { --ink: #14161B; --muted: #646B78; --line: #E1E4EA; --bg: #E9EBEF; --accent: #2443C9; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Schibsted Grotesk", Arial, sans-serif; }
+  .bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--line); }
+  .bar-in { max-width: 900px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .bar h1 { font-size: 15px; margin: 0; flex: 1; }
+  .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 9px 14px; cursor: pointer; color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sheet { background: #fff; width: min(210mm, 100% - 32px); margin: 18px auto 40px; padding: 18mm 16mm; border-radius: 4px; box-shadow: 0 8px 24px rgba(20,22,27,.08); }
+  .eyebrow { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h2 { margin: 4px 0 2px; font-size: 22px; }
+  .intro { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 8px 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.what b { display: block; }
+  td.post { color: var(--muted); }
+  td.post img { width: 34px; height: 42px; object-fit: cover; border-radius: 4px; float: left; margin-right: 8px; }
+  .msg { text-align: center; padding: 80px 16px; color: var(--muted); }
+  footer { margin-top: 16px; font-size: 10.5px; color: var(--muted); }
+  @page { size: A4; margin: 14mm 12mm; }
+  @media print { body { background: #fff; } .bar { display: none; } .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; } tr { break-inside: avoid; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in"><h1 id="t">Histórico de aprovações</h1><button class="btn primary" id="pdf" type="button" hidden>Salvar PDF</button></div></div>
+<main id="doc"><p class="msg">Carregando…</p></main>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const $doc = document.getElementById('doc');
+const LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };
+const TYPE = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };
+const fmt = (iso) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Cuiaba' }).format(new Date(iso));
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null && v !== false) el.setAttribute(k, v);
+  for (const c of kids.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+}
+async function get(url) { const r = await fetch(url, { credentials: 'same-origin' }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `Erro ${r.status}.`); return d; }
+try {
+  let name, events, brand = 'MC DIGITAL';
+  if (q.get('t')) {
+    const d = await get(`/api/pasta?r=portal&t=${encodeURIComponent(q.get('t'))}`);
+    name = d.client.name; brand = d.agency.marca || brand;
+    events = d.history.map((e) => ({ type: e.type, note: e.note, created_at: e.at, snapshot: { title: e.title, caption: e.caption, scheduled_at: e.scheduled_at, media_type: e.media_type, image_url: e.image_url, permalink: e.permalink } }));
+  } else {
+    const [clients, ev] = await Promise.all([get('/api/clients'), get(`/api/pasta?r=history&client=${encodeURIComponent(q.get('client') || '')}`)]);
+    name = clients.find((c) => c.id === q.get('client'))?.name || 'Cliente'; events = ev;
+  }
+  document.title = `Histórico de aprovações - ${name}`;
+  document.getElementById('t').textContent = document.title;
+  $doc.replaceChildren(h('article', { class: 'sheet' },
+    h('div', { class: 'eyebrow' }, `${brand} · Histórico de aprovações`),
+    h('h2', {}, name),
+    h('p', { class: 'intro' }, `Registro automático de cada envio de conteúdo para aprovação, lembretes, decisões do cliente e publicações, com data e hora (horário de Cuiabá). Gerado em ${fmt(new Date().toISOString())}.`),
+    events.length ? h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Data e hora'), h('th', {}, 'Evento'), h('th', {}, 'Conteúdo'))),
+      h('tbody', {}, ...events.map((e) => h('tr', {},
+        h('td', { class: 'when' }, fmt(e.created_at)),
+        h('td', { class: 'what' }, h('b', {}, LABEL[e.type] || e.type), e.note ? `“${e.note}”` : null),
+        h('td', { class: 'post' }, e.snapshot?.image_url ? h('img', { src: e.snapshot.image_url, alt: '' }) : null,
+          `${TYPE[e.snapshot?.media_type] || 'Post'}${e.snapshot?.scheduled_at ? ` para ${fmt(e.snapshot.scheduled_at)}` : ''}: `,
+          (e.snapshot?.title || e.snapshot?.caption || '').slice(0, 140)))))) : h('p', { class: 'intro' }, 'Ainda não há registros.'),
+    h('footer', {}, 'Documento gerado pelo sistema de gestão de conteúdo da agência.')));
+  const b = document.getElementById('pdf'); b.hidden = false; b.onclick = () => window.print();
+} catch (e) {
+  $doc.replaceChildren(h('p', { class: 'msg' }, e.message));
+}
+</script>
+</body>
+</html>

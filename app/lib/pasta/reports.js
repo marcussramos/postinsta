@@ -14,14 +14,14 @@ const listItem = (r) => ({
 
 export default route({
   GET: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const { client } = query(req);
     const params = { select: '*', order: 'ref_month.desc', limit: 200 };
     if (client) params.client_id = `eq.${client}`;
     send(res, 200, (await db.select('reports', params)).map(listItem));
   },
   POST: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const b = await readJson(req);
     need(isMonth(b.ref_month), 400, 'Escolha o mês do relatório.');
     const client = await db.one('clients', { select: '*', id: `eq.${b.client_id}` });
@@ -30,7 +30,7 @@ export default route({
     send(res, 200, listItem(row));
   },
   PATCH: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const b = await readJson(req);
     need(b.id, 400, 'Relatório não informado.');
     const [row] = await db.update('reports', { id: `eq.${b.id}` }, { note: String(b.note || '').trim().slice(0, 3000) || null });
@@ -38,7 +38,7 @@ export default route({
     send(res, 200, listItem(row));
   },
   DELETE: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const { id } = query(req);
     need(id, 400, 'Relatório não informado.');
     await db.remove('reports', { id: `eq.${id}` });

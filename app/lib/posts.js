@@ -24,8 +24,9 @@ export const CLIENT_CAN_DECIDE = ['pending_approval', 'approved', 'changes_reque
 // Status em que mexer no conteúdo exige nova aprovação do cliente.
 const NEEDS_REAPPROVAL = ['pending_approval', 'approved', 'changes_requested', 'failed'];
 
-export const FIELDS = ['title', 'notes', 'caption', 'alt_text', 'scheduled_at', 'image_url', 'image_path'];
-export const CONTENT_FIELDS = ['caption', 'image_url', 'alt_text'];
+export const FIELDS = ['title', 'notes', 'caption', 'alt_text', 'scheduled_at', 'image_url', 'image_path', 'media_type', 'media'];
+export const CONTENT_FIELDS = ['caption', 'image_url', 'alt_text', 'media_type', 'media'];
+export const MEDIA_TYPES = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };
 
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -43,6 +44,20 @@ export function cleanPostInput(input) {
     if (Number.isNaN(d.getTime())) throw bad('Data e hora inválidas.');
     out.scheduled_at = d.toISOString();
   }
+  if (out.media_type !== undefined) {
+    out.media_type = out.media_type || 'IMAGE';
+    if (!MEDIA_TYPES[out.media_type]) throw bad('Formato de post inválido.');
+  }
+  if (out.media !== undefined && out.media !== null) {
+    if (!Array.isArray(out.media)) throw bad('Mídia inválida.');
+    if (out.media.length > 10) throw bad('O carrossel aceita no máximo 10 imagens.');
+    out.media = out.media.map((m) => {
+      const url = String(m?.url || '');
+      if (!/^https?:\/\//.test(url)) throw bad('Mídia inválida.');
+      return { url, path: m.path ? String(m.path).slice(0, 300) : null, kind: m.kind === 'video' ? 'video' : 'image' };
+    });
+    if (!out.media.length) out.media = null;
+  }
   if (out.title) out.title = String(out.title).trim().slice(0, 140);
   if (out.notes) out.notes = String(out.notes).slice(0, 4000);
   if (out.alt_text) out.alt_text = String(out.alt_text).slice(0, 1000);
@@ -51,7 +66,10 @@ export function cleanPostInput(input) {
 
 // Para ir ao cliente ou para a fila de publicação, o post precisa estar completo.
 export function readyProblem(post) {
-  if (!post.image_url) return 'Falta a imagem do post.';
+  const type = post.media_type || 'IMAGE';
+  if (type === 'CAROUSEL' && (post.media || []).filter((m) => m.kind === 'image').length < 2) return 'O carrossel precisa de pelo menos 2 imagens.';
+  if (type === 'REELS' && !(post.media || []).some((m) => m.kind === 'video')) return 'Falta o vídeo do Reels.';
+  if (!post.image_url) return type === 'REELS' ? 'Falta a capa do Reels.' : 'Falta a imagem do post.';
   if (!post.scheduled_at) return 'Falta a data e a hora de publicação.';
   return null;
 }

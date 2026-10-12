@@ -1,10 +1,10 @@
 // GET: estou logado? (+ estado da instalação, só para a agência) | POST: entrar | DELETE: sair
 import { route, send, readJson, need } from '../lib/http.js';
-import { isAdmin, checkPassword, sessionCookie, clearCookie } from '../lib/auth.js';
+import { currentUser, checkPassword, checkUserPassword, sessionCookie, clearCookie } from '../lib/auth.js';
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
-import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL } from '../lib/migrations.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -44,6 +44,11 @@ async function setupInfo() {
     catch { parts.push(MIGRATION_REPORTS); }
     try { await db.select('clients', { select: 'portal_token', limit: 1 }); }
     catch { parts.push(MIGRATION_PORTAL); }
+    try {
+      await db.select('posts', { select: 'media_type', limit: 1 }); await db.select('payments', { select: 'installment', limit: 1 });
+      await db.select('post_events', { select: 'id', limit: 1 }); await db.select('users', { select: 'id', limit: 1 }); await db.select('requests', { select: 'id', limit: 1 });
+      await db.select('clients', { select: 'brand_kit,installments', limit: 1 });
+    } catch { parts.push(MIGRATION_PRO); }
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }
   return info;
@@ -51,17 +56,24 @@ async function setupInfo() {
 
 export default route({
   GET: async (req, res) => {
-    const admin = isAdmin(req);
-    send(res, 200, { admin, timezone: TIMEZONE(), setup: admin ? await setupInfo() : undefined });
+    const u = await currentUser(req);
+    const admin = u?.role === 'admin';
+    send(res, 200, { admin, staff: Boolean(u), role: u?.role || null, name: u?.name || null, timezone: TIMEZONE(), setup: admin ? await setupInfo() : undefined });
   },
 
+  // Dono: { password }. Equipe: { email, password }.
   POST: async (req, res) => {
-    need(!missingEnv().includes('ADMIN_PASSWORD'), 503, 'Falta definir ADMIN_PASSWORD na Vercel.');
-    const { password } = await readJson(req);
+    const { email, password } = await readJson(req);
     // pequena espera em toda tentativa: atrasa quem tenta adivinhar a senha
     await new Promise((r) => setTimeout(r, 400));
+    if (email) {
+      const u = await db.one('users', { select: 'id,name,role,active,pass_hash', email: `eq.${String(email).trim().toLowerCase()}` }).catch(() => null);
+      need(u && u.active && checkUserPassword(password, u.pass_hash), 401, 'E-mail ou senha incorretos.');
+      return send(res, 200, { admin: u.role === 'admin', staff: true, role: u.role, name: u.name, timezone: TIMEZONE() }, { 'Set-Cookie': sessionCookie({ role: u.role, uid: u.id }) });
+    }
+    need(!missingEnv().includes('ADMIN_PASSWORD'), 503, 'Falta definir ADMIN_PASSWORD na Vercel.');
     need(checkPassword(password), 401, 'Senha incorreta.');
-    send(res, 200, { admin: true, timezone: TIMEZONE() }, { 'Set-Cookie': sessionCookie() });
+    send(res, 200, { admin: true, staff: true, role: 'admin', name: 'Dono', timezone: TIMEZONE() }, { 'Set-Cookie': sessionCookie({ role: 'admin' }) });
   },
 
   DELETE: (req, res) => send(res, 200, { admin: false }, { 'Set-Cookie': clearCookie() }),

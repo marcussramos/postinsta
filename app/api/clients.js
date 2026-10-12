@@ -1,6 +1,6 @@
 // Clientes (marcas). GET lista | POST cria | PATCH ?id= edita | DELETE ?id= remove
 import { route, send, readJson, query, need } from '../lib/http.js';
-import { requireAdmin, randomToken } from '../lib/auth.js';
+import { requireAdmin, requireStaff, randomToken } from '../lib/auth.js';
 import { db, storage, docs } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
@@ -42,6 +42,16 @@ function cleanClient(input) {
     need(!s || /^\d{4}-\d{2}-\d{2}$/.test(s), 400, 'Data de início inválida.');
     out.billing_start = s || null;
   }
+  if (input.installments !== undefined) { // parcelas da mensalidade: [{ day, cents }]; vazio = uma parcela só
+    const list = Array.isArray(input.installments) ? input.installments : [];
+    need(list.length <= 6, 400, 'No máximo 6 parcelas por mês.');
+    out.installments = list.length > 1 ? list.map((p) => {
+      const day = Number(p.day), cents = Math.round(Number(p.cents));
+      need(Number.isInteger(day) && day >= 1 && day <= 31, 400, 'Dia da parcela deve ser de 1 a 31.');
+      need(Number.isFinite(cents) && cents > 0, 400, 'Valor de parcela inválido.');
+      return { day, cents };
+    }) : null;
+  }
   if (input.contract_data !== undefined) {
     const k = input.contract_data || {};
     const keep = {};
@@ -54,6 +64,13 @@ function cleanClient(input) {
       need(Number.isInteger(p) && p > 0 && p <= 120, 400, 'Prazo do contrato deve ser em meses (1 a 120).');
       keep.prazo_meses = p;
     }
+    for (const q of ['quota_posts', 'quota_reels']) { // cota mensal de entregas (contador)
+      if (k[q] !== undefined && k[q] !== '' && k[q] !== null) {
+        const n = Number(k[q]);
+        need(Number.isInteger(n) && n >= 0 && n <= 999, 400, 'Quantidade de entregas inválida.');
+        keep[q] = n;
+      }
+    }
     if (k.total_conteudos !== undefined && k.total_conteudos !== '' && k.total_conteudos !== null) {
       const n = Number(k.total_conteudos);
       need(Number.isInteger(n) && n > 0 && n <= 999, 400, 'Total de conteúdos por mês inválido.');
@@ -64,15 +81,21 @@ function cleanClient(input) {
   return out;
 }
 
+// A equipe vê o necessário para produzir e aprovar posts; nada de financeiro, contrato ou área do cliente.
+function teamClient(c, url) {
+  const { monthly_fee_cents, due_day, billing_start, contract_data, installments, portal_url, ...rest } = publicClient(c, url);
+  return rest;
+}
+
 export default route({
   GET: async (req, res) => {
-    requireAdmin(req);
+    const u = await requireStaff(req);
     const rows = await db.select('clients', { select: '*', order: 'name.asc' });
-    send(res, 200, rows.map((c) => publicClient(c, appUrl())));
+    send(res, 200, rows.map((c) => (u.role === 'admin' ? publicClient(c, appUrl()) : teamClient(c, appUrl()))));
   },
 
   POST: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const data = cleanClient(await readJson(req));
     need(data.name, 400, 'Dê um nome ao cliente.');
     const row = await db.insert('clients', data);
@@ -80,7 +103,7 @@ export default route({
   },
 
   PATCH: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const { id } = query(req);
     need(id, 400, 'Cliente não informado.');
     const body = await readJson(req);
@@ -98,7 +121,7 @@ export default route({
   },
 
   DELETE: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const { id } = query(req);
     need(id, 400, 'Cliente não informado.');
     const posts = await db.select('posts', { select: 'image_path', client_id: `eq.${id}` });

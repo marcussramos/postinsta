@@ -25,7 +25,7 @@ export default route({
       need(c, 404, 'Este link não existe mais. Peça um novo para a agência.');
       client = c.id; back = q.t;
     } else {
-      need(isAdmin(req), 401, 'Entre no painel para conectar o Instagram.');
+      need(await isAdmin(req), 401, 'Entre no painel para conectar o Instagram.');
       need(q.client, 400, 'Cliente não informado.');
       client = q.client;
     }

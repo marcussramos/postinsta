@@ -13,7 +13,7 @@ if (sp.get('ig')) {
 load();
 
 async function load() {
-  try { D = await api(`/api/approval?t=${encodeURIComponent(token)}`); render(); }
+  try { D = await api(`/api/approval?t=${encodeURIComponent(token)}&feed=1`); render(); }
   catch (e) {
     root.replaceChildren(h('div', { class: 'state' }, h('h1', { style: 'font-size:22px' }, 'Link indisponível'), h('p', { class: 'muted' }, e.message)));
   }
@@ -39,6 +39,7 @@ function render() {
       h('b', {}, 'Conecte seu Instagram'),
       h('span', { class: 'muted' }, 'Para os posts aprovados saírem sozinhos no seu perfil, autorize a publicação uma vez. Você entra direto no Instagram; a agência não vê sua senha.'),
       h('a', { class: 'btn primary', href: `/api/ig/connect?t=${encodeURIComponent(token)}` }, 'Conectar Instagram')),
+    feedPreview(),
     ...open.map((p) => card(p, handle)),
     decided.length ? h('div', { class: 'eyebrow section-title' }, 'Já decididos (ainda dá para mudar)') : null,
     ...decided.map((p) => card(p, handle)),
@@ -53,7 +54,7 @@ function card(p, handle) {
   const more = (p.caption || '').length > 160 ? h('button', { class: 'more', type: 'button', onclick: () => { capEl.classList.remove('clamp'); more.remove(); } }, 'ver legenda completa') : null;
   return h('article', { class: 'post', id: `p-${p.id}` },
     h('div', { class: 'ig' }, h('span', { class: 'av' }, (handle.replace('@', '')[0] || 'P')), h('span', {}, handle)),
-    h('img', { src: p.image_url, alt: p.alt_text || 'Imagem do post', loading: 'lazy' }),
+    media(p),
     capEl, more,
     h('div', { class: 'when eyebrow' }, p.status === 'published' ? 'Publicado' : `Publica ${when(p.scheduled_at)}`),
     decision(p));
@@ -104,4 +105,43 @@ async function decide(p, decision, feedback, box) {
     box.querySelectorAll('button').forEach((b) => (b.disabled = false));
     if (e.status === 409) load();
   }
+}
+
+// Foto, carrossel (deslizar) ou Reels (vídeo com capa)
+function media(p) {
+  const type = p.media_type || 'IMAGE';
+  if (type === 'REELS') {
+    const v = (p.media || []).find((m) => m.kind === 'video');
+    return h('div', { class: 'ap-reel' },
+      v ? h('video', { src: v.url, poster: p.image_url || null, controls: true, playsinline: true, preload: 'none' }) : h('img', { src: p.image_url, alt: '' }),
+      h('span', { class: 'ap-badge' }, '▶ Reels'));
+  }
+  if (type === 'CAROUSEL') {
+    const imgs = (p.media || []).filter((m) => m.kind === 'image');
+    const dots = h('div', { class: 'ap-dots' }, ...imgs.map((_, i) => h('span', { class: i === 0 ? 'on' : null })));
+    const track = h('div', { class: 'ap-track', onscroll: (e) => {
+      const i = Math.round(e.target.scrollLeft / e.target.clientWidth);
+      [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+    } }, ...imgs.map((m, i) => h('img', { src: m.url, alt: `${i + 1} de ${imgs.length}`, loading: 'lazy' })));
+    return h('div', { class: 'ap-car' }, track, h('span', { class: 'ap-badge' }, `❐ ${imgs.length} fotos · deslize`), dots);
+  }
+  return h('img', { src: p.image_url, alt: p.alt_text || 'Imagem do post', loading: 'lazy' });
+}
+
+// Prévia da grade do perfil: os próximos posts entram na frente dos já publicados.
+function feedPreview() {
+  const upcoming = D.posts.filter((p) => ['pending_approval', 'approved', 'changes_requested'].includes(p.status) && p.image_url)
+    .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+  if (!upcoming.length) return null;
+  const feed = D.feed || [];
+  const tile = (src, cls, label) => h('div', { class: `g-tile ${cls}` }, h('img', { src, alt: '', loading: 'lazy' }), label ? h('span', { class: 'g-tag' }, label) : null);
+  const grid = h('div', { class: 'g-grid' },
+    ...upcoming.map((p) => tile(p.image_url, `new ${p.status}`, p.status === 'pending_approval' ? 'para aprovar' : p.status === 'approved' ? 'aprovado' : 'ajuste')),
+    ...feed.slice(0, Math.max(0, 12 - upcoming.length)).map((f) => tile(f.thumb, 'old', f.type === 'REELS' ? '▶' : f.type === 'CAROUSEL' ? '❐' : null)));
+  const box = h('div', { class: 'card g-card', hidden: true },
+    h('b', {}, 'Como seu perfil vai ficar'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, (D.feed || []).length ? 'Os posts com borda são os novos, na ordem em que vão sair; os outros já estão no seu perfil.' : 'Os posts com borda são os novos, na ordem em que vão sair.'),
+    grid);
+  const btn = h('button', { class: 'btn', type: 'button', onclick: () => { box.hidden = !box.hidden; btn.textContent = box.hidden ? '▦ Ver como fica no meu feed' : 'Fechar prévia do feed'; } }, '▦ Ver como fica no meu feed');
+  return h('div', { class: 'g-wrap' }, btn, box);
 }

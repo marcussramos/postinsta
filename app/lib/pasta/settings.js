@@ -18,11 +18,11 @@ export async function loadSettings() {
 
 export default route({
   GET: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     send(res, 200, await loadSettings());
   },
   PUT: async (req, res) => {
-    requireAdmin(req);
+    await requireAdmin(req);
     const b = await readJson(req);
     const now = new Date().toISOString();
     if (b.agency) {

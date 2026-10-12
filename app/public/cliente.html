@@ -52,11 +52,24 @@
   .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .paid { color: var(--ok); background: var(--ok-bg); } .open { color: var(--wait); background: var(--wait-bg); }
   .late { color: var(--bad); background: var(--bad-bg); } .waived { color: var(--off); background: var(--off-bg); }
+  .parcels { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+  .parcel { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; font-size: 13px; font-weight: 600; }
   .metrics { grid-column: 1 / -1; display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
   .metrics b { color: var(--ink); font-variant-numeric: tabular-nums; }
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; color: var(--muted); font-size: 14px; }
   .pix { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
   .pix code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+  textarea, input[type=date], input[type=file] { font: inherit; color: inherit; width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; }
+  textarea { resize: vertical; min-height: 96px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row2 label { display: grid; gap: 4px; color: var(--muted); }
+  .deliv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .deliv .big { font-size: 22px; }
+  .pbar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 4px 0; }
+  .pbar span { display: block; height: 100%; background: var(--ok); }
+  .tabs { flex-wrap: wrap; }
+  .tab { white-space: nowrap; flex: 1 1 auto; }
+  @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
   .msg { text-align: center; padding: 80px 16px; color: var(--muted); }
   .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; }
   footer { padding: 10px 0 40px; font-size: 12.5px; color: var(--muted); text-align: center; }
@@ -90,7 +103,7 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const el = h('
 const fileUrl = (id, dl) => `/api/pasta?r=portal&t=${encodeURIComponent(t)}&file=${id}${dl ? '&download=1' : ''}`;
 const LABEL = { paid: 'Pago', open: 'Em aberto', late: 'Atrasado', waived: 'Isento' };
 
-let D, tab = 'financeiro';
+let D, tab = 'pedidos';
 try { const s = sessionStorage.getItem('mc_cliente_tab'); if (s) tab = s; } catch { /* sem armazenamento */ }
 
 function render() {
@@ -102,13 +115,23 @@ function render() {
   const nextOpen = [...months].reverse().find((m) => m.status === 'open' || m.status === 'late');
   const cards = h('div', { class: 'cards' },
     h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Mensalidade'),
-      late.length ? [h('div', { class: 'big', style: 'color:var(--bad)' }, `${late.length} em atraso`), h('div', { class: 'muted', style: 'font-size:13.5px' }, `Total ${brl(late.reduce((s, m) => s + (m.amount_cents || 0), 0))}`)]
-        : nextOpen ? [h('div', { class: 'big' }, brl(nextOpen.amount_cents)), h('div', { class: 'muted', style: 'font-size:13.5px' }, `Próximo vencimento: ${dmy(nextOpen.due)}`)]
+      late.length ? [h('div', { class: 'big', style: 'color:var(--bad)' }, `${brl(late.reduce((s, m) => s + (m.late_cents || 0), 0))} em atraso`), h('div', { class: 'muted', style: 'font-size:13.5px' }, `${late.length} mês(es) com parcela vencida`)]
+        : nextOpen ? [h('div', { class: 'big' }, brl(nextOpen.open_cents || nextOpen.amount_cents)), h('div', { class: 'muted', style: 'font-size:13.5px' }, `Próximo vencimento: ${dmy(nextOpen.due)}`)]
         : D.billing ? [h('div', { class: 'big', style: 'color:var(--ok)' }, 'Tudo em dia ✓')] : h('div', { class: 'muted' }, 'Sem cobranças cadastradas.')),
+    D.deliveries && (D.deliveries.posts.quota != null || D.deliveries.reels.quota != null || D.deliveries.posts.planned || D.deliveries.reels.planned)
+      ? h('div', { class: 'card', style: 'grid-column:1/-1' }, h('div', { class: 'eyebrow' }, `Entregas de ${monthName(D.deliveries.month).toLowerCase()}`),
+          h('div', { class: 'deliv' }, ...[['posts', 'posts de feed'], ['reels', 'Reels']].map(([k, l]) => {
+            const x = D.deliveries[k]; if (x.quota == null && !x.planned) return null;
+            const pct = x.quota ? Math.min(100, Math.round((x.planned / x.quota) * 100)) : 0;
+            return h('div', {}, h('div', {}, h('b', { class: 'big' }, x.quota != null ? `${x.planned}/${x.quota}` : String(x.planned)), ` ${l}`),
+              x.quota ? h('div', { class: 'pbar' }, h('span', { style: `width:${pct}%` })) : null,
+              h('div', { class: 'muted', style: 'font-size:12.5px' }, `${x.published} já publicado(s), ${x.planned - x.published} programado(s)`));
+          })))
+      : null,
     h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Posts para aprovar'),
       h('div', { class: 'big' }, D.approval.pending ? `${D.approval.pending} aguardando você` : 'Nenhum pendente'),
       h('a', { class: `btn${D.approval.pending ? ' primary' : ''} sm`, href: D.approval.url }, D.approval.pending ? 'Aprovar agora' : 'Ver aprovações')));
-  const TABS = [['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['contrato', 'Contrato']];
+  const TABS = [['pedidos', 'Pedidos'], ['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['aprovacoes', 'Aprovações'], ['contrato', 'Contrato']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' }, ...TABS.map(([k, l]) => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(tab === k),
     onclick: () => { tab = k; try { sessionStorage.setItem('mc_cliente_tab', k); } catch { /* ok */ } render(); } }, l)));
   const fileItem = (f, sub) => h('div', { class: 'item' },
@@ -121,14 +144,20 @@ function render() {
     else {
       if (D.agency.pix) panel.append(h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Pagamento por PIX'),
         h('div', { class: 'pix' }, h('code', {}, D.agency.pix), h('button', { class: 'btn sm', onclick: async () => { try { await navigator.clipboard.writeText(D.agency.pix); toast('Chave PIX copiada.'); } catch { toast('Selecione e copie a chave.'); } } }, 'Copiar chave')),
-        h('span', { class: 'muted', style: 'font-size:13px' }, `Mensalidade de ${brl(D.billing.monthly_fee_cents)}${D.billing.due_day ? `, vence todo dia ${D.billing.due_day}` : ''}. Depois de pagar, mande o comprovante para a agência.`)));
+        h('span', { class: 'muted', style: 'font-size:13px' }, `Mensalidade de ${brl(D.billing.monthly_fee_cents)}${(months[0]?.parcels.length || 1) > 1 ? `, em ${months[0].parcels.length} parcelas (dias ${[...new Set(months[0].parcels.map((p) => Number(p.due.slice(8))))].join(', ')})` : D.billing.due_day ? `, vence todo dia ${D.billing.due_day}` : ''}. Depois de pagar, mande o comprovante para a agência.`)));
       for (const m of months) {
+        const multi = m.parcels.length > 1;
         panel.append(h('div', { class: 'item' },
           h('div', { class: 't' }, monthName(m.month)),
           h('div', { class: 'act' }, h('span', { class: `pill ${m.status}` }, LABEL[m.status]),
-            m.receipt_id ? h('a', { class: 'btn sm', href: fileUrl(m.receipt_id), target: '_blank', rel: 'noopener' }, '📎 Comprovante') : null),
-          h('div', { class: 's' }, m.status === 'paid' ? `Pago${m.paid_at ? ` em ${dmy(m.paid_at)}` : ''} · ${brl(m.amount_cents)}`
-            : m.status === 'waived' ? 'Sem cobrança neste mês' : `Vence ${dmy(m.due)} · ${brl(m.amount_cents)}`)));
+            !multi && m.parcels[0].receipt_id ? h('a', { class: 'btn sm', href: fileUrl(m.parcels[0].receipt_id), target: '_blank', rel: 'noopener' }, '📎 Comprovante') : null),
+          h('div', { class: 's' }, multi ? `${brl(m.amount_cents)} em ${m.parcels.length} parcelas`
+            : m.status === 'paid' ? `Pago${m.parcels[0].paid_at ? ` em ${dmy(m.parcels[0].paid_at)}` : ''} · ${brl(m.amount_cents)}`
+            : m.status === 'waived' ? 'Sem cobrança neste mês' : `Vence ${dmy(m.due)} · ${brl(m.amount_cents)}`),
+          multi ? h('div', { class: 'parcels' }, ...m.parcels.map((p) => h('div', { class: 'parcel' },
+            h('span', {}, `${p.n}ª · ${brl(p.cents)}`),
+            h('span', { class: `pill ${p.status}` }, p.status === 'paid' && p.paid_at ? `Pago ${dmy(p.paid_at).slice(0, 5)}` : p.status === 'open' || p.status === 'late' ? `${LABEL[p.status]} · ${dmy(p.due).slice(0, 5)}` : LABEL[p.status]),
+            p.receipt_id ? h('a', { class: 'btn sm', href: fileUrl(p.receipt_id), target: '_blank', rel: 'noopener', title: 'Comprovante' }, '📎') : null))) : null));
       }
     }
   } else if (tab === 'relatorios') {
@@ -143,6 +172,22 @@ function render() {
           h('span', {}, h('b', {}, s.followers_gained == null ? '—' : `${s.followers_gained > 0 ? '+' : ''}${nf(s.followers_gained)}`), ' seguidores'), h('span', {}, h('b', {}, nf(s.posts)), ' posts'))));
     }
     for (const f of D.files.filter((x) => x.category === 'report')) panel.append(fileItem(f, `${f.ref_month ? `${monthName(f.ref_month)} · ` : ''}${size(f.size)}`));
+  } else if (tab === 'pedidos') {
+    panel.append(requestForm());
+    const REQ = { open: ['Recebido', 'open'], doing: ['Em andamento', 'waived'], done: ['Concluído', 'paid'] };
+    for (const r of D.requests || []) panel.append(h('div', { class: 'item' },
+      h('div', { class: 't', style: 'white-space:normal' }, r.text.length > 140 ? `${r.text.slice(0, 140)}…` : r.text),
+      h('div', { class: 'act' }, h('span', { class: `pill ${REQ[r.status][1]}` }, REQ[r.status][0])),
+      h('div', { class: 's' }, `Enviado em ${dmy(r.created_at)}${r.wanted_date ? ` · para ${dmy(r.wanted_date)}` : ''}${r.files?.length ? ` · ${r.files.length} anexo(s)` : ''}`)));
+  } else if (tab === 'aprovacoes') {
+    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };
+    panel.append(h('div', { class: 'card' }, h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Registro de cada envio, aprovação e publicação, com data e hora.'),
+      h('a', { class: 'btn sm', href: `/historico?t=${encodeURIComponent(t)}`, target: '_blank', rel: 'noopener' }, 'Baixar em PDF')));
+    if (!(D.history || []).length) panel.append(h('div', { class: 'empty' }, 'Os registros aparecem aqui a partir dos próximos envios.'));
+    for (const e of D.history || []) panel.append(h('div', { class: 'item' },
+      h('div', { class: 't' }, LBL[e.type] || e.type),
+      h('div', { class: 'act' }, e.permalink && e.type === 'published' ? h('a', { class: 'btn sm', href: e.permalink, target: '_blank', rel: 'noopener' }, 'Ver post') : null),
+      h('div', { class: 's' }, `${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Cuiaba' }).format(new Date(e.at))} · ${(e.title || e.caption || 'Post').slice(0, 80)}${e.note ? ` · “${e.note}”` : ''}`)));
   } else {
     const list = D.files.filter((f) => f.category === 'contract');
     if (!list.length) panel.append(h('div', { class: 'empty' }, 'O contrato assinado aparece aqui assim que a agência anexar.'));
@@ -153,6 +198,40 @@ function render() {
       D.client.ig_username ? h('div', { class: 'muted' }, `@${D.client.ig_username}`) : null),
     cards, tabs, panel,
     h('footer', {}, 'Link pessoal e intransferível. Não compartilhe.', D.agency.email ? [h('br'), `Dúvidas: ${D.agency.email}`] : null));
+}
+
+// Novo pedido: texto, data desejada e até 5 anexos (fotos/PDF/vídeo curto até 4 MB cada)
+function requestForm() {
+  const text = h('textarea', { id: 'rq-text', rows: 4, placeholder: 'Ex.: Promoção de banho e tosa no sábado, 20% de desconto. Seguem fotos da loja.' });
+  const date = h('input', { type: 'date', id: 'rq-date' });
+  const files = h('input', { type: 'file', id: 'rq-files', multiple: true, accept: 'image/*,video/mp4,video/quicktime,.pdf,.heic' });
+  const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Enviar pedido');
+  const status = h('span', { class: 'muted', style: 'font-size:13px' });
+  return h('form', { class: 'card', onsubmit: async (ev) => {
+    ev.preventDefault();
+    if (text.value.trim().length < 3) return toast('Escreva o que você precisa.');
+    btn.disabled = true;
+    try {
+      const ids = [];
+      for (const [i, f] of [...files.files].slice(0, 5).entries()) {
+        if (f.size > 4 * 1024 * 1024) throw new Error(`"${f.name}" passa de 4 MB. Vídeos maiores, mande pelo WhatsApp.`);
+        status.textContent = `Enviando anexo ${i + 1}…`;
+        const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}&upload=1`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'x-file-name': encodeURIComponent(f.name) }, body: f });
+        const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Falha ao enviar anexo.');
+        ids.push(d.id);
+      }
+      const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text.value, wanted_date: date.value || null, file_ids: ids }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Não foi possível enviar.');
+      D.requests = [{ ...d, files: ids.map((id) => ({ id })) }, ...(D.requests || [])];
+      toast('Pedido enviado para a agência!'); render();
+    } catch (e) { toast(e.message); btn.disabled = false; status.textContent = ''; }
+  } },
+    h('div', { class: 'eyebrow' }, 'Novo pedido'),
+    h('label', { for: 'rq-text', style: 'font-weight:700;font-size:14px' }, 'O que você precisa?'), text,
+    h('div', { class: 'row2' },
+      h('label', { for: 'rq-date', style: 'font-size:13px' }, 'Para quando? (opcional)', date),
+      h('label', { for: 'rq-files', style: 'font-size:13px' }, 'Fotos ou arquivos (opcional)', files)),
+    h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' }, btn, status));
 }
 
 try {
