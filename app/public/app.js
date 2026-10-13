@@ -896,7 +896,8 @@ function cardClient(c) {
     : expired ? h('span', { class: 'ig-off' }, `@${c.ig_username} · conexão expirou`)
     : h('span', { class: exp !== null && exp < 5 ? 'ig-warn' : 'ig-ok' }, `@${c.ig_username || 'conectado'}`);
   return h('article', { class: 'card' },
-    h('div', { style: 'display:flex;align-items:center;gap:10px' }, h('h3', { style: 'flex:1;min-width:0' }, c.name),
+    h('h3', { class: 'client-name' }, c.name),
+    h('div', { class: 'card-tags' },
       pend ? h('span', { class: 'pill st-pending_approval' }, `${pend} aguardando`) : null,
       lateCount(c) ? h('span', { class: 'pill st-failed', title: 'Mensalidades vencidas sem pagamento' }, `${lateCount(c)} em atraso`) : null,
       c.portal_url ? h('span', { class: `pill ${c.brand_kit?.onboarding?.submitted_at ? 'st-approved' : 'st-draft'}`, title: 'Questionário de onboarding' }, c.brand_kit?.onboarding?.submitted_at ? 'Onboarding ✓' : 'Onboarding pendente') : null),

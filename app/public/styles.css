@@ -689,3 +689,10 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .onb-dl dd { margin: 0; white-space: pre-line; font-size: 14.5px; }
 .onb-photo { display: flex; gap: 14px; align-items: center; }
 .onb-photo img, .onb-photo-empty { width: 84px; height: 112px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+
+/* cartão do cliente: nome em cima, etiquetas embaixo (quebram linha sem empurrar o cartão) */
+.client-name { overflow-wrap: anywhere; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -6px; }
+.card-tags:empty { display: none; }
+.card-tags .pill { white-space: nowrap; }
+.grid-clients > .card { min-width: 0; }
