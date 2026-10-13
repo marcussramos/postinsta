@@ -7,6 +7,7 @@ import { askClaude, jsonFrom } from './ai.js';
 import { deliveries } from './deliveries.js';
 import { bestTimes } from './besttime.js';
 import { datesBetween, NICHES } from '../public/dates.js';
+import { brandBrief } from './onboarding.js';
 
 const FORMATS = ['IMAGE', 'CAROUSEL', 'REELS', 'STORY'];
 const FORMAT_LABEL = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels', STORY: 'Story' };
@@ -60,7 +61,7 @@ Você é estrategista de conteúdo e diretor(a) de arte sênior de uma agência 
 Cliente: ${client.name}${client.ig_username ? ` (@${client.ig_username})` : ''}
 Nicho: ${NICHES[ctx.niche] || 'não informado (deduza pelo nome, tom e marca)'}
 Tom de voz: ${client.brand_voice || 'não definido'}
-${k.style ? `Estilo visual/posicionamento: ${k.style}\n` : ''}${k.dos ? `Sempre: ${k.dos}\n` : ''}${k.donts ? `Nunca: ${k.donts}\n` : ''}${k.notes ? `Observações da marca (produtos, datas, concorrentes): ${k.notes}\n` : ''}
+${k.style ? `Estilo visual/posicionamento: ${k.style}\n` : ''}${k.dos ? `Sempre: ${k.dos}\n` : ''}${k.donts ? `Nunca: ${k.donts}\n` : ''}${k.notes ? `Observações da marca (produtos, datas, concorrentes): ${k.notes}\n` : ''}${k.inspirations ? `Referências que o cliente admira: ${k.inspirations}\n` : ''}${k.avoid ? `Não associar à marca: ${k.avoid}\n` : ''}${k.competitors ? `Concorrentes: ${k.competitors}\n` : ''}${k.perception ? `Percepção desejada no primeiro contato: ${k.perception}\n` : ''}${brandBrief(client) ? `${brandBrief(client)}\n` : ''}
 Quantidade a planejar (o que falta para fechar a cota do contrato): ${w.posts} posts de feed (Foto ou Carrossel), ${w.reels} Reels${w.stories ? `, ${w.stories} Stories` : ''}.
 Período: ${ctx.from} a ${ctx.to}. Distribua ao longo do mês, sem dois conteúdos de feed no mesmo dia, de preferência em dias úteis variados.
 Melhores horários do perfil: ${ctx.best.length ? ctx.best.map((s) => s.label).join(', ') : '19:00 em dias úteis, 11:00 aos sábados'}.

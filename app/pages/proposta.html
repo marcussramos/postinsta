@@ -8,13 +8,13 @@
 <meta name="referrer" content="no-referrer">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314161B'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' font-size='14' fill='%23fff'%3EMC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   :root {
     --bg: #F4F3EF; --surface: #fff; --surface-2: #F8F7F3; --ink: #121317; --muted: #5F6370; --line: #E3E1DA;
-    --accent: #2443C9; --accent-soft: #E8ECFB; --ok: #17703F; --ok-bg: #E2F4E9; --warn-bg: #FCF1D9;
-    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    --accent: #2B2B2B; --accent-soft: #E4E1D3; --ok: #17703F; --ok-bg: #E2F4E9; --warn-bg: #FCF1D9;
+    --display: "Poppins", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -148,7 +148,7 @@ function acceptForm(P) {
       const r = await fetch(`/api/pasta?r=proposal&t=${encodeURIComponent(t)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, aceite: Boolean(d.aceite) }) });
       const out = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(out.error || 'Não foi possível concluir.');
-      render({ ...P, status: 'accepted', portal_url: out.portal_url, accepted_at: new Date().toISOString() });
+      render({ ...P, status: 'accepted', portal_url: out.portal_url, onboarding_url: out.onboarding_url, accepted_at: new Date().toISOString() });
       scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; btn.disabled = false; btn.textContent = 'Aceitar proposta'; }
   } },
@@ -189,7 +189,8 @@ function doneView(P) {
     h('div', { class: 'big' }, '🎉'),
     h('h2', { style: 'margin:0' }, 'Proposta aceita! Bem-vindo(a).'),
     h('span', { style: 'color:var(--muted);max-width:52ch' }, `A ${P.agency.marca} vai enviar o contrato para assinatura. Enquanto isso, guarde o link da sua área exclusiva: lá ficam contrato, aprovações, relatórios, financeiro e o espaço para mandar pedidos e fotos.`),
-    P.portal_url ? h('a', { class: 'btn', href: P.portal_url }, 'Abrir minha área do cliente') : null,
+    P.onboarding_url ? h('a', { class: 'btn', href: P.onboarding_url }, 'Começar meu onboarding →') : null,
+    P.portal_url ? h('a', { class: 'link', href: P.portal_url }, 'Abrir minha área do cliente') : null,
     P.portal_url ? h('span', { class: 'eyebrow' }, 'Dica: salve este link nos favoritos') : null);
 }
 

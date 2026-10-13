@@ -103,16 +103,17 @@ export const publicProposal = route({
     need(p.status !== 'draft' || admin, 404, 'Proposta não encontrada.');
     const { agency } = await loadSettings();
     const expired = p.status === 'sent' && p.valid_until && p.valid_until < today();
-    let portal = null;
+    let portal = null, onboarding = null;
     if (p.status === 'accepted' && p.client_id) {
       const c = await db.one('clients', { select: 'portal_token', id: `eq.${p.client_id}` });
       if (c?.portal_token) portal = `${appUrl()}/cliente?t=${c.portal_token}`;
+      if (c?.portal_token) onboarding = `${appUrl()}/boasvindas?t=${c.portal_token}`;
     }
     send(res, 200, {
       client_name: p.client_name, contact_name: p.contact?.name || null, intro: p.intro, items: p.items || [], entregas: p.entregas,
       quota_posts: p.quota_posts, quota_reels: p.quota_reels, monthly_fee_cents: p.monthly_fee_cents, installments: p.installments || [],
       forma_pagamento: p.forma_pagamento, valid_until: p.valid_until, notes: p.notes, status: expired ? 'expired' : p.status, preview: p.status === 'draft',
-      accepted_at: p.accepted_at, portal_url: portal,
+      accepted_at: p.accepted_at, portal_url: portal, onboarding_url: onboarding,
       agency: { marca: agency.marca || 'MC DIGITAL', slogan: agency.slogan || '', representante: agency.representante || '', email: agency.email || '', cidade: agency.cidade || '' },
     }, { 'Cache-Control': 'no-store' });
   },
@@ -158,6 +159,6 @@ export const publicProposal = route({
     });
     await db.update('proposals', { id: `eq.${p.id}` }, { client_id: client.id });
     await notify({ title: `🎉 ${p.client_name} aceitou a proposta`, body: `${(p.monthly_fee_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · início ${a.inicio.split('-').reverse().join('/')}. Cadastro e pasta já criados.`, url: `/#pasta/${client.id}` }, { adminOnly: true });
-    send(res, 200, { status: 'accepted', portal_url: `${appUrl()}/cliente?t=${client.portal_token}` });
+    send(res, 200, { status: 'accepted', portal_url: `${appUrl()}/cliente?t=${client.portal_token}`, onboarding_url: `${appUrl()}/boasvindas?t=${client.portal_token}` });
   },
 });

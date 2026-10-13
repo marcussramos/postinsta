@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bem-vindo à MC Digital</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#EBEBE6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<style>
+  /* Manual de boas-vindas da MC Digital: cada seção é um "slide" do manual, na identidade da marca. */
+  :root { --bg: #EBEBE6; --ink: #2B2B2B; --muted: #5E5D57; --gold: #7A6200; --line: #D3D1C6; --card: #F4F4F0; --ok: #2B2B2B;
+    --head: "Helvetica Neue", Helvetica, Arial, sans-serif; --body: "Poppins", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+  h1, h2, h3 { font-family: var(--head); font-weight: 800; margin: 0; line-height: 1.02; letter-spacing: -.01em; text-transform: uppercase; text-shadow: 0 5px 12px rgba(43,43,43,.18); text-wrap: balance; }
+  p { margin: 0; }
+  b, strong { font-weight: 700; }
+  .eyebrow { color: var(--gold); text-transform: uppercase; letter-spacing: .02em; font-size: clamp(18px, 2.4vw, 30px); font-family: var(--head); font-weight: 400; }
+  .gold { color: var(--gold); }
+  .slide { min-height: 100svh; padding: clamp(56px, 8vw, 110px) clamp(22px, 7vw, 120px); display: grid; align-content: center; position: relative; border-bottom: 1px solid rgba(43,43,43,.06); }
+  .wrap { width: 100%; max-width: 1180px; margin: 0 auto; }
+  .logo-fixed { position: fixed; right: clamp(14px, 3vw, 40px); bottom: clamp(14px, 3vw, 34px); width: clamp(64px, 8vw, 104px); z-index: 5; pointer-events: none; }
+  .handle { position: absolute; left: clamp(22px, 7vw, 120px); bottom: clamp(26px, 5vw, 56px); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; font-size: 15px; }
+  .jump { position: fixed; top: 14px; right: 14px; z-index: 6; background: var(--ink); color: var(--bg); text-decoration: none; font-weight: 600; font-size: 14px; padding: 10px 16px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+  /* capa */
+  .cover h1 { text-align: center; font-size: clamp(44px, 9vw, 132px); }
+  .cover h1 em { display: block; font-size: 1.3em; }
+  .scroll-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); font-size: 13px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+  /* oi */
+  .hello { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 40px; align-items: center; }
+  .hello h2 { font-family: var(--body); font-size: clamp(48px, 8vw, 104px); letter-spacing: -.02em; text-shadow: none; }
+  .hello p { font-size: clamp(18px, 2.2vw, 28px); line-height: 1.25; max-width: 30ch; margin-top: 18px; }
+  .phone { justify-self: center; width: min(300px, 70vw); aspect-ratio: 9 / 18.5; border-radius: 42px; background: #fff; border: 10px solid #f7f7f5; box-shadow: 0 30px 70px rgba(0,0,0,.18); transform: rotate(-12deg); display: grid; place-items: center; overflow: hidden; }
+  .phone img { width: 62%; opacity: .9; }
+  /* fundadora */
+  .founder { padding: 0; grid-template-columns: minmax(0, 43%) minmax(0, 1fr); align-items: stretch; }
+  .founder .photo { background: #F2F4F8 center / cover no-repeat; min-height: 60svh; }
+  .founder .photo.empty { display: grid; place-items: center; background: #e3e2db; }
+  .founder .photo.empty img { width: 42%; opacity: .6; }
+  .founder .txt { padding: clamp(40px, 7vw, 110px) clamp(22px, 5vw, 90px); display: grid; align-content: center; gap: 10px; }
+  .founder h2 { font-size: clamp(30px, 3.6vw, 46px); }
+  .founder .role { color: var(--gold); font-size: clamp(20px, 2.4vw, 30px); font-family: var(--head); }
+  .founder .bio { margin-top: 28px; display: grid; gap: 22px; font-family: var(--head); font-size: clamp(17px, 1.7vw, 22px); line-height: 1.7; max-width: 46ch; }
+  /* missão e valores */
+  .statement { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(24px, 4vw, 60px); align-items: center; }
+  .chev { width: clamp(150px, 22vw, 290px); }
+  .statement h2 { font-size: clamp(48px, 8vw, 110px); margin-bottom: 18px; }
+  .statement .rich { font-family: var(--head); font-size: clamp(18px, 2vw, 25px); line-height: 1.6; max-width: 40ch; }
+  /* etapas */
+  .steps { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 24px; align-items: center; }
+  .steps h2 { font-size: clamp(44px, 6.4vw, 84px); line-height: .95; }
+  .arc { position: relative; list-style: none; margin: 0; padding: 0; height: var(--h); }
+  .arc li { position: absolute; left: var(--x); top: var(--y); height: 40px; display: flex; align-items: center; gap: 18px; font-family: var(--head); text-transform: uppercase; font-size: clamp(15px, 1.6vw, 21px); white-space: nowrap; }
+  .arc li::before { content: ""; width: 40px; height: 20px; border: 1px solid var(--gold); border-radius: 50%; flex: none; background: var(--bg); position: relative; z-index: 1; }
+  .arc li.done::before { background: var(--gold); }
+  .arc-line { position: absolute; left: 0; top: -60px; width: 100%; height: calc(100% + 120px); pointer-events: none; overflow: hidden; z-index: 0; }
+  .arc li::before { z-index: 1; }
+  /* checklist */
+  .check h2 { font-size: clamp(34px, 4.6vw, 58px); margin-bottom: 34px; }
+  .check ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+  .check li { display: flex; gap: 16px; align-items: flex-start; font-size: clamp(16px, 1.8vw, 23px); line-height: 1.35; }
+  .box { width: 26px; height: 26px; border: 1.5px solid #9d9b92; border-radius: 4px; flex: none; position: relative; margin-top: 2px; }
+  .done .box::after { content: ""; position: absolute; left: 6px; top: -6px; width: 10px; height: 20px; border: solid var(--ink); border-width: 0 3.5px 3.5px 0; transform: rotate(40deg); }
+  .check .legend { margin-top: 26px; font-size: 14px; color: var(--muted); }
+  /* aprovação */
+  .approval h2 { font-size: clamp(34px, 5vw, 64px); margin-bottom: 34px; }
+  .approval .rich { display: grid; gap: 18px; font-size: clamp(17px, 2vw, 25px); line-height: 1.4; max-width: 46ch; color: #3d3d3a; }
+  /* questionário */
+  .cta h2 { font-family: var(--head); text-transform: none; font-size: clamp(30px, 4.4vw, 56px); line-height: 1.15; font-weight: 400; font-style: italic; }
+  .cta h2 strong { display: block; font-style: normal; font-weight: 800; }
+  .cta .lead { font-family: var(--head); font-size: clamp(17px, 2vw, 24px); margin: 22px 0 34px; max-width: 52ch; }
+  .form { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: clamp(20px, 4vw, 44px); display: grid; gap: 26px; box-shadow: 0 20px 50px rgba(43,43,43,.08); max-width: 860px; }
+  .prog { display: grid; gap: 10px; }
+  .prog-top { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .bar { height: 5px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--gold); border-radius: 99px; transition: width .3s; }
+  .form h3 { font-size: clamp(24px, 3vw, 34px); text-shadow: none; }
+  .form .intro { color: var(--muted); margin-top: -14px; }
+  .q { display: grid; gap: 10px; }
+  .q label, .q .ql { font-weight: 600; font-size: 17.5px; line-height: 1.4; }
+  .q .hint { font-size: 14px; color: var(--muted); margin-top: -6px; }
+  .q input, .q textarea { width: 100%; font: inherit; font-size: 16.5px; color: var(--ink); background: #fff; border: 1.5px solid var(--line); border-radius: 12px; padding: 13px 15px; resize: vertical; }
+  .q textarea { min-height: 96px; line-height: 1.5; }
+  .q input:focus, .q textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(122,98,0,.14); }
+  .q.bad input, .q.bad textarea, .q.bad .opts { border-color: #B4232F; box-shadow: 0 0 0 3px rgba(180,35,47,.12); border-radius: 12px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .opt { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: 10px 18px; cursor: pointer; font: inherit; font-size: 15.5px; color: var(--ink); }
+  .opt[aria-checked="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .nav { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .btn { border: 1.5px solid var(--ink); background: transparent; color: var(--ink); font: inherit; font-weight: 600; font-size: 16px; padding: 13px 24px; border-radius: 999px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+  .btn.primary { background: var(--ink); color: var(--bg); }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .saved { font-size: 13px; color: var(--muted); }
+  .note { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; padding: 12px 16px; font-size: 15px; }
+  /* obrigada */
+  .thanks { text-align: center; }
+  .thanks h2 { font-size: clamp(64px, 14vw, 200px); }
+  .thanks p { font-family: var(--body); font-weight: 700; font-style: italic; text-transform: uppercase; letter-spacing: .02em; font-size: clamp(13px, 1.7vw, 20px); margin-top: 18px; }
+  .thanks .btn { margin-top: 40px; }
+  .state { min-height: 100svh; display: grid; place-items: center; text-align: center; padding: 30px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; z-index: 50; max-width: calc(100vw - 32px); font-size: 15px; }
+  .toast.err { background: #8E1B26; color: #fff; }
+  @media (max-width: 760px) {
+    .slide { min-height: auto; padding-top: 72px; padding-bottom: 72px; }
+    .cover { min-height: 88svh; }
+    .hello, .founder, .statement, .steps { grid-template-columns: 1fr; }
+    .phone { display: none; }
+    .founder .photo { min-height: 62svh; }
+    .chev { width: 130px; }
+    .arc-line { display: none; }
+    .arc { height: auto; display: grid; gap: 18px; border-left: 1px solid var(--gold); margin-left: 20px; }
+    .arc li { position: static; height: auto; margin-left: -21px; white-space: normal; }
+    .handle { position: static; margin-top: 40px; }
+    .logo-fixed { top: 12px; left: 12px; bottom: auto; right: auto; width: 58px; }
+    .form { border-radius: 18px; }
+  }
+  @media print { .jump, .logo-fixed { display: none; } .slide { min-height: auto; break-after: page; } }
+</style>
+</head>
+<body>
+<img class="logo-fixed" src="/brand/logo.png" alt="MC Digital">
+<main id="ob"><div class="state"><p>Carregando…</p></div></main>
+<script type="module">
+import { h, api } from '/shared.js';
+
+const t = new URLSearchParams(location.search).get('t') || '';
+const $ = document.getElementById('ob');
+const KEY = `mc_onb_${t.slice(0, 12)}`;
+let D, answers = {}, step = 0;
+
+function toast(msg, err = false) {
+  document.querySelector('.toast')?.remove();
+  const el = h('div', { class: `toast${err ? ' err' : ''}`, role: err ? 'alert' : 'status' }, msg); document.body.append(el);
+  setTimeout(() => el.remove(), err ? 6000 : 3500);
+}
+// **negrito** e parágrafos (texto vem escapado: só cria nós de texto e <b>)
+function rich(text) {
+  return String(text || '').split(/\n{2,}/).map((par) => h('p', {}, ...par.split(/(\*\*[^*]+\*\*)/).map((bit) => (/^\*\*.+\*\*$/.test(bit) ? h('b', {}, bit.slice(2, -2)) : bit))));
+}
+const loadDraft = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
+const saveDraft = () => { try { localStorage.setItem(KEY, JSON.stringify(answers)); } catch { /* sem armazenamento */ } };
+
+load();
+async function load() {
+  try { D = await api(`/api/pasta?r=onboarding&t=${encodeURIComponent(t)}`); }
+  catch (e) { $.replaceChildren(h('div', { class: 'state' }, h('div', {}, h('h2', { style: 'font-size:28px' }, 'Link indisponível'), h('p', { style: 'margin-top:12px' }, e.message)))); return; }
+  answers = { ...(D.answers || {}), ...(loadDraft() || {}) };
+  if (!answers.empresa && D.client.name) answers.empresa = D.client.name;
+  render();
+  if (location.hash === '#questionario') document.getElementById('questionario')?.scrollIntoView();
+}
+
+const chevrons = () => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 440 240'); svg.setAttribute('class', 'chev'); svg.setAttribute('aria-hidden', 'true');
+  for (const x of [0, 144, 288]) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', `M${x} 2 L${x + 150} 120 L${x} 238 L${x} 168 L${x + 76} 120 L${x} 72 Z`); p.setAttribute('fill', 'none'); p.setAttribute('stroke', '#7A6200'); p.setAttribute('stroke-width', '2.4'); svg.append(p); }
+  return svg;
+};
+
+// Etapas sobre um arco (como no manual): cada marcador fica em cima de uma elipse dourada.
+function stepsArc(list) {
+  const n = list.length, gap = 60, H = (n - 1) * gap, Rx = 300, Ry = (H / 2) * 1.18, cx = -Rx + 140, cy = H / 2 + 20;
+  const ul = h('ol', { class: 'arc', style: `--h:${H + 40}px` }, ...list.map((s, i) => {
+    const dy = i * gap - H / 2;
+    const x = cx + Rx * Math.sqrt(Math.max(0, 1 - (dy / Ry) ** 2));
+    return h('li', { style: `--x:${Math.round(x - 20)}px;--y:${i * gap}px` }, s);
+  }));
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('class', 'arc-line'); svg.setAttribute('aria-hidden', 'true');
+  const e = document.createElementNS(ns, 'ellipse');
+  e.setAttribute('cx', cx); e.setAttribute('cy', cy + 60); e.setAttribute('rx', Rx); e.setAttribute('ry', Ry);
+  e.setAttribute('fill', 'none'); e.setAttribute('stroke', '#7A6200'); e.setAttribute('stroke-width', '1');
+  svg.append(e); ul.prepend(svg);
+  return ul;
+}
+
+function render() {
+  const C = D.content;
+  const doneCount = D.checklist.filter((c) => c.done).length;
+  $.replaceChildren(
+    h('a', { class: 'jump', href: '#questionario' }, D.submitted_at ? 'Minhas respostas ↓' : 'Ir para o questionário ↓'),
+    h('section', { class: 'slide cover' }, h('h1', {}, 'Bem-vindo à', h('em', {}, 'MC Digital')), h('div', { class: 'handle' }, C.instagram), h('div', { class: 'scroll-hint' }, 'role para baixo')),
+    h('section', { class: 'slide hello' }, h('div', { class: 'wrap' }, h('h2', {}, `Oi, ${D.client.first_name}!!`), h('p', {}, C.hello_sub)),
+      h('div', { class: 'phone', 'aria-hidden': 'true' }, h('img', { src: '/brand/logo.png', alt: '' }))),
+    h('section', { class: 'slide' }, h('div', { class: 'wrap', style: 'max-width:900px' }, h('div', { class: 'eyebrow' }, 'Onboarding'), h('h2', { style: 'font-size:clamp(48px,8vw,110px);margin:8px 0 14px' }, 'Estratégia', h('br'), 'de conteúdo'), h('div', { class: 'gold', style: 'font-size:20px' }, C.instagram))),
+    h('section', { class: 'slide founder' },
+      C.founder_photo ? h('div', { class: 'photo', style: `background-image:url('${encodeURI(C.founder_photo)}')`, role: 'img', 'aria-label': C.founder_name }) : h('div', { class: 'photo empty' }, h('img', { src: '/brand/logo.png', alt: '' })),
+      h('div', { class: 'txt' }, h('h2', {}, C.founder_name), h('div', { class: 'role' }, `{${C.founder_role}}`), h('div', { class: 'bio' }, ...rich(C.founder_bio)))),
+    h('section', { class: 'slide' }, h('div', { class: 'wrap statement' }, chevrons(), h('div', {}, h('h2', {}, 'Missão'), h('div', { class: 'rich' }, ...rich(C.mission))))),
+    h('section', { class: 'slide' }, h('div', { class: 'wrap statement' }, chevrons(), h('div', {}, h('h2', {}, 'Propósito e', h('br'), 'valores'), h('div', { class: 'rich' }, ...rich(C.values))))),
+    h('section', { class: 'slide' }, h('div', { class: 'wrap steps' }, h('h2', {}, 'Etapas do', h('br'), 'nosso', h('br'), 'processo'), stepsArc(C.steps))),
+    h('section', { class: 'slide check' }, h('div', { class: 'wrap', style: 'max-width:980px' }, h('h2', {}, 'Checklist do processo'),
+      h('ul', {}, ...D.checklist.map((c) => h('li', { class: c.done ? 'done' : '' }, h('span', { class: 'box', 'aria-hidden': 'true' }), h('span', {}, c.text, h('span', { class: 'sr', style: 'position:absolute;left:-9999px' }, c.done ? ' (feito)' : ' (a fazer)'))))),
+      h('p', { class: 'legend' }, `${doneCount} de ${D.checklist.length} etapas concluídas · este checklist se atualiza sozinho conforme avançamos.`))),
+    h('section', { class: 'slide approval' }, h('div', { class: 'wrap', style: 'max-width:980px' }, h('h2', {}, 'Aprovação de conteúdo'), h('div', { class: 'rich' }, ...rich(C.approval)))),
+    h('section', { class: 'slide cta', id: 'questionario' }, h('div', { class: 'wrap', style: 'max-width:980px' },
+      h('h2', {}, C.cta_title, h('strong', {}, C.cta_strong)), h('p', { class: 'lead' }, C.cta_text), formBox())),
+    h('section', { class: 'slide thanks', id: 'obrigada' }, h('div', { class: 'wrap' }, h('h2', {}, C.thanks_title), h('p', {}, C.thanks_text),
+      h('a', { class: 'btn', href: D.portal_url }, 'Abrir minha área do cliente →'))),
+  );
+}
+
+function formBox() {
+  const box = h('div', { class: 'form' });
+  const sections = D.sections;
+  const draw = () => {
+    const sec = sections[step];
+    const qs = D.questions.filter((q) => q.section === sec.id);
+    const pct = Math.round(((step) / sections.length) * 100);
+    const status = h('span', { class: 'saved' });
+    const field = (q) => {
+      const id = `q-${q.id}`;
+      if (q.type === 'choice') {
+        const opts = h('div', { class: 'opts', role: 'radiogroup', 'aria-labelledby': `${id}-l` }, ...q.options.map((o) => h('button', { type: 'button', class: 'opt', role: 'radio', 'aria-checked': String(answers[q.id] === o),
+          onclick: (e) => { answers[q.id] = o; saveDraft(); [...e.target.parentElement.children].forEach((b) => b.setAttribute('aria-checked', String(b === e.target))); e.target.closest('.q').classList.remove('bad'); } }, o)));
+        return h('div', { class: 'q', 'data-q': q.id }, h('div', { class: 'ql', id: `${id}-l` }, q.q), q.hint ? h('div', { class: 'hint' }, q.hint) : null, opts);
+      }
+      const el = h(q.type === 'short' ? 'input' : 'textarea', { id, placeholder: q.ph || (q.type === 'short' ? '' : 'Escreva com as suas palavras…'), maxlength: q.type === 'short' ? 200 : 2500,
+        oninput: (e) => { answers[q.id] = e.target.value; saveDraft(); status.textContent = 'Rascunho salvo neste aparelho'; e.target.closest('.q').classList.remove('bad'); } });
+      el.value = answers[q.id] || '';
+      return h('div', { class: 'q', 'data-q': q.id }, h('label', { for: id }, q.q), q.hint ? h('div', { class: 'hint' }, q.hint) : null, el);
+    };
+    const missing = () => qs.filter((q) => !String(answers[q.id] || '').trim());
+    const next = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+      const miss = missing();
+      box.querySelectorAll('.q').forEach((el) => el.classList.toggle('bad', miss.some((q) => q.id === el.dataset.q)));
+      if (miss.length) { toast('Responda as perguntas destacadas para continuar.', true); box.querySelector('.q.bad input, .q.bad textarea, .q.bad .opt')?.focus(); return; }
+      if (step < sections.length - 1) { step++; draw(); box.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      next.disabled = true; next.textContent = 'Enviando…';
+      try {
+        const r = await api(`/api/pasta?r=onboarding&t=${encodeURIComponent(t)}`, { method: 'POST', body: { answers } });
+        D.submitted_at = r.submitted_at; D.answers = { ...answers };
+        try { localStorage.removeItem(KEY); } catch { /* ok */ }
+        const form = D.checklist.find((c) => c.text === 'Onboarding'); if (form) form.done = true;
+        step = 0; render(); document.getElementById('obrigada').scrollIntoView({ behavior: 'smooth' });
+        toast('Respostas enviadas! Obrigada.');
+      } catch (e) { toast(e.message, true); next.disabled = false; next.textContent = 'Enviar respostas'; }
+    } }, step < sections.length - 1 ? 'Continuar →' : D.submitted_at ? 'Atualizar respostas' : 'Enviar respostas');
+    box.replaceChildren(
+      D.submitted_at && step === 0 ? h('div', { class: 'note' }, `Você já respondeu em ${new Date(D.submitted_at).toLocaleDateString('pt-BR')}. Se quiser, ajuste e envie de novo.`) : null,
+      h('div', { class: 'prog' }, h('div', { class: 'prog-top' }, h('span', {}, `Etapa ${step + 1} de ${sections.length}`), h('span', {}, `${pct}%`)), h('div', { class: 'bar' }, h('span', { style: `width:${Math.max(4, pct)}%` }))),
+      h('h3', {}, sec.title), h('p', { class: 'intro' }, sec.intro),
+      ...qs.map(field),
+      h('div', { class: 'nav' }, step > 0 ? h('button', { class: 'btn', type: 'button', onclick: () => { step--; draw(); box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, '← Voltar') : status, next));
+  };
+  draw();
+  return box;
+}
+</script>
+</body>
+</html>

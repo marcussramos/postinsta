@@ -8,17 +8,17 @@
 <meta name="referrer" content="no-referrer">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700;800&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314161B'/%3E%3Ctext x='16' y='21.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' font-size='14' fill='%23fff'%3EMC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   :root {
-    --bg: #F3F4F6; --surface: #fff; --surface-2: #F8F9FB; --ink: #14161B; --muted: #646B78; --line: #E1E4EA;
-    --accent: #2443C9; --accent-soft: #E8ECFB;
-    --ok: #17703F; --ok-bg: #E2F4E9; --wait: #8A5A00; --wait-bg: #FCF1D9; --bad: #B4232F; --bad-bg: #FBE3E5; --off: #6B7280; --off-bg: #EEF0F3;
-    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    --bg: #EBEBE6; --surface: #fff; --surface-2: #F2F2ED; --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF;
+    --accent: #2B2B2B; --accent-soft: #E4E1D3;
+    --ok: #17703F; --ok-bg: #E2F4E9; --wait: #8A5A00; --wait-bg: #FCF1D9; --bad: #B4232F; --bad-bg: #FBE3E5; --off: #6B7280; --off-bg: #E4E3DC;
+    --display: "Poppins", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0F1115; --surface: #171A20; --surface-2: #1D2128; --ink: #ECEEF2; --muted: #9AA1AD; --line: #2A2F38; --accent: #7B93FF; --accent-soft: #1E2645;
+    :root { --bg: #1A1A18; --surface: #232320; --surface-2: #2A2A27; --ink: #EBEBE6; --muted: #A6A499; --line: #3A3934; --accent: #E6E1CF; --accent-soft: #34312A;
       --ok: #6DD39A; --ok-bg: #12301F; --wait: #F1BE5C; --wait-bg: #33280F; --bad: #FF7C86; --bad-bg: #3A161B; --off: #A3A9B4; --off-bg: #23272F; color-scheme: dark; }
   }
   * { box-sizing: border-box; }
@@ -85,6 +85,8 @@
     .item .act { grid-row: auto; justify-content: flex-start; }
     .tab { font-size: 13px; padding: 9px 4px; }
   }
+  .onb-cta { text-decoration: none; color: inherit; border: 1.5px solid var(--ink) !important; display: grid; gap: 6px; }
+  .onb-link { font-size: 14px; font-weight: 600; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -208,10 +210,14 @@ function render() {
     if (!list.length) panel.append(h('div', { class: 'empty' }, 'O contrato assinado aparece aqui assim que a agência anexar.'));
     for (const f of list) panel.append(fileItem(f));
   }
+  const onb = D.onboarding ? (D.onboarding.done
+    ? h('a', { class: 'onb-link', href: D.onboarding.url }, 'Manual de boas-vindas e respostas do questionário →')
+    : h('a', { class: 'card onb-cta', href: D.onboarding.url }, h('div', { class: 'eyebrow' }, 'Primeiro passo'),
+        h('b', {}, 'Conheça a MC Digital e responda o questionário da sua marca'), h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Leva uns 15 minutos e é a base de todo o seu planejamento →'))) : null;
   $app.replaceChildren(
     h('header', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Área do cliente'), h('h1', {}, D.client.name),
       D.client.ig_username ? h('div', { class: 'muted' }, `@${D.client.ig_username}`) : null),
-    cards, tabs, panel,
+    onb, cards, tabs, panel,
     h('footer', {}, 'Link pessoal e intransferível. Não compartilhe.', D.agency.email ? [h('br'), `Dúvidas: ${D.agency.email}`] : null));
 }
 

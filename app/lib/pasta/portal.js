@@ -63,6 +63,7 @@ export default route({
       requests: requests.map((r) => ({ ...r, files: (r.file_ids || []).map((id) => files.find((f) => f.id === id)).filter(Boolean) })),
       deliveries: deliv[c.id] || null,
       pix_enabled: asaasReady(),
+      onboarding: { url: `${appUrl()}/boasvindas?t=${c.portal_token}`, done: Boolean(c.brand_kit?.onboarding?.submitted_at) },
     }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
   },
 

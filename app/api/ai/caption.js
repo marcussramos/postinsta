@@ -3,6 +3,7 @@
 import { route, send, readJson, need } from '../../lib/http.js';
 import { requireStaff } from '../../lib/auth.js';
 import { db } from '../../lib/db.js';
+import { brandBrief } from '../../lib/onboarding.js';
 
 const MODEL = () => process.env.AI_MODEL || 'claude-sonnet-5-5';
 
@@ -23,7 +24,7 @@ function buildPrompt({ client, brief, title, current, format }) {
 
 Marca/cliente: ${client?.name || 'não informado'}${client?.ig_username ? ` (@${client.ig_username})` : ''}
 Tom de voz da marca: ${client?.brand_voice || 'não definido — deduza pelo visual do post e mantenha natural'}
-${client?.brand_kit?.style ? `Estilo/posicionamento: ${client.brand_kit.style}\n` : ''}${client?.brand_kit?.dos ? `Sempre: ${client.brand_kit.dos}\n` : ''}${client?.brand_kit?.donts ? `Nunca (palavras/temas proibidos): ${client.brand_kit.donts}\n` : ''}${client?.brand_kit?.notes ? `Observações da marca: ${client.brand_kit.notes}\n` : ''}${format ? `Formato do post: ${format}` : ''}
+${client?.brand_kit?.style ? `Estilo/posicionamento: ${client.brand_kit.style}\n` : ''}${client?.brand_kit?.dos ? `Sempre: ${client.brand_kit.dos}\n` : ''}${client?.brand_kit?.donts ? `Nunca (palavras/temas proibidos): ${client.brand_kit.donts}\n` : ''}${client?.brand_kit?.notes ? `Observações da marca: ${client.brand_kit.notes}\n` : ''}${client?.brand_kit?.avoid ? `Não associar à marca: ${client.brand_kit.avoid}\n` : ''}${client?.brand_kit?.perception ? `Percepção desejada no primeiro contato: ${client.brand_kit.perception}\n` : ''}${brandBrief(client) ? `${brandBrief(client)}\n` : ''}${format ? `Formato do post: ${format}` : ''}
 Pauta / título interno: ${title || '—'}
 O que o post precisa comunicar (briefing): ${brief || '—'}
 ${current ? `Legenda atual (melhore, não repita): ${current}` : ''}

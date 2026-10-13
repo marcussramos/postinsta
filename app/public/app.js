@@ -1,5 +1,6 @@
 // MC DIGITAL — painel da agência (JavaScript puro, sem build).
 import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
+import { QUESTIONS as ONB_QUESTIONS, SECTIONS as ONB_SECTIONS } from '/onboarding-perguntas.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
@@ -106,7 +107,7 @@ function renderLogin() {
   pw.focus();
 }
 
-const brand = () => h('a', { class: 'brand', href: '#inicio', 'aria-label': 'MC DIGITAL — Início', title: 'Início' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'MC'), h('span', {}, 'DIGITAL'));
+const brand = () => h('a', { class: 'brand', href: '#inicio', 'aria-label': 'MC DIGITAL — Início', title: 'Início' }, h('img', { class: 'brand-logo light', src: '/brand/logo.png', alt: 'MC Digital' }), h('img', { class: 'brand-logo dark', src: '/brand/logo-claro.png', alt: '' }));
 
 // ───────────────────────── estrutura
 function render() {
@@ -897,7 +898,8 @@ function cardClient(c) {
   return h('article', { class: 'card' },
     h('div', { style: 'display:flex;align-items:center;gap:10px' }, h('h3', { style: 'flex:1;min-width:0' }, c.name),
       pend ? h('span', { class: 'pill st-pending_approval' }, `${pend} aguardando`) : null,
-      lateCount(c) ? h('span', { class: 'pill st-failed', title: 'Mensalidades vencidas sem pagamento' }, `${lateCount(c)} em atraso`) : null),
+      lateCount(c) ? h('span', { class: 'pill st-failed', title: 'Mensalidades vencidas sem pagamento' }, `${lateCount(c)} em atraso`) : null,
+      c.portal_url ? h('span', { class: `pill ${c.brand_kit?.onboarding?.submitted_at ? 'st-approved' : 'st-draft'}`, title: 'Questionário de onboarding' }, c.brand_kit?.onboarding?.submitted_at ? 'Onboarding ✓' : 'Onboarding pendente') : null),
     deliveryLine(c.id),
     h('dl', { class: 'kv' },
       h('dt', {}, 'Instagram'), h('dd', {}, ig),
@@ -1021,6 +1023,7 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsOnboarding(),
     ...settingsDevice(),
     ...settingsSecurity(),
     ...settingsMail(),
@@ -1607,6 +1610,7 @@ function openPortal(c) {
         h('a', { class: 'btn sm', href: c.portal_url, target: '_blank', rel: 'noopener' }, 'Ver como o cliente vê'),
         c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, portalMessage(c)), target: '_blank', rel: 'noopener' }, 'Enviar por WhatsApp') : null,
         c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, `Sua área do cliente · ${c.name}`, portalMessage(c)) }, 'Enviar por e-mail') : null),
+      onboardingBox(c),
       h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Segurança'),
         h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Se o link vazou ou o contrato terminou, gere um novo (o antigo para de abrir) ou desative.'),
         h('div', { class: 'actions' },
@@ -1683,7 +1687,7 @@ function folderBrand(c) {
     h('input', { type: 'color', value: col, 'aria-label': `Cor ${i + 1}`, oninput: (e) => { colors[i] = e.target.value; e.target.nextSibling.textContent = e.target.value.toUpperCase(); } }),
     h('code', { translate: 'no' }, col.toUpperCase()),
     h('button', { type: 'button', class: 'linkish', 'aria-label': 'Remover cor', onclick: () => { colors.splice(i, 1); drawColors(); } }, '✕'))),
-    colors.length < 8 ? h('button', { type: 'button', class: 'btn sm', onclick: () => { colors.push('#2443C9'); drawColors(); } }, '+ Cor') : null);
+    colors.length < 8 ? h('button', { type: 'button', class: 'btn sm', onclick: () => { colors.push('#7A6200'); drawColors(); } }, '+ Cor') : null);
   drawColors();
   const ta = (id, label, val, ph, hint) => { const el = h('textarea', { id, placeholder: ph, style: 'min-height:70px' }); el.value = val || ''; return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el, hint ? h('span', { class: 'hint' }, hint) : null)]; };
   const fonts = h('input', { id: 'b-fonts', value: k.fonts || '', placeholder: 'Ex.: títulos em Montserrat ExtraBold, textos em Inter' });
@@ -1694,10 +1698,14 @@ function folderBrand(c) {
   const [donts, fDonts] = ta('b-donts', 'Nunca', k.donts, 'Ex.: falar de preço sem aprovação, usar a palavra "barato", fotos de pets tristes.', 'A IA evita estes temas e palavras.');
   const [refs, fRefs] = ta('b-refs', 'Referências (links)', k.references, 'Perfis, pastas do Drive, Pinterest…');
   const [notes, fNotes] = ta('b-notes', 'Outras observações', k.notes, 'Datas importantes, produtos-estrela, concorrentes…');
+  const [insp, fInsp] = ta('b-insp', 'Marcas, perfis e criadores que admira', k.inspirations, 'E o que chama a atenção na comunicação deles.');
+  const [avoid, fAvoid] = ta('b-avoid', 'O que não associar à marca', k.avoid, 'Conteúdos, linguagens, tendências ou abordagens a evitar.', 'A IA evita isto.');
+  const [comp, fComp] = ta('b-comp', 'Concorrentes', k.competitors, 'Quem são e o que fazem bem ou deixam de fazer no digital.');
+  const [perc, fPerc] = ta('b-perc', 'Percepção desejada', k.perception, 'O que as pessoas devem sentir/associar no primeiro contato com o perfil.', 'Guia o tom das legendas e do planejamento.');
   const save = h('button', { class: 'btn primary', onclick: async () => {
     save.disabled = true;
     try {
-      const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, brand_voice: voice.value, brand_kit: { niche: niche.value || null, colors, fonts: fonts.value, style: style.value, dos: dos.value, donts: donts.value, references: refs.value, notes: notes.value } } });
+      const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, brand_voice: voice.value, brand_kit: { niche: niche.value || null, inspirations: insp.value, avoid: avoid.value, competitors: comp.value, perception: perc.value, colors, fonts: fonts.value, style: style.value, dos: dos.value, donts: donts.value, references: refs.value, notes: notes.value } } });
       F.brand = { ...F.brand, ...r };
       const i = S.clients.findIndex((x) => x.id === c.id); if (i >= 0) S.clients[i] = { ...S.clients[i], brand_voice: r.brand_voice, brand_kit: r.brand_kit };
       toast('Identidade da marca salva.');
@@ -1711,7 +1719,10 @@ function folderBrand(c) {
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Paleta de cores'), colorsBox),
       h('div', { class: 'field' }, h('label', { for: 'b-fonts' }, 'Tipografia'), fonts),
       fVoice, h('div', { class: 'grid-2 tight' }, fStyle, fRefs), h('div', { class: 'grid-2 tight' }, fDos, fDonts), fNotes,
+      h('div', { class: 'eyebrow', style: 'margin-top:6px' }, 'Marca no digital (vem do questionário)'),
+      h('div', { class: 'grid-2 tight' }, fInsp, fAvoid), h('div', { class: 'grid-2 tight' }, fComp, fPerc),
       h('div', { class: 'actions' }, save)),
+    onboardingAnswers(c, k.onboarding),
     filesSection(c, 'brand', 'Logo e referências visuais', 'Logo em PNG/PDF, fontes, fotos de referência, manual da marca.'),
   ];
 }
@@ -1845,7 +1856,7 @@ function viewHome() {
   const newReqs = (S.requests || []).filter((r) => r.status === 'open').length;
 
   const hero = h('section', { class: 'home-hero' },
-    h('div', { class: 'home-mark', 'aria-hidden': 'true' }, 'MC'),
+    h('div', { class: 'home-mark', 'aria-hidden': 'true' }, h('img', { src: '/brand/logo-claro.png', alt: '' })),
     h('div', { class: 'home-hello' },
       h('div', { class: 'eyebrow' }, longDate),
       h('h1', {}, `${hello}${who ? `, ${who}` : ''}.`),
@@ -2636,4 +2647,86 @@ function openDay(d, special = []) {
   const cid = S.fClient || (S.clients.length === 1 ? S.clients[0].id : null);
   if (cid) api(`/api/pasta?r=besttime&client=${cid}`).then((r) => { best = r.slots || []; draw(); }).catch(() => {});
   const close = drawer(title, [box], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => { close(); openPost(null, { date: d, title: special[0]?.name }); } }, '+ Novo post neste dia')]);
+}
+
+// ───────────────────────── onboarding (boas-vindas + questionário da marca)
+const onboardingUrl = (c) => (c.portal_url ? c.portal_url.replace('/cliente?', '/boasvindas?') : null);
+function welcomeMessage(c) {
+  const first = (c.contract_data?.representante || '').trim().split(/\s+/)[0];
+  return `Oi${first ? `, ${first}` : ''}! Seja muito bem-vindo(a) à MC Digital 🤍\n\nPreparei o seu manual de boas-vindas: lá você conhece como vamos trabalhar juntos e responde o questionário da sua marca (leva uns 15 minutos). Ele é a base de todo o seu planejamento:\n${onboardingUrl(c)}`;
+}
+function onboardingBox(c) {
+  const url = onboardingUrl(c); if (!url) return null;
+  const done = c.brand_kit?.onboarding?.submitted_at;
+  return h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Boas-vindas e questionário'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, done ? `Respondido em ${fmtDate(done, S.tz)}. As respostas estão na aba Marca.` : 'Apresenta a MC Digital (fundadora, missão, valores, processo, checklist e aprovação) e termina no questionário. As respostas vão sozinhas para a Marca do cliente.'),
+    h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, url), h('button', { class: 'btn sm', onclick: () => copyText(url, 'Link copiado.') }, 'Copiar')),
+    h('div', { class: 'actions' },
+      h('a', { class: 'btn sm', href: url, target: '_blank', rel: 'noopener' }, 'Ver como o cliente vê'),
+      c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, welcomeMessage(c)), target: '_blank', rel: 'noopener' }, 'Enviar boas-vindas no WhatsApp') : null,
+      h('button', { class: 'btn sm', onclick: () => copyText(welcomeMessage(c), 'Mensagem copiada.') }, 'Copiar mensagem')));
+}
+function onboardingAnswers(c, onb) {
+  if (!onb?.answers) {
+    return h('section', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Questionário de onboarding'), h('h3', {}, 'Ainda não respondido'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, c.portal_url ? 'Mande o link de boas-vindas para o cliente: as respostas aparecem aqui e preenchem os campos da marca.' : 'Crie o link do cliente (botão "Criar link do cliente" no topo da pasta) e envie as boas-vindas.'),
+      c.portal_url ? h('div', { class: 'actions' }, c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, welcomeMessage(c)), target: '_blank', rel: 'noopener' }, 'Enviar boas-vindas no WhatsApp') : null,
+        h('button', { class: 'btn sm', onclick: () => copyText(onboardingUrl(c), 'Link copiado.') }, 'Copiar link')) : null);
+  }
+  const text = ONB_SECTIONS.map((sec) => `${sec.title.toUpperCase()}\n${ONB_QUESTIONS.filter((q) => q.section === sec.id).map((q) => `${q.q}\n${onb.answers[q.id] || '—'}`).join('\n\n')}`).join('\n\n');
+  return h('section', { class: 'card' },
+    h('div', { class: 'home-card-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Questionário de onboarding'), h('h3', {}, `Respostas de ${c.name}`)),
+      h('button', { class: 'btn sm', onclick: () => copyText(text, 'Respostas copiadas.') }, 'Copiar tudo')),
+    h('span', { class: 'muted', style: 'font-size:13px' }, `Respondido em ${fmtDate(onb.submitted_at, S.tz)} ${fmtTime(onb.submitted_at, S.tz)}. A IA de legendas e o planejamento usam estas respostas.`),
+    ...ONB_SECTIONS.map((sec) => h('details', { class: 'onb-sec', open: sec.id === 'digital' || sec.id === 'publico' },
+      h('summary', {}, sec.title),
+      h('dl', { class: 'onb-dl' }, ...ONB_QUESTIONS.filter((q) => q.section === sec.id).flatMap((q) => [h('dt', {}, q.q), h('dd', {}, onb.answers[q.id] || '—')])))));
+}
+function settingsOnboarding() {
+  if (S.onb === undefined) { S.onb = null; api('/api/pasta?r=onbcfg').then((v) => { S.onb = v; }).catch(() => { S.onb = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Novos clientes'), h('h2', { style: 'font-size:22px' }, 'Boas-vindas (onboarding)')));
+  if (!S.onb) return [head, h('p', { class: 'muted' }, S.onb === false ? 'Indisponível agora.' : 'Carregando…')];
+  const O = S.onb;
+  const fields = {};
+  const fld = (k, label, { area = false, rows = 3, hint } = {}) => {
+    const el = h(area ? 'textarea' : 'input', { id: `on-${k}`, style: area ? `min-height:${rows * 26}px` : null });
+    el.value = k === 'steps' ? (O.steps || []).join('\n') : (O[k] ?? '');
+    fields[k] = el;
+    return h('div', { class: 'field' }, h('label', { for: `on-${k}` }, label), el, hint ? h('span', { class: 'hint' }, hint) : null);
+  };
+  const photoIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async () => {
+    const f = photoIn.files[0]; if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
+      const sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.88));
+      S.onb = await api('/api/pasta?r=onbcfg&photo=1', { method: 'POST', raw: blob }); toast('Foto atualizada.'); render();
+    } catch (e) { toast(e.message, true); }
+  } });
+  const sample = S.clients.find((c) => c.portal_url);
+  return [head, h('article', { class: 'card' },
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Depois que o cliente fecha, mande o link de boas-vindas (fica na pasta do cliente → "Link do cliente"). É o seu manual de onboarding em página: saudação com o nome dele, você, missão, valores, etapas, checklist que se marca sozinho, como funciona a aprovação e o questionário. As respostas vão para a aba Marca. Use **palavra** para destacar em negrito.'),
+    h('div', { class: 'onb-photo' },
+      O.founder_photo ? h('img', { src: O.founder_photo, alt: 'Foto da fundadora' }) : h('div', { class: 'onb-photo-empty' }, 'sem foto'),
+      h('div', { style: 'display:grid;gap:8px' }, h('b', {}, 'Foto da fundadora'), h('span', { class: 'muted', style: 'font-size:13px' }, 'Vertical, como no manual (a de câmera na mão fica ótima).'),
+        h('div', { class: 'actions' }, h('button', { class: 'btn sm', onclick: () => photoIn.click() }, O.founder_photo ? 'Trocar foto' : 'Enviar foto'), photoIn))),
+    h('div', { class: 'grid-2 tight' }, fld('founder_name', 'Nome'), fld('founder_role', 'Cargo (aparece entre chaves)')),
+    fld('founder_bio', 'Apresentação', { area: true, rows: 6 }),
+    fld('hello_sub', 'Frase abaixo do "Oi, nome!"'),
+    h('div', { class: 'grid-2 tight' }, fld('mission', 'Missão', { area: true, rows: 5 }), fld('values', 'Propósito e valores', { area: true, rows: 5 })),
+    h('div', { class: 'grid-2 tight' }, fld('steps', 'Etapas do processo (uma por linha)', { area: true, rows: 9 }), fld('approval', 'Aprovação de conteúdo', { area: true, rows: 9 })),
+    h('div', { class: 'grid-2 tight' }, fld('cta_title', 'Chamada do questionário'), fld('cta_strong', 'Pergunta em destaque')),
+    fld('cta_text', 'Texto antes do questionário'),
+    h('div', { class: 'grid-2 tight' }, fld('thanks_title', 'Encerramento'), fld('thanks_text', 'Frase final')),
+    fld('instagram', 'Instagram da agência'),
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn primary sm', onclick: async (e) => {
+        e.target.disabled = true;
+        try { S.onb = await api('/api/pasta?r=onbcfg', { method: 'PUT', body: Object.fromEntries(Object.entries(fields).map(([k, el]) => [k, el.value])) }); toast('Boas-vindas salvas.'); render(); }
+        catch (err) { toast(err.message, true); e.target.disabled = false; }
+      } }, 'Salvar textos'),
+      sample ? h('a', { class: 'btn sm', href: onboardingUrl(sample), target: '_blank', rel: 'noopener' }, `Pré-visualizar (como ${sample.name})`) : h('span', { class: 'muted', style: 'font-size:13px' }, 'Crie o link de um cliente para pré-visualizar.')),
+    h('span', { class: 'hint muted' }, 'Apagar um campo e salvar volta ao texto original do manual.'))];
 }

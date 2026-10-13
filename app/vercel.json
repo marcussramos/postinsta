@@ -37,7 +37,7 @@
       ]
     },
     {
-      "source": "/(aprovar|relatorio|contrato|cliente|historico|proposta)",
+      "source": "/(aprovar|relatorio|contrato|cliente|historico|proposta|boasvindas)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -88,6 +88,10 @@
     {
       "source": "/historico",
       "destination": "/api/page?p=historico"
+    },
+    {
+      "source": "/boasvindas",
+      "destination": "/api/page?p=boasvindas"
     }
   ]
 }

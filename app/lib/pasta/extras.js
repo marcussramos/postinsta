@@ -40,6 +40,7 @@ export function cleanBrandKit(b = {}) {
     colors, fonts: txt(b.fonts, 200), style: txt(b.style, 600), dos: txt(b.dos, 1000), donts: txt(b.donts, 1000),
     references: txt(b.references, 1500), notes: txt(b.notes, 2000), logo_file_id: b.logo_file_id ? String(b.logo_file_id) : null,
     niche: NICHES[b.niche] ? b.niche : null,
+    inspirations: txt(b.inspirations, 2500), avoid: txt(b.avoid, 2500), competitors: txt(b.competitors, 2500), perception: txt(b.perception, 2500),
   };
 }
 export const brandRoute = route({
@@ -56,7 +57,9 @@ export const brandRoute = route({
     await requireStaff(req);
     const b = await readJson(req);
     need(b.client_id, 400, 'Cliente não informado.');
-    const patch = { brand_kit: cleanBrandKit(b.brand_kit) };
+    const cur = await db.one('clients', { select: 'brand_kit', id: `eq.${b.client_id}` });
+    need(cur, 404, 'Cliente não encontrado.');
+    const patch = { brand_kit: { ...cleanBrandKit(b.brand_kit), onboarding: cur.brand_kit?.onboarding || undefined } }; // as respostas do questionário são do cliente: mantém
     if (b.brand_voice !== undefined) patch.brand_voice = String(b.brand_voice || '').trim().slice(0, 1500) || null;
     const [row] = await db.update('clients', { id: `eq.${b.client_id}` }, patch);
     need(row, 404, 'Cliente não encontrado.');
