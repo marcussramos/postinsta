@@ -12,6 +12,7 @@ import { deliveries } from '../deliveries.js';
 import { currentMonth, isMonth } from '../reports.js';
 import { recentFeed } from '../feed.js';
 import { bestTimes } from '../besttime.js';
+import { NICHES } from '../../public/dates.js';
 
 export const deliveriesRoute = route({
   GET: async (req, res) => {
@@ -38,6 +39,7 @@ export function cleanBrandKit(b = {}) {
   return {
     colors, fonts: txt(b.fonts, 200), style: txt(b.style, 600), dos: txt(b.dos, 1000), donts: txt(b.donts, 1000),
     references: txt(b.references, 1500), notes: txt(b.notes, 2000), logo_file_id: b.logo_file_id ? String(b.logo_file_id) : null,
+    niche: NICHES[b.niche] ? b.niche : null,
   };
 }
 export const brandRoute = route({

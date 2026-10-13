@@ -5,6 +5,7 @@ import { requireAdmin, randomToken, currentUser } from '../auth.js';
 import { db } from '../db.js';
 import { appUrl, TIMEZONE } from '../env.js';
 import { loadSettings } from './settings.js';
+import { notify } from '../push.js';
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE() }).format(new Date());
 const txt = (v, n) => String(v ?? '').trim().slice(0, n);
@@ -156,6 +157,7 @@ export const publicProposal = route({
       portal_token: randomToken(),
     });
     await db.update('proposals', { id: `eq.${p.id}` }, { client_id: client.id });
+    await notify({ title: `🎉 ${p.client_name} aceitou a proposta`, body: `${(p.monthly_fee_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · início ${a.inicio.split('-').reverse().join('/')}. Cadastro e pasta já criados.`, url: `/#pasta/${client.id}` }, { adminOnly: true });
     send(res, 200, { status: 'accepted', portal_url: `${appUrl()}/cliente?t=${client.portal_token}` });
   },
 });

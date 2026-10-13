@@ -5,7 +5,8 @@ import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem }
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
 import { asaasEnv } from '../lib/asaas.js';
-import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8 } from '../lib/migrations.js';
+import { activeSecret, verifyTotp, twoFactorOff } from '../lib/totp.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9 } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -29,7 +30,7 @@ select cron.schedule(
 
 async function setupInfo() {
   const missing = missingEnv();
-  const info = { missing_env: missing, key_problem: supabaseKeyProblem(), ig_ready: igReady(), ai_ready: Boolean(process.env.ANTHROPIC_API_KEY), migration_sql: null, app_url: null, redirect_uri: null, cron_sql: null, publisher_last_run: null };
+  const info = { missing_env: missing, key_problem: supabaseKeyProblem(), ig_ready: igReady(), ai_ready: Boolean(process.env.ANTHROPIC_API_KEY), mail_ready: Boolean(process.env.RESEND_API_KEY), twofa_disabled_by_env: process.env.DISABLE_2FA === '1', migration_sql: null, app_url: null, redirect_uri: null, cron_sql: null, publisher_last_run: null };
   try { info.app_url = appUrl(); info.redirect_uri = redirectUri(); } catch { /* sem endereço ainda */ }
   if (!missing.length && !info.key_problem && info.app_url) {
     info.cron_sql = cronSql(info.app_url, cronSecret());
@@ -52,6 +53,10 @@ async function setupInfo() {
     } catch { parts.push(MIGRATION_PRO); }
     try { await db.select('proposals', { select: 'id', limit: 1 }); } catch { parts.push(MIGRATION_V7); }
     try { await db.select('payments', { select: 'asaas_id', limit: 1 }); await db.select('clients', { select: 'asaas_customer_id', limit: 1 }); } catch { parts.push(MIGRATION_V8); }
+    try {
+      for (const t of ['push_subs', 'snippets', 'media_bank']) await db.select(t, { select: 'id', limit: 1 });
+      await db.select('mail_log', { select: 'key', limit: 1 }); await db.select('users', { select: 'totp_secret', limit: 1 }); await db.select('payments', { select: 'nf_id,nf_url', limit: 1 });
+    } catch { parts.push(MIGRATION_V9); }
     if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }
@@ -65,18 +70,28 @@ export default route({
     send(res, 200, { admin, staff: Boolean(u), role: u?.role || null, name: u?.name || null, timezone: TIMEZONE(), setup: admin ? await setupInfo() : undefined });
   },
 
-  // Dono: { password }. Equipe: { email, password }.
+  // Dono: { password }. Equipe: { email, password }. Com 2 etapas ligada: + { code } (6 dígitos do app autenticador).
   POST: async (req, res) => {
-    const { email, password } = await readJson(req);
+    const { email, password, code } = await readJson(req);
+    const secondStep = async (uid) => {
+      if (twoFactorOff()) return true;
+      const secret = await activeSecret(uid).catch(() => null);
+      if (!secret) return true;
+      if (!code) { send(res, 200, { need_code: true }); return false; }
+      need(verifyTotp(secret, code), 401, 'Código de verificação incorreto ou vencido. Confira o app autenticador e tente de novo.');
+      return true;
+    };
     // pequena espera em toda tentativa: atrasa quem tenta adivinhar a senha
     await new Promise((r) => setTimeout(r, 400));
     if (email) {
       const u = await db.one('users', { select: 'id,name,role,active,pass_hash', email: `eq.${String(email).trim().toLowerCase()}` }).catch(() => null);
       need(u && u.active && checkUserPassword(password, u.pass_hash), 401, 'E-mail ou senha incorretos.');
+      if (!(await secondStep(u.id))) return;
       return send(res, 200, { admin: u.role === 'admin', staff: true, role: u.role, name: u.name, timezone: TIMEZONE() }, { 'Set-Cookie': sessionCookie({ role: u.role, uid: u.id }) });
     }
     need(!missingEnv().includes('ADMIN_PASSWORD'), 503, 'Falta definir ADMIN_PASSWORD na Vercel.');
     need(checkPassword(password), 401, 'Senha incorreta.');
+    if (!(await secondStep(null))) return;
     send(res, 200, { admin: true, staff: true, role: 'admin', name: 'Dono', timezone: TIMEZONE() }, { 'Set-Cookie': sessionCookie({ role: 'admin' }) });
   },
 

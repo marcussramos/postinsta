@@ -169,6 +169,11 @@ function render() {
             h('span', { class: `pill ${p.status}` }, p.status === 'paid' && p.paid_at ? `Pago ${dmy(p.paid_at).slice(0, 5)}` : p.status === 'open' || p.status === 'late' ? `${LABEL[p.status]} · ${dmy(p.due).slice(0, 5)}` : LABEL[p.status]),
             receiptLink(p, '📎'), payButton(m, p)))) : null));
       }
+      const nfs = D.files.filter((f) => f.category === 'invoice');
+      if (nfs.length) {
+        panel.append(h('div', { class: 'eyebrow', style: 'margin-top:8px' }, 'Notas fiscais'));
+        for (const f of nfs) panel.append(fileItem(f, `${f.ref_month ? `${monthName(f.ref_month)} · ` : ''}${size(f.size)}`));
+      }
     }
   } else if (tab === 'relatorios') {
     if (!D.reports.length && !D.files.some((f) => f.category === 'report')) panel.append(h('div', { class: 'empty' }, 'Os relatórios mensais aparecem aqui assim que ficarem prontos.'));

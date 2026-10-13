@@ -12,8 +12,9 @@ import { appUrl } from '../env.js';
 import { billingMonths } from '../billing.js';
 import { summary } from '../reports.js';
 import { loadSettings } from './settings.js';
+import { notify } from '../push.js';
 
-const VISIBLE = ['contract', 'receipt', 'report', 'briefing']; // "Outros" e "Marca" ficam só para a agência
+const VISIBLE = ['contract', 'receipt', 'report', 'briefing', 'invoice']; // "Outros" e "Marca" ficam só para a agência
 const UPLOAD_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime' };
 const okToken = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
 
@@ -105,6 +106,7 @@ export default route({
     const open = await db.select('requests', { select: 'id', client_id: `eq.${c.id}`, status: 'neq.done' });
     need(open.length < 50, 429, 'Você tem muitos pedidos em aberto. Aguarde a agência responder.');
     const row = await db.insert('requests', { client_id: c.id, text, wanted_date: b.wanted_date || null, file_ids: ids, status: 'open' });
+    await notify({ title: `📩 Pedido novo de ${c.name}`, body: text.slice(0, 160), url: `/#pasta/${c.id}`, tag: `req-${row.id}` });
     send(res, 201, { id: row.id, text: row.text, wanted_date: row.wanted_date, status: row.status, created_at: row.created_at });
   },
 });

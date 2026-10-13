@@ -5,6 +5,7 @@
 import { db } from './db.js';
 import * as ig from './ig.js';
 import { logEvent } from './events.js';
+import { notify } from './push.js';
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -134,5 +135,9 @@ async function fail(p, message, log, keepTrying = false) {
     : { status: 'failed', last_error: message };
   await db.update('posts', { id: `eq.${p.id}` }, patch);
   log.failed.push({ id: p.id, error: message });
-  if (patch.status === 'failed') await logEvent(p, 'failed', message);
+  if (patch.status === 'failed') {
+    await logEvent(p, 'failed', message);
+    const c = await db.one('clients', { select: 'name', id: `eq.${p.client_id}` }).catch(() => null);
+    await notify({ title: `⚠️ Post de ${c?.name || 'cliente'} não publicou`, body: String(message).slice(0, 160), url: '/#agenda', tag: `fail-${p.id}` });
+  }
 }

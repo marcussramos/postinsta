@@ -88,7 +88,7 @@ test('baixa manual com Pix em aberto cancela a cobrança no Asaas; ligar aviso a
   const w = S.fakes.asaas.webhooks[0];
   assert.equal(w.url, 'http://localhost:4419/api/pasta?r=asaas');
   assert.equal(w.authToken, webhookToken());
-  assert.deepEqual(w.events, ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED']);
+  assert.deepEqual(w.events, ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED', 'INVOICE_AUTHORIZED', 'INVOICE_ERROR', 'INVOICE_CANCELED']);
   await call('/api/pasta?r=pix&setup=1', { method: 'POST', body: {} });
   assert.equal(S.fakes.asaas.webhooks.length, 1, 'não duplica');
   const st = (await call('/api/pasta?r=pix')).data;

@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [] };
+  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [], push_subs: [], snippets: [], media_bank: [], mail_log: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail,
     // métricas simuladas: feed extra, métricas por post e totais da conta
@@ -19,6 +19,10 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     client_files: () => ({ id: crypto.randomUUID(), ref_month: null, created_at: new Date().toISOString() }),
     reports: () => ({ id: crypto.randomUUID(), note: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     ig_daily: () => ({}),
+    push_subs: () => ({ id: crypto.randomUUID(), role: 'admin', user_id: null, created_at: new Date().toISOString() }),
+    snippets: () => ({ id: crypto.randomUUID(), client_id: null, created_at: new Date().toISOString() }),
+    media_bank: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
+    mail_log: () => ({ sent_at: new Date().toISOString() }),
     proposals: () => ({ id: crypto.randomUUID(), status: 'draft', accepted: null, accepted_at: null, client_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     post_events: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
     users: () => ({ id: crypto.randomUUID(), active: true, created_at: new Date().toISOString() }),
@@ -52,7 +56,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
   function filterRows(rows, sp) {
     let out = rows;
     for (const [k, v] of sp) {
-      if (['select', 'order', 'limit'].includes(k)) continue;
+      if (['select', 'order', 'limit', 'offset'].includes(k)) continue;
       if (k === 'or') {
         const conds = v.replace(/^\(|\)$/g, '').split(',').map((c) => { const [col, ...e] = c.split('.'); return [col, e.join('.')]; });
         out = out.filter((r) => conds.some(([c, e]) => test(r, c, e)));
@@ -89,6 +93,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       let out = filterRows(rows, sp);
       const order = sp.get('order');
       if (order) { const [col, dir] = order.split('.'); out = [...out].sort((a, b) => (a[col] == null) - (b[col] == null) || cmp(a[col], b[col]) * (dir === 'desc' ? -1 : 1)); }
+      if (sp.get('offset')) out = out.slice(+sp.get('offset'));
       if (sp.get('limit')) out = out.slice(0, +sp.get('limit'));
       return json(200, out.map((r) => ({ ...r })));
     }
@@ -106,6 +111,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
         if (old) Object.assign(old, JSON.parse(init.body)); else rows.push(row);
         return json(201, []);
       }
+      if (table === 'mail_log' && rows.some((x) => x.key === row.key)) return json(409, { message: 'duplicate key value violates unique constraint' });
       rows.push(row); return json(201, [{ ...row }]);
     }
     if (method === 'PATCH') {
@@ -165,7 +171,9 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
   }
 
   // Asaas simulado: clientes, cobranças Pix, QR Code e webhooks
-  const asaasDb = { customers: [], payments: [], webhooks: [], calls: [] };
+  const asaasDb = { customers: [], payments: [], webhooks: [], invoices: [], calls: [] };
+  const push = { sent: [], status: 201 };
+  const mail = { sent: [] };
   async function asaasFake(url, init = {}) {
     const u = new URL(url); const method = init.method || 'GET'; const path = u.pathname.replace('/v3', '');
     asaasDb.calls.push(`${method} ${path}`);
@@ -187,6 +195,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       if (method === 'DELETE') { p.deleted = true; return json(200, { deleted: true, id: p.id }); }
       return json(200, p);
     }
+    if (path === '/invoices' && method === 'POST') { const inv = { id: `inv_${asaasDb.invoices.length + 1}`, status: 'SCHEDULED', ...body }; asaasDb.invoices.push(inv); return json(200, inv); }
     if (path === '/finance/balance') return json(200, { balance: 1234.5 });
     if (path === '/webhooks' && method === 'GET') return json(200, { data: asaasDb.webhooks });
     if (path === '/webhooks' && method === 'POST') { const w = { id: `wh_${asaasDb.webhooks.length + 1}`, ...body }; asaasDb.webhooks.push(w); return json(200, w); }
@@ -200,13 +209,25 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     if (url.startsWith(supabaseUrl)) return supa(url, init);
     if (/instagram\.com/.test(new URL(url).host)) return instagram(url, init);
     if (/asaas\.com$/.test(new URL(url).host)) return asaasFake(url, init);
+    if (new URL(url).host === 'push.example.com') { push.sent.push({ url, headers: init.headers, body: Buffer.from(init.body) }); return new Response(null, { status: push.status }); }
+    if (new URL(url).host === 'api.resend.com') { mail.sent.push(JSON.parse(init.body)); return json(200, { id: `em_${mail.sent.length}` }); }
+    if (new URL(url).host === 'files.asaas.example') return new Response(Buffer.from('%PDF-1.4 nota fiscal'), { status: 200 });
     if (new URL(url).host === 'api.anthropic.com') {
       const req = JSON.parse(init.body); ig.aiCalls = (ig.aiCalls || []).concat([req]);
+      const prompt = req.messages[0].content.map((b) => b.text || '').join('');
+      if (prompt.startsWith('PLANEJAMENTO')) {
+        const month = (prompt.match(/Período: (\d{4}-\d{2})/) || [])[1];
+        return json(200, { content: [{ type: 'text', text: JSON.stringify({ strategy: 'Mês de autoridade e datas.', items: [
+          { date: `${month}-04`, time: '19:00', format: 'REELS', pillar: 'Atrair', title: 'Dia dos Animais', idea: 'Reels com os pets dos clientes', caption: 'Hoje é dia deles!', hashtags: ['diadosanimais', '#pet'], date_hook: 'Dia dos Animais' },
+          { date: `${month}-09`, time: '11:00', format: 'CAROUSEL', pillar: 'Relacionar', title: '5 cuidados', idea: 'Carrossel 5 slides', caption: 'Salve para lembrar.', hashtags: ['#cuidados'] },
+          { date: '1999-01-01', title: 'data fora do mês' },
+        ] }) }] });
+      }
       return json(200, { content: [{ type: 'text', text: 'Aqui:\n{"options":[{"label":"Curta","caption":"Foco no corre.","hashtags":["funk","#corre","foco no corre"]},{"label":"Engajamento","caption":"Marca o parça!","hashtags":["#parça"]}]}' }] });
     }
     return realFetch(input, init);
   };
-  return { tables, files, ig, asaas: asaasDb, restore: () => { globalThis.fetch = realFetch; } };
+  return { tables, files, ig, asaas: asaasDb, push, mail, restore: () => { globalThis.fetch = realFetch; } };
 }
 
 function json(status, data) {

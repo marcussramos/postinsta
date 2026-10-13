@@ -1,5 +1,6 @@
 // MC DIGITAL — painel da agência (JavaScript puro, sem build).
 import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
+import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
 const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'propostas', 'ajustes'];
@@ -32,6 +33,7 @@ async function boot() {
     Object.assign(S, { admin: s.admin, staff: s.staff ?? s.admin, role: s.role || (s.admin ? 'admin' : null), userName: s.name, tz: s.timezone, setup: s.setup || null });
   } catch { /* mostra o login */ }
   if (!S.staff) return renderLogin();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   if (S.role !== 'admin' && ['ajustes', 'propostas'].includes(S.view)) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
   await loadAll();
 }
@@ -81,19 +83,24 @@ function renderLogin() {
   const email = h('input', { type: 'email', id: 'em', autocomplete: 'username', placeholder: 'só para contas da equipe' });
   const pw = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password', required: true });
   const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Entrar');
+  const code = h('input', { type: 'text', id: 'otp', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 7, placeholder: '000000', class: 'mono otp' });
+  const codeField = h('div', { class: 'field', hidden: true }, h('label', { for: 'otp' }, 'Código de verificação'), code, h('span', { class: 'hint' }, 'Abra o app autenticador (Google Authenticator, Authy…) e digite os 6 números de MC DIGITAL.'));
   root.replaceChildren(h('main', { class: 'login' },
     h('form', { onsubmit: async (e) => {
       e.preventDefault(); btn.disabled = true;
       try {
         const body = email.value.trim() ? { email: email.value.trim(), password: pw.value } : { password: pw.value };
+        if (!codeField.hidden) body.code = code.value.replace(/\D/g, '');
         const s = await api('/api/session', { method: 'POST', body });
+        if (s.need_code) { codeField.hidden = false; btn.disabled = false; btn.textContent = 'Confirmar'; code.focus(); return; }
         S.admin = s.admin; S.staff = true; S.role = s.role; S.tz = s.timezone; await boot();
-      } catch (err) { toast(err.message, true); btn.disabled = false; pw.select(); }
+      } catch (err) { toast(err.message, true); btn.disabled = false; if (codeField.hidden) pw.select(); else code.select(); }
     } },
       brand(),
       h('h1', {}, 'Entrar no painel'),
       h('div', { class: 'field' }, h('label', { for: 'em' }, 'E-mail'), email, h('span', { class: 'hint' }, 'Administrador principal: deixe em branco e use a senha do painel.')),
       h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Senha'), pw),
+      codeField,
       btn,
     )));
   pw.focus();
@@ -261,6 +268,8 @@ function viewCalendar() {
     h('div', {}, h('div', { class: 'eyebrow' }, 'Planejamento'), h('h1', {}, label)),
     h('div', { class: 'spacer' }),
     h('div', { class: 'actions' },
+      h('button', { class: 'btn ai sm', onclick: () => openPlan({ month: m }) }, '✨ Planejar o mês'),
+      h('button', { class: 'btn sm', onclick: () => openDuplicate() }, 'Duplicar semana'),
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Modo de exibição' },
         ...[['thumbs', 'Miniaturas'], ['list', 'Lista']].map(([k, l]) => h('button', { class: 'seg-btn', 'aria-pressed': String(S.cal.mode === k),
           onclick: () => { S.cal.mode = k; savePref('mc_cal_mode', k); render(); } }, l))),
@@ -269,6 +278,11 @@ function viewCalendar() {
       h('button', { class: 'btn sm', onclick: () => go(1), 'aria-label': 'Próximo mês' }, '›')));
 
   const week = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  // datas comemorativas: as principais + as dos nichos dos clientes (ou do cliente filtrado)
+  const gridDays = monthGrid(m);
+  const niches = new Set((S.fClient ? [clientById(S.fClient)] : S.clients).map((c) => c?.brand_kit?.niche).filter(Boolean));
+  const dayDates = new Map();
+  for (const x of datesBetween(gridDays[0], gridDays.at(-1)).filter((x) => x.major || x.tags.some((t) => niches.has(t)))) dayDates.set(x.date, [...(dayDates.get(x.date) || []), x]);
   const grid = h('div', { class: `cal mode-${S.cal.mode}${S.cal.loading ? ' loading' : ''}`, role: 'grid', 'aria-label': `Calendário de ${label}` },
     ...week.map((w) => h('div', { class: 'cal-wd', role: 'columnheader' }, w)),
     ...monthGrid(m).map((d) => {
@@ -278,10 +292,11 @@ function viewCalendar() {
         onclick: (e) => {
           if (e.target.closest('.cal-chip, .cal-tile, .cal-more')) return;
           if (window.matchMedia('(max-width: 640px)').matches) { S.cal.day = d; render(); return; }
-          openPost(null, { date: d });
+          openPost(null, { date: d, title: (dayDates.get(d) || [])[0]?.name });
         },
         onkeydown: (e) => { if (e.key === 'Enter') openPost(null, { date: d }); } },
         h('div', { class: 'cal-num' }, String(Number(d.slice(8)))),
+        ...(dayDates.get(d) || []).slice(0, 2).map((x) => h('div', { class: `cal-date${x.major ? ' major' : ''}`, title: `${x.name} · clique para criar um post` }, x.name)),
         h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: `dot st-${p.status}` }))),
         // celular, modo miniaturas: a 1ª imagem do dia + quantos posts tem
         list.length ? h('div', { class: 'cal-mini', 'aria-hidden': 'true' },
@@ -353,7 +368,8 @@ function viewBoard() {
     return colEl;
   }));
   return [
-    h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Workflow de criação e aprovação'), h('h1', {}, 'Fluxo'))),
+    h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Workflow de criação e aprovação'), h('h1', {}, 'Fluxo')), h('div', { class: 'spacer' }),
+      h('button', { class: 'btn ai sm', onclick: () => openPlan({}) }, '✨ Planejar o mês com IA')),
     clientFilter(),
     h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, 'Arraste os cards entre as etapas ou use o botão de avançar. Para ir ao cliente ou à fila, o post precisa de imagem e data.'),
     h('div', { class: 'board-wrap' }, board),
@@ -418,7 +434,7 @@ function openPost(post = null, opts = {}) {
   const isNew = !post;
   const st = post?.status || opts.stage || 'draft';
   const locked = post && ['publishing', 'published'].includes(post.status);
-  let img = post?.image_url ? { url: post.image_url } : null; // { blob, url, note } quando trocada
+  let img = post?.image_url ? { url: post.image_url } : opts.image ? { url: opts.image.url, path: opts.image.path } : null; // { blob, url, note } quando trocada
 
   // Clientes: no post novo dá para escolher vários (um post por cliente).
   const picked = new Set([post?.client_id || opts.client || S.fClient || S.clients[0].id]);
@@ -555,6 +571,14 @@ function openPost(post = null, opts = {}) {
     URL.revokeObjectURL(url);
     return { blob, url: URL.createObjectURL(blob) };
   };
+  // foto do banco de mídia do cliente (já está no Storage: não precisa enviar de novo)
+  const takeFromBank = (m) => {
+    const it = { url: m.url, path: m.path };
+    if (mtype === 'CAROUSEL') { if (items.length >= 10) return toast('O carrossel já tem 10 imagens.', true); items.push(it); }
+    else if (mtype === 'STORY') { img = it; video = null; }
+    else img = it;
+    mediaDirty = true; drawImage(); toast(mtype === 'REELS' ? 'Capa escolhida do banco.' : 'Imagem do banco aplicada.');
+  };
   const onPaste = (e) => { const fs = [...(e.clipboardData?.files || [])]; if (!fs.length || locked) return; if (mtype === 'CAROUSEL') addItems(fs); else takeFile(fs[0]); };
   document.addEventListener('paste', onPaste);
   drawSeg(); drawImage();
@@ -570,6 +594,7 @@ function openPost(post = null, opts = {}) {
     counter.classList.toggle('bad', n > 2200 || tags > 30);
   };
   cap.addEventListener('input', updCounter); updCounter();
+  const snipBar = locked ? null : snippetBar(() => [...picked][0], cap, updCounter);
 
   // Data: post existente usa a dele; dia clicado no calendário; ideia começa sem data; resto = amanhã 19h.
   const when = post?.scheduled_at ? partsInTz(post.scheduled_at, S.tz)
@@ -614,8 +639,9 @@ function openPost(post = null, opts = {}) {
       h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? items[0]?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
       locked ? null : h('div', { class: 'canva-row' },
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
+        h('button', { type: 'button', class: 'btn sm', onclick: () => openBankPicker([...picked][0], takeFromBank) }, '🗂 Banco de mídia'),
         h('span', { class: 'hint' }, 'Feed 1080×1350 · Reels 1080×1920. Baixe e arraste aqui.'))),
-    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, locked ? null : aiPanel()),
+    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, snipBar, locked ? null : aiPanel()),
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
       h('div', { class: 'field' }, h('label', { for: 'f-time' }, 'Hora'), tIn)),
@@ -939,6 +965,10 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsDevice(),
+    ...settingsSecurity(),
+    ...settingsMail(),
+    ...settingsBackup(),
     ...settingsTeam(),
     ...settingsPix(),
     ...settingsContract(),
@@ -998,7 +1028,8 @@ function settingsContract() {
 }
 
 // ───────────────────────── pasta privada do cliente (contrato, financeiro, relatórios)
-const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['history', 'Aprovações'], ['requests', 'Pedidos'], ['brand', 'Marca'], ['other', 'Outros']];
+const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['history', 'Aprovações'], ['requests', 'Pedidos'], ['brand', 'Marca'], ['media', 'Banco de mídia'], ['snippets', 'Modelos'], ['other', 'Outros']];
+const TEAM_TABS = ['requests', 'brand', 'media', 'snippets'];
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt';
 const todayLocal = () => partsInTz(new Date().toISOString(), S.tz).date;
 const nextMonth = (m) => shiftMonth(m, 1);
@@ -1011,7 +1042,7 @@ const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'
 async function loadFolder(id) {
   if (S.role !== 'admin') { // equipe: só marca e pedidos
     try { S.folder.files = await api(`/api/pasta?r=files&client=${id}`); S.folder.error = null; } catch (e) { S.folder.error = e.message; }
-    S.folder.loading = false; if (!['brand', 'requests'].includes(S.folder.tab)) S.folder.tab = 'requests';
+    S.folder.loading = false; if (!TEAM_TABS.includes(S.folder.tab)) S.folder.tab = 'requests';
     if (S.view === 'pasta' && S.folderId === id) render();
     return;
   }
@@ -1040,10 +1071,10 @@ function viewFolder() {
       h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, S.role === 'admin' ? '🔒 Pasta privada' : '🔒 Marca e pedidos'),
       S.role === 'admin' ? h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente') : null));
   const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
-    ...FOLDER_TABS.filter(([k]) => S.role === 'admin' || ['requests', 'brand'].includes(k)).map(([k, l]) => {
+    ...FOLDER_TABS.filter(([k]) => S.role === 'admin' || TEAM_TABS.includes(k)).map(([k, l]) => {
       const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0)
         : k === 'requests' ? (S.requests || []).filter((r) => r.client_id === c.id && r.status !== 'done').length
-        : ['history', 'brand'].includes(k) ? 0 : count(k);
+        : ['history', 'brand', 'media', 'snippets'].includes(k) ? 0 : count(k);
       return h('button', { class: 'seg-btn', 'aria-pressed': String(F.tab === k), onclick: () => { F.tab = k; render(); } },
         l, n ? h('span', { class: `seg-n${k === 'finance' || k === 'requests' ? ' bad' : ''}` }, String(n)) : null);
     }));
@@ -1056,7 +1087,7 @@ function viewFolder() {
       h('div', { class: 'actions' }, needsDb ? h('a', { class: 'btn primary sm', href: '#ajustes' }, 'Ir para Ajustes') : null,
         h('button', { class: 'btn sm', onclick: () => { F.id = null; render(); } }, 'Tentar de novo')))];
   }
-  const body = { contract: folderContract, finance: folderFinance, report: folderReports, other: folderOther, history: folderHistory, brand: folderBrand, requests: folderRequests }[F.tab](c);
+  const body = { contract: folderContract, finance: folderFinance, report: folderReports, other: folderOther, history: folderHistory, brand: folderBrand, requests: folderRequests, media: folderMedia, snippets: folderSnippets }[F.tab](c);
   return [head, deliveryLine(c.id, { big: true }), tabs, ...body];
 }
 
@@ -1199,6 +1230,13 @@ function folderFinance(c) {
         pay?.file_id && fileName(pay.file_id) ? h('a', { class: 'btn ghost sm', href: `/api/pasta?r=files&id=${pay.file_id}&open=1`, target: '_blank', rel: 'noopener', title: fileName(pay.file_id) }, '📎')
           : pay?.receipt_url ? h('a', { class: 'btn ghost sm', href: pay.receipt_url, target: '_blank', rel: 'noopener', title: 'Comprovante do Pix' }, '📎') : null,
         S.setup?.asaas && ['open', 'late'].includes(p.status) ? h('button', { class: 'btn ghost sm', title: 'Gerar Pix com baixa automática', onclick: () => openPix(c, m, p) }, pay?.asaas_id ? 'Pix ✓' : 'Pix') : null,
+        pay?.nf_status === 'authorized' ? h('a', { class: 'btn ghost sm', href: pay.nf_url || '#', target: '_blank', rel: 'noopener', title: 'Nota fiscal emitida' }, '🧾 NF')
+          : pay?.nf_status === 'scheduled' ? h('span', { class: 'pill st-internal_review', title: 'A nota sai assim que a prefeitura autorizar' }, 'NF agendada')
+          : p.status === 'paid' && pay?.asaas_id && S.setup?.asaas ? h('button', { class: `btn ${pay?.nf_status === 'error' ? 'danger ' : 'ghost '}sm`, title: pay?.nf_status === 'error' ? 'A prefeitura recusou: confira em Notas fiscais no Asaas e tente de novo' : 'Emitir nota fiscal desta parcela', onclick: async (e) => {
+            e.target.disabled = true;
+            try { await api('/api/pasta?r=nf', { method: 'POST', body: { client_id: c.id, month: m.month, n: p.n } }); pay.nf_status = 'scheduled'; toast('Nota fiscal enviada para emissão. O PDF chega na pasta quando a prefeitura autorizar.'); render(); }
+            catch (err) { toast(err.message, true); e.target.disabled = false; }
+          } }, pay?.nf_status === 'error' ? 'NF: tentar de novo' : 'Emitir NF') : null,
         soon.has(`${m.month}#${p.n}`) ? chargeButton(c, m, p) : null,
         h('button', { class: `btn sm${p.status === 'late' ? ' primary' : ''}`, onclick: () => openPayment(c, m, p) }, p.status === 'paid' || p.status === 'waived' ? 'Editar' : 'Registrar')));
   };
@@ -1218,6 +1256,7 @@ function folderFinance(c) {
         h('div', { class: `parcels n${m.parcels.length}` }, ...m.parcels.map((p) => parcelChip(m, p))));
     })),
     filesSection(c, 'receipt', 'Todos os comprovantes', 'Comprovantes enviados ao registrar pagamentos aparecem aqui. Também dá para enviar direto.', { month: true }),
+    filesSection(c, 'invoice', 'Notas fiscais', 'Com a nota automática ligada (Ajustes → Pix automático), o PDF de cada nota autorizada chega aqui sozinho. O cliente também vê na área dele.', { month: true }),
   ];
 }
 // Cliente antigo cadastrado agora: marca de uma vez os meses anteriores como pagos.
@@ -1592,6 +1631,7 @@ function folderBrand(c) {
   drawColors();
   const ta = (id, label, val, ph, hint) => { const el = h('textarea', { id, placeholder: ph, style: 'min-height:70px' }); el.value = val || ''; return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el, hint ? h('span', { class: 'hint' }, hint) : null)]; };
   const fonts = h('input', { id: 'b-fonts', value: k.fonts || '', placeholder: 'Ex.: títulos em Montserrat ExtraBold, textos em Inter' });
+  const niche = h('select', { id: 'b-niche' }, h('option', { value: '' }, '— escolha —'), ...Object.entries(NICHES).map(([v, l]) => h('option', { value: v, selected: k.niche === v }, l)));
   const [voice, fVoice] = ta('b-voice', 'Tom de voz', F.brand.brand_voice, 'Ex.: próximo, carinhoso com os pets, divertido sem ser bobo. Fala com tutores de 25–45.', 'A IA de legendas usa isto.');
   const [style, fStyle] = ta('b-style', 'Estilo visual e posicionamento', k.style, 'Ex.: fotos claras e naturais, muito pet real (nada de banco de imagens), fundos limpos.');
   const [dos, fDos] = ta('b-dos', 'Sempre', k.dos, 'Ex.: mostrar o nome do pet, usar emojis de patinha, citar o endereço nos posts de promoção.');
@@ -1601,9 +1641,9 @@ function folderBrand(c) {
   const save = h('button', { class: 'btn primary', onclick: async () => {
     save.disabled = true;
     try {
-      const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, brand_voice: voice.value, brand_kit: { colors, fonts: fonts.value, style: style.value, dos: dos.value, donts: donts.value, references: refs.value, notes: notes.value } } });
+      const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, brand_voice: voice.value, brand_kit: { niche: niche.value || null, colors, fonts: fonts.value, style: style.value, dos: dos.value, donts: donts.value, references: refs.value, notes: notes.value } } });
       F.brand = { ...F.brand, ...r };
-      const i = S.clients.findIndex((x) => x.id === c.id); if (i >= 0) S.clients[i] = { ...S.clients[i], brand_voice: r.brand_voice };
+      const i = S.clients.findIndex((x) => x.id === c.id); if (i >= 0) S.clients[i] = { ...S.clients[i], brand_voice: r.brand_voice, brand_kit: r.brand_kit };
       toast('Identidade da marca salva.');
     } catch (e) { toast(e.message, true); }
     save.disabled = false;
@@ -1611,6 +1651,7 @@ function folderBrand(c) {
   return [
     h('section', { class: 'card' },
       h('div', { class: 'eyebrow' }, 'Manual rápido da marca'), h('h3', {}, `Identidade de ${c.name}`),
+      h('div', { class: 'field' }, h('label', { for: 'b-niche' }, 'Nicho'), niche, h('span', { class: 'hint' }, 'Define as datas comemorativas do calendário, os alertas do Início e o planejamento com IA.')),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Paleta de cores'), colorsBox),
       h('div', { class: 'field' }, h('label', { for: 'b-fonts' }, 'Tipografia'), fonts),
       fVoice, h('div', { class: 'grid-2 tight' }, fStyle, fRefs), h('div', { class: 'grid-2 tight' }, fDos, fDonts), fNotes,
@@ -1809,6 +1850,9 @@ function viewHome() {
       alerts.push(alertRow('', `${p.client_name}: proposta sem resposta há ${Math.floor((Date.now() - new Date(p.updated_at || p.created_at)) / 864e5)} dias`, 'Que tal um follow-up?', null, '#propostas'));
     }
   }
+  const dAlerts = commemorativeAlerts();
+  for (const a of dAlerts.slice(0, 6)) alerts.push(alertRow(a.in_days <= 5 ? 'warn' : '', `${a.name} em ${a.in_days} dia${a.in_days > 1 ? 's' : ''} — sem post planejado para ${a.client}`, `${fmtDay(a.date)} · clique para criar a ideia`, () => openPost(null, { client: a.client_id, date: shiftDay(a.date, a.in_days > 1 ? -1 : 0), title: a.name, stage: 'idea' })));
+  if (dAlerts.length > 6) alerts.push(alertRow('', `+${dAlerts.length - 6} datas comemorativas sem post`, 'Veja no calendário', null, '#calendario'));
   const attention = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
     alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Tudo certo por aqui ✓'));
 
@@ -1839,8 +1883,8 @@ function viewHome() {
   }
 
   if (!S.clients.length) return [hero, noClients()];
-  return [hero, h('div', { class: 'home-kpis' }, ...tiles),
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, delivCard, reaj, approvalReminders(), requestsInbox()))];
+  return [hero, pushPrompt(), h('div', { class: 'home-kpis' }, ...tiles),
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, delivCard, upcomingDatesCard(), reaj, approvalReminders(), requestsInbox()))].filter(Boolean);
 }
 const kpi = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:12.5px' }, sub));
 function alertRow(tone, title, sub, onclick, href) {
@@ -2005,5 +2049,452 @@ function settingsPix() {
         try { await api('/api/pasta?r=pix&setup=1', { method: 'POST', body: { email: email.value } }); S.pixStatus = undefined; toast('Baixa automática ligada.'); render(); }
         catch (err) { toast(err.message, true); e.target.disabled = false; }
       } }, hookOk ? 'Reconfigurar aviso' : 'Ligar baixa automática')),
-    h('span', { class: 'muted', style: 'font-size:13px' }, 'Como usar: no Financeiro de cada cliente aparece o botão "Pix" nas parcelas em aberto; na área do cliente aparece "Pagar com Pix". As mensagens de cobrança já levam o link. Se você der baixa manual numa parcela com Pix gerado, o app cancela a cobrança no Asaas.'))];
+    h('span', { class: 'muted', style: 'font-size:13px' }, 'Como usar: no Financeiro de cada cliente aparece o botão "Pix" nas parcelas em aberto; na área do cliente aparece "Pagar com Pix". As mensagens de cobrança já levam o link. Se você der baixa manual numa parcela com Pix gerado, o app cancela a cobrança no Asaas.')), nfCard()];
+}
+
+// ───────────────────────── datas comemorativas (Início)
+const shiftDay = (day, n) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 864e5).toISOString().slice(0, 10);
+function postDaysOf(clientId) {
+  return [...S.posts, ...S.cal.posts].filter((p) => p.client_id === clientId && p.scheduled_at).map((p) => dayKey(p.scheduled_at, S.tz));
+}
+const dismissedDates = () => { try { return new Set(JSON.parse(localStorage.getItem('mc_dates_off') || '[]')); } catch { return new Set(); } };
+function commemorativeAlerts() {
+  const clients = S.clients.map((c) => ({ id: c.id, name: c.name, niche: c.brand_kit?.niche || null }));
+  const off = dismissedDates();
+  return dateAlerts(clients, postDaysOf, todayLocal()).filter((a) => !off.has(`${a.client_id}:${a.date}`));
+}
+function upcomingDatesCard() {
+  const today = todayLocal();
+  const niches = new Set(S.clients.map((c) => c.brand_kit?.niche).filter(Boolean));
+  const list = datesBetween(shiftDay(today, 1), shiftDay(today, 45)).filter((d) => d.major || d.tags.some((t) => niches.has(t))).slice(0, 7);
+  if (!list.length) return null;
+  return h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Datas que vêm aí'), h('a', { href: '#calendario', class: 'muted' }, 'Calendário →')),
+    h('div', { class: 'dates-list' }, ...list.map((d) => {
+      const target = S.clients.filter((c) => relevantFor(d, c.brand_kit?.niche));
+      const covered = target.filter((c) => [0, 1, 2, 3].some((n) => postDaysOf(c.id).includes(shiftDay(d.date, -n))));
+      const n = daysBetween(today, d.date);
+      return h('div', { class: 'date-row' },
+        h('span', { class: 'date-day mono' }, fmtDay(d.date).slice(0, 5)),
+        h('span', { class: 'date-name' }, h('b', {}, d.name), h('span', { class: 'muted' }, ` · em ${n} dia${n > 1 ? 's' : ''}`)),
+        target.length ? h('span', { class: `pill ${covered.length === target.length ? 'st-approved' : 'st-pending_approval'}`, title: target.filter((c) => !covered.includes(c)).map((c) => c.name).join(', ') || 'Todos com post' }, `${covered.length}/${target.length} com post`) : h('span', { class: 'muted', style: 'font-size:12.5px' }, 'nicho'));
+    })),
+    h('span', { class: 'hint muted' }, 'Defina o nicho de cada cliente em Pasta → Marca para ver as datas do segmento dele (Dia dos Animais, Dia do Dentista…).'));
+}
+
+// ───────────────────────── notificações no celular (Web Push) e app instalável
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const b64ToBytes = (b64) => { const s = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (b64.length % 4)) % 4)); return Uint8Array.from(s, (c) => c.charCodeAt(0)); };
+const deviceName = () => { const ua = navigator.userAgent; return `${/iphone/i.test(ua) ? 'iPhone' : /ipad/i.test(ua) ? 'iPad' : /android/i.test(ua) ? 'Android' : /mac/i.test(ua) ? 'Mac' : /windows/i.test(ua) ? 'Windows' : 'Navegador'}${isStandalone() ? ' (app)' : ''}`; };
+async function loadPushState() {
+  if (!pushSupported()) return (S.push = isIOS() && !isStandalone() ? 'ios-install' : 'unsupported');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    S.push = sub ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off';
+  } catch { S.push = 'off'; }
+  return S.push;
+}
+async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('As notificações foram bloqueadas. Libere nas configurações do navegador (cadeado ao lado do endereço) e tente de novo.');
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  const { public_key } = await api('/api/pasta?r=push');
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(public_key) });
+  await api('/api/pasta?r=push', { method: 'POST', body: { subscription: sub.toJSON(), device: deviceName() } });
+  S.push = 'on';
+}
+async function disablePush() {
+  const reg = await navigator.serviceWorker.getRegistration('/');
+  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  if (sub) { await api('/api/pasta?r=push', { method: 'DELETE', body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
+  S.push = 'off';
+}
+function pushControls({ compact = false } = {}) {
+  if (S.push === undefined) { S.push = null; loadPushState().finally(() => render()); }
+  const st = S.push;
+  const go = async (e, fn, msg) => { e.target.disabled = true; try { await fn(); toast(msg); } catch (err) { toast(err.message, true); } e.target.disabled = false; render(); };
+  if (st === null) return [h('span', { class: 'muted' }, 'Verificando…')];
+  if (st === 'ios-install') return [h('span', { class: 'ig-warn' }, '• No iPhone, primeiro instale o app'),
+    h('ol', { class: 'steps-ol' }, h('li', {}, 'Abra este painel no Safari.'), h('li', {}, 'Toque em Compartilhar (quadrado com seta) → "Adicionar à Tela de Início".'), h('li', {}, 'Abra o MC DIGITAL pelo ícone novo e volte aqui para ativar.'))];
+  if (st === 'unsupported') return [h('span', { class: 'muted' }, 'Este navegador não recebe notificações. Use Chrome, Edge, Firefox ou Safari atualizado.')];
+  if (st === 'denied') return [h('span', { class: 'ig-warn' }, '• Notificações bloqueadas neste aparelho'), h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Libere nas configurações do navegador (cadeado ao lado do endereço → Notificações → Permitir) e recarregue a página.')];
+  if (st === 'on') return [h('span', { class: 'ig-ok' }, '✓ Este aparelho recebe os avisos'),
+    h('div', { class: 'actions' }, h('button', { class: 'btn sm', onclick: (e) => go(e, () => api('/api/pasta?r=push&test=1', { method: 'POST' }), 'Notificação de teste enviada.') }, 'Enviar teste'),
+      compact ? null : h('button', { class: 'btn ghost sm', onclick: (e) => go(e, disablePush, 'Notificações desligadas neste aparelho.') }, 'Desligar neste aparelho'))];
+  return [h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: (e) => go(e, enablePush, 'Pronto! Este aparelho vai receber os avisos.') }, '🔔 Ativar notificações neste aparelho')];
+}
+function pushPrompt() {
+  if (S.push === undefined) { S.push = null; loadPushState().finally(() => render()); }
+  let off = false; try { off = localStorage.getItem('mc_push_prompt') === 'off'; } catch { /* ok */ }
+  if (off || !['off', 'ios-install'].includes(S.push)) return null;
+  return h('section', { class: 'card push-prompt' },
+    h('div', { class: 'push-ico', 'aria-hidden': 'true' }, '🔔'),
+    h('div', { style: 'display:grid;gap:8px;min-width:0' },
+      h('b', {}, 'Receba os avisos no celular'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cliente aprovou, pediu ajuste, mandou pedido, aceitou proposta, pagou o Pix ou um post falhou: você fica sabendo na hora, sem abrir o painel.'),
+      ...pushControls({ compact: true })),
+    h('button', { class: 'btn ghost sm', 'aria-label': 'Agora não', onclick: () => { try { localStorage.setItem('mc_push_prompt', 'off'); } catch { /* ok */ } render(); } }, '✕'));
+}
+function settingsDevice() {
+  return [h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Celular'), h('h2', { style: 'font-size:22px' }, 'App e notificações'))),
+    h('div', { class: 'grid-clients' },
+      h('article', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Avisos na hora'), h('h3', {}, 'Notificações neste aparelho'),
+        h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Ative em cada aparelho (celular e computador). Avisa: cliente aprovou ou pediu ajuste, pedido novo, proposta aceita, Pix recebido, nota fiscal e post que falhou.'),
+        ...pushControls()),
+      h('article', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Tela de início'), h('h3', {}, 'Instalar o MC DIGITAL'),
+        isStandalone() ? h('span', { class: 'ig-ok' }, '✓ Você está usando o app instalado') : null,
+        h('ol', { class: 'steps-ol' },
+          h('li', {}, h('b', {}, 'iPhone: '), 'no Safari, Compartilhar → "Adicionar à Tela de Início".'),
+          h('li', {}, h('b', {}, 'Android: '), 'no Chrome, menu ⋮ → "Instalar app" (ou "Adicionar à tela inicial").'),
+          h('li', {}, h('b', {}, 'Computador: '), 'no Chrome/Edge, ícone de instalar na barra de endereço.')),
+        h('span', { class: 'hint muted' }, 'Abre em tela cheia, com ícone próprio, como um aplicativo.')))];
+}
+
+// ───────────────────────── verificação em duas etapas
+function loadScript(src) { return new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.append(s); }); }
+function settingsSecurity() {
+  if (S.sec === undefined) { S.sec = null; api('/api/pasta?r=security').then((v) => { S.sec = v; }).catch(() => { S.sec = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Segurança'), h('h2', { style: 'font-size:22px' }, 'Verificação em duas etapas')));
+  const card = h('article', { class: 'card' });
+  if (S.sec === false) card.append(h('span', { class: 'muted' }, 'Disponível depois da atualização do banco de dados.'));
+  else if (!S.sec) card.append(h('span', { class: 'muted' }, 'Carregando…'));
+  else if (S.sec.enabled) {
+    const code = h('input', { class: 'mono otp', inputmode: 'numeric', maxlength: 7, placeholder: '000000', 'aria-label': 'Código atual' });
+    card.append(h('span', { class: 'ig-ok' }, '✓ Ligada: para entrar, além da senha, pede o código do app autenticador'),
+      S.sec.disabled_by_env ? h('div', { class: 'errorbox' }, 'A variável DISABLE_2FA=1 está ativa na Vercel: o código não está sendo pedido. Apague-a e faça Redeploy assim que recuperar o acesso.') : null,
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Perdeu o celular? Na Vercel, crie a variável DISABLE_2FA com valor 1, faça Redeploy, entre só com a senha, desligue e ative de novo no celular novo. Depois apague a variável.'),
+      h('div', { class: 'actions' }, code, h('button', { class: 'btn ghost sm', onclick: async (e) => {
+        e.target.disabled = true;
+        try { S.sec = await api('/api/pasta?r=security', { method: 'DELETE', body: { code: code.value } }); toast('Verificação em duas etapas desligada.'); render(); }
+        catch (err) { toast(err.message, true); e.target.disabled = false; }
+      } }, 'Desligar')));
+  } else {
+    const box = h('div', { style: 'display:grid;gap:12px' });
+    card.append(h('span', { class: 'ig-warn' }, '• Desligada'),
+      h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Protege o painel (financeiro, contratos, dados dos clientes) mesmo se alguém descobrir a sua senha: para entrar, também é preciso o código de 6 números que muda a cada 30 segundos no seu celular. Use Google Authenticator, Microsoft Authenticator ou Authy (grátis).'),
+      box);
+    const start = h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async () => {
+      start.disabled = true;
+      try {
+        const r = await api('/api/pasta?r=security', { method: 'POST', body: { start: 1 } });
+        const qr = h('div', { class: 'qr' });
+        const code = h('input', { class: 'mono otp', inputmode: 'numeric', maxlength: 7, placeholder: '000000', 'aria-label': 'Código de 6 números' });
+        box.replaceChildren(
+          h('ol', { class: 'steps-ol' }, h('li', {}, 'No app autenticador, toque em + e escaneie o QR Code.'), h('li', {}, 'Digite abaixo o código de 6 números que apareceu para MC DIGITAL.')),
+          qr, h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, r.secret.replace(/(.{4})/g, '$1 ').trim()), h('button', { class: 'btn sm', onclick: () => copyText(r.secret, 'Chave copiada.') }, 'Copiar chave')),
+          h('div', { class: 'actions' }, code, h('button', { class: 'btn primary sm', onclick: async (e) => {
+            e.target.disabled = true;
+            try { S.sec = await api('/api/pasta?r=security', { method: 'POST', body: { code: code.value } }); S.sec = { ...S.sec, enabled: true }; toast('Verificação em duas etapas ligada. No próximo login o app pede o código.'); render(); }
+            catch (err) { toast(err.message, true); e.target.disabled = false; }
+          } }, 'Confirmar e ligar')));
+        try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'); new window.QRCode(qr, { text: r.otpauth, width: 180, height: 180, correctLevel: window.QRCode.CorrectLevel.M }); }
+        catch { qr.append(h('span', { class: 'muted' }, 'Não consegui desenhar o QR Code: no app, escolha "inserir chave" e cole a chave abaixo.')); }
+        code.focus();
+      } catch (e) { toast(e.message, true); start.disabled = false; }
+    } }, 'Ativar no meu celular');
+    box.append(start);
+  }
+  return [head, h('div', { class: 'grid-clients' }, card)];
+}
+
+// ───────────────────────── e-mails automáticos
+function settingsMail() {
+  const st = S.setup || {};
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Clientes'), h('h2', { style: 'font-size:22px' }, 'E-mails automáticos')));
+  if (!st.mail_ready) {
+    return [head, h('article', { class: 'card' }, h('span', { class: 'ig-warn' }, '• Desligados'),
+      h('span', { class: 'muted', style: 'font-size:14px' }, 'O app manda sozinho, para o e-mail de cada cliente: posts esperando aprovação (agrupados), lembrete quando o post sai em 48 h sem aprovação, lembrete de mensalidade (2 dias antes e no dia seguinte ao vencimento, com o Pix) e "seu relatório do mês está pronto".'),
+      h('ol', { class: 'steps-ol' },
+        h('li', {}, 'Crie uma conta grátis em resend.com (3.000 e-mails/mês grátis).'),
+        h('li', {}, 'Em Domains, adicione o domínio da agência e copie os registros DNS que ele mostrar para o seu provedor de domínio (sem domínio próprio, o Resend só entrega para o seu próprio e-mail — dá para testar).'),
+        h('li', {}, 'Em API Keys, crie uma chave. Na Vercel, adicione RESEND_API_KEY com ela e MAIL_FROM com o remetente, ex.: MC DIGITAL <contato@seudominio.com.br>. Faça Redeploy.')))];
+  }
+  if (S.mail === undefined) { S.mail = null; api('/api/pasta?r=mailcfg').then((v) => { S.mail = v; }).catch(() => { S.mail = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  if (!S.mail) return [head, h('article', { class: 'card' }, h('span', { class: 'muted' }, S.mail === false ? 'Disponível depois da atualização do banco de dados.' : 'Carregando…'))];
+  const labels = { approval: 'Posts enviados para aprovação', reminder: 'Lembrete de aprovação (post sai em 48 h)', charge: 'Lembrete de mensalidade', report: 'Relatório do mês pronto' };
+  const to = h('input', { type: 'email', value: S.settings?.agency?.email || '', placeholder: 'seu@email.com', 'aria-label': 'E-mail para teste' });
+  return [head, h('article', { class: 'card' },
+    h('span', { class: 'ig-ok' }, `✓ Ligados · remetente ${S.mail.from}`),
+    h('div', { class: 'toggles' }, ...Object.entries(labels).map(([k, l]) => h('label', { class: 'toggle' },
+      h('input', { type: 'checkbox', checked: S.mail.settings[k], onchange: async (e) => {
+        try { S.mail = { ...S.mail, ...(await api('/api/pasta?r=mailcfg', { method: 'PUT', body: { [k]: e.target.checked } })) }; toast('Salvo.'); } catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
+      } }), h('span', {}, l)))),
+    h('span', { class: 'hint muted' }, 'Vai para o e-mail cadastrado em cada cliente (Clientes → Editar). As respostas chegam no e-mail da agência.'),
+    h('div', { class: 'actions' }, to, h('button', { class: 'btn sm', onclick: async (e) => {
+      e.target.disabled = true;
+      try { await api('/api/pasta?r=mailcfg', { method: 'POST', body: { to: to.value } }); toast('E-mail de teste enviado. Confira a caixa de entrada (e o spam).'); } catch (err) { toast(err.message, true); }
+      e.target.disabled = false;
+    } }, 'Enviar e-mail de teste')),
+    S.mail.recent?.length ? h('details', {}, h('summary', { class: 'muted' }, `Últimos envios (${S.mail.recent.length})`),
+      h('ul', { class: 'mail-log' }, ...S.mail.recent.map((m) => h('li', {}, h('span', { class: 'mono' }, `${fmtDate(m.sent_at, S.tz)} ${fmtTime(m.sent_at, S.tz)}`), ' ', ({ approval: 'aprovação', reminder: 'lembrete de aprovação', charge: 'cobrança', report: 'relatório' })[m.key.split(':')[0]] || m.key.split(':')[0], ' · ', clientName(m.key.split(':')[1]))))) : null)];
+}
+
+// ───────────────────────── backup
+function settingsBackup() {
+  if (S.backups === undefined) { S.backups = null; api('/api/pasta?r=backup').then((v) => { S.backups = v; }).catch(() => { S.backups = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Proteção dos dados'), h('h2', { style: 'font-size:22px' }, 'Backup')));
+  const list = S.backups || [];
+  const last = list[0];
+  const age = last ? Math.floor((Date.now() - new Date(last.at)) / 864e5) : null;
+  return [head, h('article', { class: 'card' },
+    S.backups === null ? h('span', { class: 'muted' }, 'Carregando…')
+      : last ? h('span', { class: age <= 8 ? 'ig-ok' : 'ig-warn' }, `${age <= 8 ? '✓' : '•'} Último backup ${age === 0 ? 'hoje' : `há ${age} dia${age > 1 ? 's' : ''}`} · ${last.rows} registros`)
+      : h('span', { class: 'ig-warn' }, '• Nenhum backup ainda (o primeiro sai sozinho na próxima rodada do agendador)'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Toda semana o app copia sozinho todos os dados (clientes, posts, contratos, pagamentos, relatórios, propostas…) para um arquivo no cofre privado. Ficam as 8 últimas cópias. Baixe uma de vez em quando e guarde no seu Google Drive: se algo der errado no Supabase, os dados voltam a partir dele.'),
+    list.length ? h('div', { class: 'backup-list' }, ...list.map((b) => h('div', { class: 'backup-row' },
+      h('span', {}, h('b', {}, `${fmtDate(b.at, S.tz)} ${fmtTime(b.at, S.tz)}`), h('span', { class: 'muted' }, ` · ${b.reason === 'manual' ? 'manual' : 'automático'} · ${fileSize(b.size)}`)),
+      h('a', { class: 'btn sm', href: `/api/pasta?r=backup&path=${encodeURIComponent(b.path)}` }, 'Baixar')))) : null,
+    h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async (e) => {
+      e.target.disabled = true;
+      try { const b = await api('/api/pasta?r=backup', { method: 'POST' }); S.backups = [b, ...(S.backups || []).filter((x) => x.path !== b.path)].slice(0, 8); toast('Backup feito.'); render(); }
+      catch (err) { toast(err.message, true); e.target.disabled = false; }
+    } }, 'Fazer backup agora'),
+    h('span', { class: 'hint muted' }, 'O arquivo tem dados sensíveis (contratos, tokens do Instagram): guarde em lugar seguro e não compartilhe.'))];
+}
+
+// ───────────────────────── nota fiscal automática (dentro de Pix automático)
+function nfCard() {
+  if (S.nf === undefined) { S.nf = null; api('/api/pasta?r=nf').then((v) => { S.nf = v; }).catch(() => { S.nf = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  if (!S.nf) return null;
+  const n = S.nf.settings;
+  const inp = (id, label, value, ph, hint) => { const el = h('input', { id, value: value ?? '', placeholder: ph }); return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el, hint ? h('span', { class: 'hint' }, hint) : null)]; };
+  const [desc, fDesc] = inp('nf-desc', 'Descrição do serviço na nota', n.service_description, 'Gestão de redes sociais (social media)');
+  const [code, fCode] = inp('nf-code', 'Código do serviço municipal', n.municipal_service_code, 'Ex.: 17.06', 'Item da lista de serviços (LC 116) usado pela sua prefeitura. Para social media costuma ser 17.06 ou 17.01 — confirme com o contador.');
+  const [name, fName] = inp('nf-name', 'Nome do serviço municipal (opcional)', n.municipal_service_name, 'Propaganda e publicidade…');
+  const [iss, fIss] = inp('nf-iss', 'Alíquota de ISS (%)', String(n.iss ?? 0), '2', 'No Simples Nacional/MEI, use a que o contador indicar.');
+  const [obs, fObs] = inp('nf-obs', 'Observações (opcional)', n.observations, 'Deixe em branco para "Mensalidade MM/AAAA"');
+  const enabled = h('input', { type: 'checkbox', checked: n.enabled });
+  return h('article', { class: 'card', style: 'margin-top:12px' },
+    h('div', { class: 'eyebrow' }, 'Nota fiscal automática'), h('h3', {}, 'Emitir NFS-e quando o Pix cair'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Quando o cliente paga o Pix, o Asaas emite a nota de serviço na prefeitura e o PDF autorizado vai sozinho para a pasta do cliente (Financeiro → Notas fiscais) e para a área dele. Antes, configure a emissão no Asaas: Notas fiscais → Configurações (dados da prefeitura, regime e certificado/senha, conforme a cidade).'),
+    h('label', { class: 'toggle' }, enabled, h('span', {}, 'Emitir a nota automaticamente a cada Pix recebido')),
+    fDesc, h('div', { class: 'grid-2 tight' }, fCode, fIss), fName, fObs,
+    h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async (e) => {
+      e.target.disabled = true;
+      try { S.nf = { ...S.nf, ...(await api('/api/pasta?r=nf', { method: 'PUT', body: { enabled: enabled.checked, service_description: desc.value, municipal_service_code: code.value, municipal_service_name: name.value, iss: iss.value, observations: obs.value } })) }; toast('Nota fiscal salva.'); render(); }
+      catch (err) { toast(err.message, true); e.target.disabled = false; }
+    } }, 'Salvar'),
+    h('span', { class: 'hint muted' }, 'Depois de salvar, clique em "Reconfigurar aviso" acima uma vez, para o Asaas também avisar quando a nota for autorizada.'));
+}
+
+// ───────────────────────── planejamento do mês com IA
+function openPlan({ client, month } = {}) {
+  if (!S.clients.length) return toast('Cadastre um cliente primeiro.', true);
+  if (!S.setup?.ai_ready && S.role === 'admin') return toast('A IA ainda não está ligada. Veja a aba Ajustes → Inteligência Artificial.', true);
+  const cur = todayLocal().slice(0, 7);
+  const sel = h('select', { id: 'pl-client' }, ...S.clients.map((c) => h('option', { value: c.id, selected: c.id === (client || S.fClient || S.clients[0].id) }, c.name)));
+  const mIn = h('input', { type: 'month', id: 'pl-month', value: month && month >= cur ? month : (Number(todayLocal().slice(8)) > 20 ? shiftMonth(cur, 1) : cur) });
+  const extra = h('textarea', { id: 'pl-extra', style: 'min-height:70px', placeholder: 'Opcional. Ex.: lançamento do plano de banho mensal no dia 15; evitar promoções; 2 Reels de bastidores.' });
+  const out = h('div', { class: 'plan-out' });
+  const info = h('div', { class: 'muted', style: 'font-size:13.5px' });
+  const drawInfo = () => {
+    const c = clientById(sel.value); const k = c?.contract_data || {};
+    info.replaceChildren(`A IA usa a marca (${c?.brand_kit?.niche ? NICHES[c.brand_kit.niche] : 'nicho não definido'}), o tom de voz, a cota (${k.quota_posts ?? '—'} posts · ${k.quota_reels ?? '—'} Reels por mês), os melhores posts dos relatórios, os melhores horários e as datas comemorativas. Planeja só o que falta no calendário do mês.`);
+  };
+  sel.addEventListener('change', drawInfo); drawInfo();
+  let plan = null; const chosen = new Set();
+  const gen = h('button', { class: 'btn ai', onclick: run }, '✨ Gerar planejamento');
+  const create = h('button', { class: 'btn primary', hidden: true, onclick: createIdeas }, 'Criar ideias no Fluxo');
+  async function run() {
+    gen.disabled = true; create.hidden = true;
+    out.replaceChildren(h('div', { class: 'plan-wait' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('span', {}, 'Estudando a marca, os resultados e as datas do mês… leva uns 30 segundos.')));
+    try {
+      plan = await api('/api/pasta?r=plan', { method: 'POST', body: { client_id: sel.value, month: mIn.value, extra: extra.value } });
+      chosen.clear(); plan.items.forEach((_, i) => chosen.add(i));
+      drawPlan();
+    } catch (e) { out.replaceChildren(h('div', { class: 'errorbox' }, e.message)); }
+    gen.disabled = false; gen.textContent = '↻ Gerar de novo';
+  }
+  function drawPlan() {
+    const fmtD = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+    out.replaceChildren(
+      plan.strategy ? h('div', { class: 'feedback' }, h('b', {}, 'Linha do mês:'), h('span', {}, plan.strategy)) : null,
+      h('div', { class: 'plan-list' }, ...plan.items.map((it, i) => h('label', { class: `plan-item${chosen.has(i) ? ' on' : ''}` },
+        h('input', { type: 'checkbox', checked: chosen.has(i), onchange: (e) => { if (e.target.checked) chosen.add(i); else chosen.delete(i); e.target.closest('.plan-item').classList.toggle('on', e.target.checked); create.textContent = `Criar ${chosen.size} ideia${chosen.size === 1 ? '' : 's'} no Fluxo`; } }),
+        h('div', { class: 'plan-main' },
+          h('div', { class: 'plan-top' }, h('span', { class: 'mono' }, `${fmtD(it.date)} · ${it.time}`), h('span', { class: 'type-badge' }, it.format_label), it.pillar ? h('span', { class: 'muted' }, it.pillar) : null, it.date_hook ? h('span', { class: 'cal-date major' }, it.date_hook) : null),
+          h('b', {}, it.title),
+          h('span', { class: 'muted plan-idea' }, it.idea),
+          it.caption ? h('details', {}, h('summary', { class: 'muted' }, 'Rascunho de legenda'), h('p', { style: 'margin:6px 0 0;white-space:pre-line' }, it.caption), h('p', { class: 'mono', style: 'margin:4px 0 0;font-size:12.5px;color:var(--accent)' }, it.hashtags.join(' '))) : null)))),
+      h('span', { class: 'hint muted' }, 'As ideias entram no Fluxo com data, formato, roteiro (nas notas da equipe) e rascunho de legenda. É só produzir a arte e seguir o fluxo normal de aprovação.'));
+    create.hidden = false; create.textContent = `Criar ${chosen.size} ideia${chosen.size === 1 ? '' : 's'} no Fluxo`;
+  }
+  async function createIdeas() {
+    if (!chosen.size) return toast('Marque pelo menos uma ideia.', true);
+    create.disabled = true;
+    try {
+      const rows = await api('/api/pasta?r=plan', { method: 'POST', body: { client_id: sel.value, create: true, items: plan.items.filter((_, i) => chosen.has(i)) } });
+      rows.forEach((p) => upsert(p, false));
+      close(); S.fClient = sel.value; S.cal.month = null; location.hash = '#calendario'; render();
+      toast(`${rows.length} ideias criadas para ${clientName(sel.value)}. Estão no calendário e no Fluxo.`);
+    } catch (e) { toast(e.message, true); create.disabled = false; }
+  }
+  const close = drawer('Planejar o mês com IA', [
+    h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'pl-client' }, 'Cliente'), sel), h('div', { class: 'field' }, h('label', { for: 'pl-month' }, 'Mês'), mIn)),
+    h('div', { class: 'field' }, h('label', { for: 'pl-extra' }, 'Pedido para este mês'), extra), info, gen, out,
+  ], [h('span', { class: 'spacer' }), create]);
+}
+
+// ───────────────────────── duplicar semana
+function openDuplicate() {
+  const today = todayLocal();
+  const t = new Date(`${today}T12:00:00Z`);
+  const sunday = shiftDay(today, -t.getUTCDay());
+  const from = h('input', { type: 'date', id: 'dp-from', value: shiftDay(sunday, -7) });
+  const to = h('input', { type: 'date', id: 'dp-to', value: sunday });
+  const sel = h('select', { id: 'dp-client' }, h('option', { value: '' }, 'Todos os clientes'), ...S.clients.map((c) => h('option', { value: c.id, selected: c.id === S.fClient }, c.name)));
+  const preview = h('div', { class: 'muted', style: 'font-size:13.5px' });
+  const upd = () => {
+    const a = from.value, b = to.value; if (!a || !b) return;
+    const shift = daysBetween(a, b);
+    const n = [...S.posts, ...S.cal.posts].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i && p.scheduled_at && (!sel.value || p.client_id === sel.value)).filter((p) => { const d = dayKey(p.scheduled_at, S.tz); return d >= a && d < shiftDay(a, 7); }).length;
+    preview.replaceChildren(shift < 1 ? 'A semana de destino precisa ser depois da semana copiada.' : `${n} post${n === 1 ? '' : 's'} de ${fmtDay(a)} a ${fmtDay(shiftDay(a, 6))} → mesmos dias e horários a partir de ${fmtDay(b)} (+${shift} dias). Viram rascunhos "Em produção" (ideias continuam ideias), com as mesmas artes e legendas para você ajustar.`);
+  };
+  [from, to, sel].forEach((el) => el.addEventListener('change', upd)); upd();
+  const go = h('button', { class: 'btn primary', onclick: async () => {
+    const shift = daysBetween(from.value, to.value);
+    if (shift < 1) return toast('Escolha uma semana de destino depois da copiada.', true);
+    go.disabled = true;
+    try {
+      const rows = await api('/api/pasta?r=duplicate', { method: 'POST', body: { from: from.value, days: 7, shift, client_id: sel.value || undefined } });
+      rows.forEach((p) => upsert(p, false));
+      close(); if (S.view === 'calendario') await loadMonth(S.cal.month, true); render();
+      toast(`${rows.length} post${rows.length === 1 ? '' : 's'} duplicado${rows.length === 1 ? '' : 's'}.`);
+    } catch (e) { toast(e.message, true); go.disabled = false; }
+  } }, 'Duplicar');
+  const close = drawer('Duplicar semana', [
+    h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'dp-from' }, 'Copiar a semana que começa em'), from), h('div', { class: 'field' }, h('label', { for: 'dp-to' }, 'Colar na semana que começa em'), to)),
+    h('div', { class: 'field' }, h('label', { for: 'dp-client' }, 'Cliente'), sel), preview,
+  ], [h('span', { class: 'spacer' }), go]);
+}
+
+// ───────────────────────── banco de mídia
+async function loadBank(clientId) { return api(`/api/pasta?r=media&client=${clientId}`); }
+async function uploadToBank(clientId, files, onStep) {
+  const added = [];
+  for (const [i, f] of files.entries()) {
+    onStep?.(`Enviando ${i + 1} de ${files.length}…`);
+    try {
+      const img = await prepareImage(f);
+      const up = await api(`/api/upload?client=${clientId}`, { method: 'POST', raw: img.blob });
+      added.push(await api('/api/pasta?r=media', { method: 'POST', body: { client_id: clientId, url: up.image_url, path: up.image_path, name: f.name } }));
+    } catch (e) { toast(`${f.name}: ${e.message}`, true); }
+  }
+  return added;
+}
+function bankGrid(items, { onPick, onDelete } = {}) {
+  return h('div', { class: 'bank-grid' }, ...items.map((m) => h('figure', { class: 'bank-item' },
+    h('img', { src: m.url, alt: m.name || '', loading: 'lazy' }),
+    h('figcaption', {},
+      onPick ? h('button', { class: 'btn sm primary', type: 'button', onclick: () => onPick(m) }, 'Usar') : null,
+      onDelete ? confirmButton('✕', 'Apagar?', () => onDelete(m), 'btn ghost sm') : null))));
+}
+function openBankPicker(clientId, onPick) {
+  const box = h('div', { style: 'display:grid;gap:12px' }, h('p', { class: 'muted' }, 'Carregando…'));
+  const input = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+  let close;
+  const draw = (items) => box.replaceChildren(
+    h('div', { class: 'actions' }, h('button', { class: 'btn sm', type: 'button', onclick: () => input.click() }, '+ Enviar fotos para o banco'), input),
+    items.length ? bankGrid(items, { onPick: (m) => { onPick(m); close(); } }) : h('p', { class: 'muted', style: 'margin:0' }, 'Nenhuma foto no banco deste cliente ainda. Envie as fotos do cliente (produtos, equipe, espaço) e reaproveite em vários posts.'));
+  input.addEventListener('change', async () => {
+    const added = await uploadToBank(clientId, [...input.files], (t) => toast(t));
+    input.value = ''; if (added.length) toast(`${added.length} foto(s) no banco.`);
+    draw(await loadBank(clientId).catch(() => []));
+  });
+  loadBank(clientId).then(draw).catch((e) => box.replaceChildren(h('div', { class: 'errorbox' }, /media_bank|relation|schema/i.test(e.message) ? 'O banco de mídia precisa da atualização do banco de dados (veja Ajustes).' : e.message)));
+  close = drawer(`Banco de mídia · ${clientName(clientId)}`, [box], []);
+}
+function folderMedia(c) {
+  const F = S.folder;
+  if (F.mediaFor !== c.id) { F.mediaFor = c.id; F.media = null; loadBank(c.id).then((v) => { F.media = v; }).catch(() => { F.media = false; }).finally(() => render()); }
+  if (F.media === false) return [h('div', { class: 'banner' }, 'O banco de mídia precisa da atualização do banco. ', S.role === 'admin' ? h('a', { href: '#ajustes' }, 'Ver em Ajustes') : 'Peça ao administrador.')];
+  if (!F.media) return [h('p', { class: 'muted' }, 'Carregando…')];
+  const status = h('span', { class: 'muted', style: 'font-size:13px' });
+  const input = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: async () => {
+    const added = await uploadToBank(c.id, [...input.files], (t) => { status.textContent = t; });
+    F.media = [...added, ...F.media]; status.textContent = ''; input.value = ''; render(); if (added.length) toast(`${added.length} foto(s) no banco.`);
+  } });
+  const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => input.click() }, h('b', {}, 'Enviar fotos do cliente'), h('span', { class: 'muted' }, 'Arraste aqui ou clique. Produtos, equipe, espaço, bastidores… viram JPEG otimizado para o Instagram.'));
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', async (e) => { e.preventDefault(); drop.classList.remove('over'); const fs = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/')); if (!fs.length) return; const added = await uploadToBank(c.id, fs, (t) => { status.textContent = t; }); F.media = [...added, ...F.media]; status.textContent = ''; render(); });
+  return [h('section', { class: 'card' },
+    h('div', { class: 'eyebrow' }, `${F.media.length} foto${F.media.length === 1 ? '' : 's'}`), h('h3', {}, `Banco de mídia de ${c.name}`),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Fotos do cliente para reaproveitar: no post, clique em "🗂 Banco de mídia" e escolha. Apagar daqui não tira a foto dos posts que já usam.'),
+    drop, input, status,
+    F.media.length ? bankGrid(F.media, {
+      onPick: (m) => openPost(null, { client: c.id, image: m }),
+      onDelete: async (m) => { await api(`/api/pasta?r=media&id=${m.id}`, { method: 'DELETE' }); F.media = F.media.filter((x) => x.id !== m.id); render(); toast('Foto removida do banco.'); },
+    }) : null)];
+}
+
+// ───────────────────────── modelos de legenda e grupos de hashtags
+const SNIP_KIND = { caption: 'Modelo de legenda', hashtags: 'Grupo de hashtags' };
+function snippetBar(getClient, cap, upd) {
+  const bar = h('div', { class: 'snip-bar' });
+  let loadedFor = null;
+  const insertAt = (text) => { const a = cap.selectionStart ?? cap.value.length; cap.setRangeText(text, a, cap.selectionEnd ?? a, 'end'); cap.focus(); upd(); };
+  const addTags = (text) => {
+    const have = new Set((cap.value.match(/#[\p{L}\p{N}_]+/gu) || []).map((t) => t.toLowerCase()));
+    const add = text.split(/\s+/).filter((t) => t && !have.has(t.toLowerCase()));
+    if (!add.length) return toast('Essas hashtags já estão na legenda.');
+    cap.value = `${cap.value.trimEnd()}${cap.value.trim() ? '\n\n' : ''}${add.join(' ')}`; upd(); toast(`${add.length} hashtag(s) adicionada(s).`);
+  };
+  const draw = async () => {
+    const cid = getClient();
+    if (loadedFor === cid) return; loadedFor = cid;
+    let list = [];
+    try { list = await api(`/api/pasta?r=snippets&client=${cid}`); } catch { bar.replaceChildren(); return; }
+    const caps = list.filter((x) => x.kind === 'caption'), tags = list.filter((x) => x.kind === 'hashtags');
+    const nameIn = h('input', { placeholder: 'Nome do modelo', maxlength: 60, class: 'snip-name' });
+    const saveBox = h('div', { class: 'snip-save', hidden: true }, nameIn,
+      h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+        try { await api('/api/pasta?r=snippets', { method: 'POST', body: { kind: 'caption', name: nameIn.value, text: cap.value, client_id: cid } }); loadedFor = null; toast('Modelo salvo para este cliente.'); draw(); }
+        catch (e) { toast(e.message, true); }
+      } }, 'Salvar'));
+    bar.replaceChildren(
+      caps.length ? h('div', { class: 'snip-row' }, h('span', { class: 'label' }, 'Modelos'), ...caps.map((x) => h('button', { type: 'button', class: 'chip', title: x.text, onclick: () => insertAt(x.text) }, x.name))) : null,
+      tags.length ? h('div', { class: 'snip-row' }, h('span', { class: 'label' }, '# Hashtags'), ...tags.map((x) => h('button', { type: 'button', class: 'chip', title: x.text, onclick: () => addTags(x.text) }, x.name))) : null,
+      h('div', { class: 'snip-row' },
+        h('button', { type: 'button', class: 'linkish', onclick: () => { if (!cap.value.trim()) return toast('Escreva a legenda antes de salvar como modelo.', true); saveBox.hidden = !saveBox.hidden; if (!saveBox.hidden) nameIn.focus(); } }, '+ Salvar legenda como modelo'),
+        h('a', { class: 'linkish', href: `#pasta/${cid}`, onclick: () => { S.folder.tab = 'snippets'; document.querySelectorAll('.drawer, .scrim').forEach((x) => x.remove()); } }, caps.length || tags.length ? 'Gerenciar modelos' : 'Criar grupos de hashtags')),
+      saveBox);
+  };
+  draw();
+  bar.addEventListener('mouseenter', draw); // trocou o cliente no post: recarrega
+  return bar;
+}
+function folderSnippets(c) {
+  const F = S.folder;
+  if (F.snipFor !== c.id) { F.snipFor = c.id; F.snips = null; api(`/api/pasta?r=snippets&client=${c.id}`).then((v) => { F.snips = v; }).catch(() => { F.snips = false; }).finally(() => render()); }
+  if (F.snips === false) return [h('div', { class: 'banner' }, 'Os modelos precisam da atualização do banco. ', S.role === 'admin' ? h('a', { href: '#ajustes' }, 'Ver em Ajustes') : 'Peça ao administrador.')];
+  if (!F.snips) return [h('p', { class: 'muted' }, 'Carregando…')];
+  const kind = h('select', { id: 'sn-kind' }, h('option', { value: 'hashtags' }, SNIP_KIND.hashtags), h('option', { value: 'caption' }, SNIP_KIND.caption));
+  const name = h('input', { id: 'sn-name', placeholder: 'Ex.: Pet geral, CTA agendamento, Assinatura', maxlength: 60 });
+  const text = h('textarea', { id: 'sn-text', style: 'min-height:80px', placeholder: 'Hashtags separadas por espaço (com ou sem #) ou o texto do modelo de legenda.' });
+  const all = h('input', { type: 'checkbox', id: 'sn-all' });
+  const add = h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async () => {
+    add.disabled = true;
+    try { const row = await api('/api/pasta?r=snippets', { method: 'POST', body: { kind: kind.value, name: name.value, text: text.value, client_id: all.checked ? null : c.id } }); F.snips = [...F.snips, row].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')); toast('Modelo criado.'); render(); }
+    catch (e) { toast(e.message, true); add.disabled = false; }
+  } }, 'Adicionar');
+  const section = (k) => {
+    const list = F.snips.filter((x) => x.kind === k);
+    return h('section', { class: 'card' }, h('h3', {}, k === 'hashtags' ? 'Grupos de hashtags' : 'Modelos de legenda'),
+      list.length ? h('div', { class: 'snip-list' }, ...list.map((x) => h('div', { class: 'snip-item' },
+        h('div', { class: 'snip-head' }, h('b', {}, x.name), x.client_id ? null : h('span', { class: 'pill st-draft' }, 'todos os clientes'),
+          h('span', { class: 'spacer' }), h('button', { class: 'btn ghost sm', onclick: () => copyText(x.text, 'Copiado.') }, 'Copiar'),
+          confirmButton('Apagar', 'Confirmar', async () => { await api(`/api/pasta?r=snippets&id=${x.id}`, { method: 'DELETE' }); F.snips = F.snips.filter((y) => y.id !== x.id); render(); }, 'btn ghost sm')),
+        h('p', { class: k === 'hashtags' ? 'mono snip-text tags' : 'snip-text' }, x.text))))
+        : h('p', { class: 'muted', style: 'margin:0' }, k === 'hashtags' ? 'Nenhum grupo ainda. Crie grupos por tema (ex.: "Pet geral", "Banho e tosa", "Cuiabá") e adicione com 1 clique na legenda.' : 'Nenhum modelo ainda. Bom para assinaturas, CTAs e formatos que se repetem.'));
+  };
+  return [h('section', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Produtividade'), h('h3', {}, 'Novo modelo'),
+    h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'sn-kind' }, 'Tipo'), kind), h('div', { class: 'field' }, h('label', { for: 'sn-name' }, 'Nome'), name)),
+    h('div', { class: 'field' }, h('label', { for: 'sn-text' }, 'Texto'), text),
+    h('label', { class: 'toggle' }, all, h('span', {}, 'Usar em todos os clientes (ex.: assinatura da agência)')), add),
+  h('div', { class: 'grid-2' }, section('hashtags'), section('caption'))];
 }

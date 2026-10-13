@@ -197,3 +197,49 @@ alter table app_state enable row level security;
 -- ───────────── AGENDADOR
 -- Não precisa editar nada aqui: depois de publicar o app, entre no painel,
 -- abra a aba "Ajustes" e copie o comando pronto (já vem com o seu endereço e o código secreto).
+
+-- atualização 9: notificações, backup, modelos, banco de mídia, e-mails, nota fiscal e 2 etapas
+create table if not exists push_subs (
+  id          uuid primary key default gen_random_uuid(),
+  endpoint    text not null unique,
+  p256dh      text not null,
+  auth        text not null,
+  role        text not null default 'admin',
+  user_id     uuid,
+  device      text,
+  created_at  timestamptz not null default now()
+);
+alter table push_subs enable row level security;
+
+create table if not exists snippets (
+  id          uuid primary key default gen_random_uuid(),
+  client_id   uuid references clients(id) on delete cascade,
+  kind        text not null check (kind in ('caption','hashtags')),
+  name        text not null,
+  text        text not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists snippets_client on snippets (client_id, kind);
+alter table snippets enable row level security;
+
+create table if not exists media_bank (
+  id          uuid primary key default gen_random_uuid(),
+  client_id   uuid not null references clients(id) on delete cascade,
+  url         text not null,
+  path        text,
+  name        text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists media_bank_client on media_bank (client_id, created_at desc);
+alter table media_bank enable row level security;
+
+create table if not exists mail_log (key text primary key, sent_at timestamptz not null default now());
+alter table mail_log enable row level security;
+
+alter table users add column if not exists totp_secret text;
+
+alter table payments add column if not exists nf_id text;
+alter table payments add column if not exists nf_status text;
+alter table payments add column if not exists nf_url text;
+alter table client_files drop constraint if exists client_files_category_check;
+alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice'));

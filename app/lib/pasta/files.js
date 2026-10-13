@@ -7,7 +7,7 @@ import { route, send, readRaw, query, need, redirect } from '../http.js';
 import { requireStaff } from '../auth.js';
 import { db, docs } from '../db.js';
 
-const CATEGORIES = ['contract', 'receipt', 'report', 'other', 'brand', 'briefing'];
+const CATEGORIES = ['contract', 'receipt', 'report', 'other', 'brand', 'briefing', 'invoice'];
 const TEAM_CATEGORIES = ['brand', 'briefing']; // a equipe só mexe na identidade da marca e nos anexos de pedidos
 async function who(req) {
   const u = await requireStaff(req);

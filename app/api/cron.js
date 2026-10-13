@@ -4,6 +4,8 @@ import { route, send, need } from '../lib/http.js';
 import { cronSecret } from '../lib/env.js';
 import { runPublisher } from '../lib/publisher.js';
 import { autoReports, snapshotFollowers } from '../lib/reports.js';
+import { weeklyBackup } from '../lib/backup.js';
+import { runMailer } from '../lib/mail.js';
 
 function authorized(req) {
   const given = Buffer.from(String(req.headers.authorization || ''));
@@ -20,6 +22,8 @@ async function run(req, res) {
     try { log.followers_snapshot = await snapshotFollowers(); } catch (e) { log.followers_snapshot_error = e.message; }
     try { log.auto_report = await autoReports(); } catch (e) { log.auto_report_error = e.message; }
   }
+  if (Date.now() - started < 25000) { try { log.backup = await weeklyBackup(); } catch (e) { log.backup_error = e.message; } }
+  if (Date.now() - started < 30000) { try { log.mail = await runMailer({ budgetMs: 45000 - (Date.now() - started) }); } catch (e) { log.mail_error = e.message; } }
   if (log.failed.length) console.warn('Publicador: falhas', JSON.stringify(log.failed));
   send(res, 200, log);
 }

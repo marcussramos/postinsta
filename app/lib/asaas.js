@@ -3,10 +3,12 @@
 // Fluxo: cada parcela vira uma cobrança Pix exclusiva (externalReference = mc:<cliente>:<AAAA-MM>:<parcela>).
 // Quando o cliente paga, o Asaas chama /api/pasta?r=asaas e o app dá baixa na parcela certa.
 import crypto from 'node:crypto';
-import { db } from './db.js';
+import { db, docs } from './db.js';
 import { sessionSecret, TIMEZONE } from './env.js';
 import { HttpError } from './http.js';
 import { billingMonths } from './billing.js';
+import { getState } from './appstate.js';
+import { notify } from './push.js';
 
 export const asaasReady = () => Boolean(process.env.ASAAS_API_KEY);
 export const asaasEnv = () => (process.env.ASAAS_ENV || (String(process.env.ASAAS_API_KEY || '').includes('_hmlg_') ? 'sandbox' : 'production'));
@@ -92,19 +94,24 @@ export async function cancelCharge(asaasId) {
 
 // Aviso do Asaas (webhook). Pago → baixa automática.
 export async function handleWebhook(evt) {
+  if (/^INVOICE_/.test(evt?.event || '')) return handleInvoice(evt);
   const p = evt?.payment;
   const ref = parseRef(p?.externalReference);
   if (!ref) return { ignored: true };
   if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED_IN_CASH'].includes(evt.event)) {
     const cur = await db.one('payments', { select: 'status,file_id,note', client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` });
     if (cur?.status === 'paid') return { already: true }; // o Asaas pode repetir o aviso
+    const c = await db.one('clients', { select: 'name', id: `eq.${ref.client_id}` }).catch(() => null);
     await db.upsert('payments', {
       ...ref, status: 'paid', paid_at: String(p.paymentDate || p.confirmedDate || today()).slice(0, 10),
       amount_cents: Math.round(Number(p.value) * 100), asaas_id: p.id, receipt_url: p.transactionReceiptUrl || null,
       note: 'Pix automático (Asaas)', updated_at: new Date().toISOString(),
     });
-    return { paid: ref };
+    await notify({ title: `💰 Pix recebido · ${c?.name || 'cliente'}`, body: `${(Number(p.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · parcela de ${ref.ref_month.slice(5)}/${ref.ref_month.slice(0, 4)} baixada sozinha.`, url: `/#pasta/${ref.client_id}`, tag: `pix-${p.id}` }, { adminOnly: true });
+    const nf = await issueInvoice(ref, p).catch((e) => ({ error: e.message }));
+    return { paid: ref, nf };
   }
+
   if (evt.event === 'PAYMENT_DELETED') {
     await db.update('payments', { ...Object.fromEntries(Object.entries(ref).map(([k, v]) => [k, `eq.${v}`])), status: 'eq.pending', asaas_id: `eq.${p.id}` }, { asaas_id: null, pix_payload: null, pix_url: null }).catch(() => {});
     return { deleted: ref };
@@ -117,6 +124,73 @@ export async function setupWebhook(appUrl, email) {
   const list = await asaas('/webhooks').catch(() => ({ data: [] }));
   const old = (list.data || []).find((w) => w.url === url);
   const body = { name: 'MC DIGITAL - baixa automática', url, email, enabled: true, interrupted: false, authToken: webhookToken(), sendType: 'SEQUENTIALLY',
-    events: ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED'] };
+    events: ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED', 'INVOICE_AUTHORIZED', 'INVOICE_ERROR', 'INVOICE_CANCELED'] };
   return old ? asaas(`/webhooks/${old.id}`, { method: 'PUT', body }) : asaas('/webhooks', { method: 'POST', body });
+}
+
+// ───────── Nota fiscal de serviço (NFS-e) automática pelo Asaas
+// Configuração em Ajustes (app_state "nf_settings"). A conta Asaas precisa estar com a emissão de notas configurada
+// (Notas fiscais → Configurações: dados da prefeitura, regime tributário e certificado/senha, conforme a cidade).
+export const NF_DEFAULTS = { enabled: false, service_description: 'Gestão de redes sociais (social media)', municipal_service_code: '', municipal_service_name: '', municipal_service_id: '', iss: 0, observations: '' };
+export async function nfSettings() { return { ...NF_DEFAULTS, ...((await getState('nf_settings')) || {}) }; }
+const isoToday = () => today();
+
+export async function issueInvoice(ref, payment, { force = false } = {}) {
+  const cfg = await nfSettings();
+  if (!cfg.enabled && !force) return { skipped: 'desligada' };
+  if (!asaasReady()) throw new HttpError(503, 'Pix automático (Asaas) desligado.');
+  const cur = await db.one('payments', { select: 'nf_id,nf_status,asaas_id', client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` }).catch(() => null);
+  if (cur?.nf_id && cur.nf_status !== 'error') return { already: cur.nf_id };
+  const paymentId = payment?.id || cur?.asaas_id;
+  if (!paymentId) throw new HttpError(400, 'Esta parcela não foi paga pelo Pix do Asaas: emita a nota direto no site da prefeitura ou no Asaas.');
+  const value = Number(payment?.value) || (await asaas(`/payments/${paymentId}`)).value;
+  const body = {
+    payment: paymentId, serviceDescription: cfg.service_description || NF_DEFAULTS.service_description,
+    observations: cfg.observations || `Mensalidade ${ref.ref_month.slice(5)}/${ref.ref_month.slice(0, 4)}`, value, deductions: 0, effectiveDate: isoToday(),
+    externalReference: refOf(ref.client_id, ref.ref_month, ref.installment),
+    municipalServiceId: cfg.municipal_service_id || undefined, municipalServiceCode: cfg.municipal_service_code || undefined, municipalServiceName: cfg.municipal_service_name || cfg.service_description,
+    taxes: { retainIss: false, iss: Number(cfg.iss) || 0, cofins: 0, csll: 0, inss: 0, ir: 0, pis: 0 },
+  };
+  try {
+    const inv = await asaas('/invoices', { method: 'POST', body });
+    await db.update('payments', { client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` }, { nf_id: inv.id, nf_status: 'scheduled' }).catch(() => {});
+    return { scheduled: inv.id };
+  } catch (e) {
+    await db.update('payments', { client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` }, { nf_status: 'error' }).catch(() => {});
+    await notify({ title: '⚠️ Nota fiscal não emitida', body: e.message.slice(0, 180), url: `/#pasta/${ref.client_id}` }, { adminOnly: true });
+    throw e;
+  }
+}
+
+async function handleInvoice(evt) {
+  const inv = evt.invoice || {};
+  const ref = parseRef(inv.externalReference);
+  if (!ref) return { ignored: true };
+  const where = { client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` };
+  if (evt.event === 'INVOICE_AUTHORIZED') {
+    const cur = await db.one('payments', { select: 'nf_status', ...where }).catch(() => null);
+    if (cur?.nf_status === 'authorized') return { already: true };
+    let fileId = null;
+    if (inv.pdfUrl) {
+      try {
+        const r = await fetch(inv.pdfUrl);
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (r.ok && buf.subarray(0, 4).toString() === '%PDF') {
+          const name = `Nota fiscal ${inv.number || ''} - ${ref.ref_month.slice(5)}-${ref.ref_month.slice(0, 4)}${ref.installment > 1 ? ` (parcela ${ref.installment})` : ''}.pdf`.replace(/\s+/g, ' ');
+          const path = `${ref.client_id}/invoice/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.pdf`;
+          await docs.upload(path, buf, 'application/pdf');
+          fileId = (await db.insert('client_files', { client_id: ref.client_id, category: 'invoice', name, path, mime: 'application/pdf', size: buf.length, ref_month: ref.ref_month })).id;
+        }
+      } catch (e) { console.warn('Nota fiscal: não consegui baixar o PDF', e.message); }
+    }
+    await db.update('payments', where, { nf_id: inv.id || null, nf_status: 'authorized', nf_url: inv.pdfUrl || null });
+    return { invoice: 'authorized', file_id: fileId };
+  }
+  if (evt.event === 'INVOICE_ERROR') {
+    await db.update('payments', where, { nf_status: 'error' }).catch(() => {});
+    await notify({ title: '⚠️ A prefeitura recusou a nota fiscal', body: String(inv.statusDescription || 'Veja os detalhes em Notas fiscais no Asaas.').slice(0, 180), url: `/#pasta/${ref.client_id}` }, { adminOnly: true });
+    return { invoice: 'error' };
+  }
+  if (evt.event === 'INVOICE_CANCELED') { await db.update('payments', where, { nf_status: 'canceled' }).catch(() => {}); return { invoice: 'canceled' }; }
+  return { ignored: true };
 }

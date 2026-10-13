@@ -6,6 +6,7 @@ import { TIMEZONE } from '../lib/env.js';
 import { CLIENT_CAN_DECIDE } from '../lib/posts.js';
 import { logEvent } from '../lib/events.js';
 import { recentFeed } from '../lib/feed.js';
+import { notify } from '../lib/push.js';
 
 async function clientByToken(t) {
   need(t && /^[0-9a-f]{32,}$/.test(t), 404, 'Link de aprovação inválido.');
@@ -51,6 +52,10 @@ export default route({
     }, patch);
     need(row, 409, 'Este post já foi publicado ou saiu da fila de aprovação.');
     await logEvent(row, body.decision === 'approve' ? 'approved' : 'changes_requested', feedback || null);
+    const what = row.title || (row.caption || '').split('\n')[0].slice(0, 80) || 'post';
+    await notify(body.decision === 'approve'
+      ? { title: `✅ ${c.name} aprovou`, body: `${what}${feedback ? ` — “${feedback.slice(0, 100)}”` : ''}`, url: '/#agenda', tag: `post-${row.id}` }
+      : { title: `✏️ ${c.name} pediu ajuste`, body: `${what}: “${feedback.slice(0, 140)}”`, url: '/#fluxo', tag: `post-${row.id}` });
     send(res, 200, { id: row.id, status: row.status, client_feedback: row.client_feedback, decided_at: row.decided_at });
   },
 });

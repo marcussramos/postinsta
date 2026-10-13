@@ -12,14 +12,16 @@ const LIST_FIELDS = '*';
 async function removeImageIfUnused(path) {
   if (!path) return;
   const still = await db.select('posts', { select: 'id', image_path: `eq.${path}`, limit: 1 });
-  if (!still.length) await storage.remove(path);
+  const inBank = await db.select('media_bank', { select: 'id', path: `eq.${path}`, limit: 1 }).catch(() => []); // foto guardada no banco de mídia
+  if (!still.length && !inBank.length) await storage.remove(path);
 }
 async function removeMediaIfUnused(media) {
   for (const m of media || []) {
     if (!m?.path) continue;
     const still = await db.select('posts', { select: 'id', media: `cs.${JSON.stringify([{ path: m.path }])}`, limit: 1 }).catch(() => [1]);
     const asCover = await db.select('posts', { select: 'id', image_path: `eq.${m.path}`, limit: 1 }).catch(() => [1]);
-    if (!still.length && !asCover.length) await storage.remove(m.path);
+    const inBank = await db.select('media_bank', { select: 'id', path: `eq.${m.path}`, limit: 1 }).catch(() => []);
+    if (!still.length && !asCover.length && !inBank.length) await storage.remove(m.path);
   }
 }
 const pathsOf = (media) => new Set((media || []).map((m) => m.path).filter(Boolean));
