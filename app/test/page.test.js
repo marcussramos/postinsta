@@ -20,14 +20,14 @@ test('aprovação: imagem da marca e título com o cliente e a quantidade', asyn
   const r = await get(`/aprovar?t=${t}`);
   assert.equal(r.status, 200);
   assert.equal(og(r.html, 'title'), '1 post para aprovar · MY PET &amp; Cia');
-  assert.equal(og(r.html, 'image'), 'http://localhost:4418/og/aprovacao.jpg');
+  assert.equal(og(r.html, 'image'), 'http://localhost:4418/og/v2/aprovacao.jpg');
   assert.match(r.html, /<title>1 post para aprovar/);
   assert.match(r.html, /<script type="module" src="\/aprovar.js">|aprovar\.js/);
   // link inválido: prévia genérica, sem erro
   const g = await get('/aprovar?t=zzz');
   assert.equal(og(g.html, 'title'), 'Posts para aprovar');
   // a imagem existe
-  assert.equal((await fetch(`${base}/og/aprovacao.jpg`)).status, 200);
+  assert.equal((await fetch(`${base}/og/v2/aprovacao.jpg`)).status, 200);
 });
 
 test('relatório, área do cliente e proposta têm prévia própria; rascunho não vaza', async () => {
