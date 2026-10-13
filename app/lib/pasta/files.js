@@ -7,8 +7,8 @@ import { route, send, readRaw, query, need, redirect } from '../http.js';
 import { requireStaff } from '../auth.js';
 import { db, docs } from '../db.js';
 
-const CATEGORIES = ['contract', 'receipt', 'report', 'other', 'brand', 'briefing', 'invoice'];
-const TEAM_CATEGORIES = ['brand', 'briefing']; // a equipe só mexe na identidade da marca e nos anexos de pedidos
+const CATEGORIES = ['contract', 'receipt', 'report', 'other', 'brand', 'briefing', 'invoice', 'audio'];
+const TEAM_CATEGORIES = ['brand', 'briefing', 'audio']; // a equipe só mexe na identidade da marca e nos anexos de pedidos
 async function who(req) {
   const u = await requireStaff(req);
   return { u, allowed: (cat) => u.role === 'admin' || TEAM_CATEGORIES.includes(cat) };
@@ -34,7 +34,7 @@ export default route({
     if (q.id) {
       const f = await db.one('client_files', { select: 'path,name,category', id: `eq.${q.id}` });
       need(f && allowed(f.category), 404, 'Arquivo não encontrado.');
-      return redirect(res, await docs.signedUrl(f.path, { expiresIn: 120, downloadName: q.download ? f.name : undefined }), { 'Cache-Control': 'no-store' });
+      return redirect(res, await docs.signedUrl(f.path, { expiresIn: f.category === 'audio' ? 1800 : 120, downloadName: q.download ? f.name : undefined }), { 'Cache-Control': 'no-store' });
     }
     need(q.client, 400, 'Cliente não informado.');
     const params = { select: 'id,client_id,category,name,mime,size,ref_month,created_at', client_id: `eq.${q.client}`, order: 'created_at.desc', limit: 500 };

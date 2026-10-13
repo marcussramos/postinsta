@@ -291,10 +291,12 @@ function viewCalendar() {
       const cell = h('div', { class: `cal-day${out ? ' out' : ''}${d === today ? ' today' : ''}${S.cal.day === d ? ' sel' : ''}`, role: 'gridcell', tabindex: 0,
         onclick: (e) => {
           if (e.target.closest('.cal-chip, .cal-tile, .cal-more')) return;
-          if (window.matchMedia('(max-width: 640px)').matches) { S.cal.day = d; render(); return; }
-          openPost(null, { date: d, title: (dayDates.get(d) || [])[0]?.name });
+          openDay(d, dayDates.get(d) || []);
         },
-        onkeydown: (e) => { if (e.key === 'Enter') openPost(null, { date: d }); } },
+        onkeydown: (e) => { if (e.key === 'Enter') openDay(d, dayDates.get(d) || []); },
+        ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-over'); },
+        ondragleave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-over'); },
+        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drop-over'); const p = S.cal.posts.find((x) => x.id === e.dataTransfer.getData('text/plain')); if (p && dayKey(p.scheduled_at, S.tz) !== d) reschedule(p, d, fmtTime24(p.scheduled_at)); } },
         h('div', { class: 'cal-num' }, String(Number(d.slice(8)))),
         ...(dayDates.get(d) || []).slice(0, 2).map((x) => h('div', { class: `cal-date${x.major ? ' major' : ''}`, title: `${x.name} · clique para criar um post` }, x.name)),
         h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: `dot st-${p.status}` }))),
@@ -304,23 +306,25 @@ function viewCalendar() {
           list.length > 1 ? h('span', { class: 'cal-badge' }, String(list.length)) : null) : null,
         S.cal.mode === 'thumbs'
           ? h('div', { class: 'cal-thumbs' },
-              ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`,
-                onclick: () => (i === 3 && list.length > 4 ? (S.cal.day = d, render()) : openPost(p)) },
+              ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]} · arraste para outro dia`,
+                draggable: movable(p) ? 'true' : null, ondragstart: (e) => e.dataTransfer.setData('text/plain', p.id),
+                onclick: () => (i === 3 && list.length > 4 ? openDay(d, dayDates.get(d) || []) : openPost(p)) },
                 p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
                 h('span', { class: 'cal-tile-time mono' }, `${{ REELS: '▶ ', CAROUSEL: '❐ ', STORY: '◷ ' }[p.media_type] || ''}${fmtTime(p.scheduled_at, S.tz)}`),
                 h('span', { class: 'cal-tile-dot', 'aria-hidden': 'true' }),
                 i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null)))
           : h('div', { class: 'cal-list' },
-              ...list.slice(0, 4).map((p) => h('button', { class: `cal-chip st-${p.status}`, title: `${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`, onclick: () => openPost(p) },
+              ...list.slice(0, 4).map((p) => h('button', { class: `cal-chip st-${p.status}`, title: `${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`, onclick: () => openPost(p),
+                draggable: movable(p) ? 'true' : null, ondragstart: (e) => e.dataTransfer.setData('text/plain', p.id) },
                 h('span', { class: 'cal-chip-dot', 'aria-hidden': 'true' }),
                 h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
                 h('span', { class: 'cal-chip-t' }, S.fClient ? postLabel(p) : `${clientName(p.client_id)} · ${postLabel(p)}`))),
-              list.length > 4 ? h('button', { class: 'cal-more', onclick: () => { S.cal.day = d; render(); } }, `+${list.length - 4} mais`) : null));
+              list.length > 4 ? h('button', { class: 'cal-more', onclick: () => openDay(d, dayDates.get(d) || []) }, `+${list.length - 4} mais`) : null));
       return cell;
     }));
 
   const out = [head, clientFilter(), grid,
-    h('p', { class: 'muted hint-desk', style: 'margin:0;font-size:13.5px' }, 'Clique num dia vazio para criar um post nessa data.')];
+    h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, 'Clique num dia para ver os horários e programar. Arraste um post para outro dia para remarcar.')];
   if (S.cal.day) {
     const list = byDay.get(S.cal.day) || [];
     out.push(h('section', { class: 'day' },
@@ -342,18 +346,28 @@ const COLUMNS = [
   { id: 'published', label: 'Publicado' },
 ];
 
+// cor fixa por cliente (etiqueta no estilo Trello)
+const LABEL_COLORS = ['#4BCE97', '#F5CD47', '#FEA362', '#F87168', '#9F8FEF', '#579DFF', '#6CC3E0', '#94C748', '#E774BB', '#8590A2'];
+function clientColor(id) {
+  const i = S.clients.findIndex((c) => c.id === id);
+  return LABEL_COLORS[(i < 0 ? 0 : i) % LABEL_COLORS.length];
+}
+const initials = (name) => (name || '?').split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w[0] || '')).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
 function viewBoard() {
   if (!S.clients.length) return [h('div', { class: 'page-head' }, h('h1', {}, 'Fluxo')), noClients()];
+  const q = (S.boardQ || '').trim().toLowerCase();
   const posts = S.posts.filter((p) => !S.fClient || p.client_id === S.fClient)
-    .filter((p) => p.status !== 'published' || Date.now() - new Date(p.published_at || p.scheduled_at) < 7 * 86400e3);
-  const board = h('div', { class: 'board' }, ...COLUMNS.map((col) => {
-    const items = posts.filter((p) => p.status === col.id || col.also?.includes(p.status));
-    const colEl = h('section', { class: 'col', 'data-col': col.id, 'aria-label': col.label },
-      h('header', { class: 'col-head' },
-        h('span', { class: `pill st-${col.id}` }, col.label), h('span', { class: 'eyebrow' }, String(items.length)),
-        col.id === 'idea' ? h('button', { class: 'btn ghost sm', style: 'margin-left:auto', onclick: () => openPost(null, { stage: 'idea' }) }, '+ Ideia') : null),
-      h('div', { class: 'col-body' }, ...items.map((p) => boardCard(p, col)),
-        items.length ? null : h('p', { class: 'muted col-empty' }, col.drop ? 'Arraste um post para cá' : 'Nada aqui')));
+    .filter((p) => p.status !== 'published' || Date.now() - new Date(p.published_at || p.scheduled_at) < 7 * 86400e3)
+    .filter((p) => !q || `${p.title || ''} ${p.caption || ''} ${clientName(p.client_id)}`.toLowerCase().includes(q));
+  const sortKey = (p) => (p.scheduled_at ? new Date(p.scheduled_at).getTime() : Infinity);
+  const board = h('div', { class: 'tboard' }, ...COLUMNS.map((col) => {
+    const items = posts.filter((p) => p.status === col.id || col.also?.includes(p.status)).sort((a, b) => sortKey(a) - sortKey(b));
+    const body = h('div', { class: 'tlist-cards' }, ...items.map((p) => boardCard(p, col)));
+    const colEl = h('section', { class: `tlist${col.drop ? ' droppable' : ''}`, 'data-col': col.id, 'aria-label': col.label },
+      h('header', { class: 'tlist-head' }, h('span', { class: `tlist-dot st-${col.id}`, 'aria-hidden': 'true' }), h('h2', {}, col.label), h('span', { class: 'tlist-n' }, String(items.length))),
+      body,
+      ['idea', 'draft', 'internal_review'].includes(col.id) ? quickAdd(col) : h('div', { class: 'tlist-foot muted' }, col.id === 'pending_approval' ? 'Envie pelo cartão ou arraste para cá' : col.id === 'approved' ? 'Sai sozinho no horário' : col.id === 'published' ? 'Últimos 7 dias' : 'Volta para produção ao ajustar'));
     if (col.drop) {
       colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.classList.add('over'); });
       colEl.addEventListener('dragleave', (e) => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove('over'); });
@@ -367,28 +381,68 @@ function viewBoard() {
     }
     return colEl;
   }));
+  const search = h('input', { type: 'search', class: 'tsearch', placeholder: 'Filtrar cartões…', value: S.boardQ || '', 'aria-label': 'Filtrar cartões',
+    oninput: (e) => { S.boardQ = e.target.value; clearTimeout(S.boardT); S.boardT = setTimeout(() => { render(); const el = document.querySelector('.tsearch'); el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); }, 250); } });
   return [
     h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Workflow de criação e aprovação'), h('h1', {}, 'Fluxo')), h('div', { class: 'spacer' }),
-      h('button', { class: 'btn ai sm', onclick: () => openPlan({}) }, '✨ Planejar o mês com IA')),
+      h('div', { class: 'actions' }, search, h('button', { class: 'btn ai sm', onclick: () => openPlan({}) }, '✨ Planejar o mês com IA'))),
     clientFilter(),
-    h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, 'Arraste os cards entre as etapas ou use o botão de avançar. Para ir ao cliente ou à fila, o post precisa de imagem e data.'),
-    h('div', { class: 'board-wrap' }, board),
+    h('div', { class: 'tboard-wrap' }, board),
+    h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Arraste os cartões entre as listas. Para ir ao cliente ou à fila, o post precisa de mídia e data.'),
   ];
 }
 
+// "+ Adicionar um cartão" no fim da lista (cria ideia / post em produção / revisão só com a pauta)
+function quickAdd(col) {
+  const stage = { idea: 'idea', draft: 'production', internal_review: 'internal_review' }[col.id];
+  const wrap = h('div', { class: 'tadd' });
+  const closed = () => wrap.replaceChildren(h('button', { class: 'tadd-btn', type: 'button', onclick: opened }, '+ Adicionar um cartão'));
+  function opened() {
+    const ta = h('textarea', { class: 'tadd-ta', placeholder: 'Pauta do post (ex.: Dica de banho no inverno)', rows: 3, maxlength: 140 });
+    const sel = h('select', { class: 'tadd-sel', 'aria-label': 'Cliente' }, ...S.clients.map((c) => h('option', { value: c.id, selected: c.id === (S.fClient || S.lastClient || S.clients[0].id) }, c.name)));
+    const add = async () => {
+      const title = ta.value.trim(); if (!title) return ta.focus();
+      try {
+        const saved = await api('/api/posts', { method: 'POST', body: { client_id: sel.value, title, stage: stage === 'production' ? 'draft' : stage } });
+        S.lastClient = sel.value; upsert(saved, false); render();
+        const again = document.querySelector(`.tlist[data-col="${col.id}"] .tadd-btn`); again?.click();
+      } catch (e) { toast(e.message, true); }
+    };
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); } if (e.key === 'Escape') closed(); });
+    wrap.replaceChildren(h('div', { class: 'tadd-form' }, ta, S.clients.length > 1 ? sel : null,
+      h('div', { class: 'tadd-act' }, h('button', { class: 'btn primary sm', type: 'button', onclick: add }, 'Adicionar cartão'), h('button', { class: 'tadd-x', type: 'button', 'aria-label': 'Cancelar', onclick: closed }, '✕'))));
+    ta.focus();
+  }
+  closed();
+  return wrap;
+}
+
 function boardCard(p, col) {
-  const card = h('article', { class: 'bcard', draggable: 'true', tabindex: 0, onclick: (e) => { if (!e.target.closest('button')) openPost(p); },
+  const late = isLate(p);
+  const t = p.scheduled_at ? new Date(p.scheduled_at) : null;
+  const dateBadge = t ? h('span', { class: `tbadge${p.status === 'published' ? ' ok' : late ? ' late' : t - Date.now() < 2 * 864e5 && t > Date.now() ? ' soon' : ''}`, title: late ? 'Horário já passou' : 'Data de publicação' },
+    '🕒 ', `${fmtDate(p.scheduled_at, S.tz)} ${fmtTime(p.scheduled_at, S.tz)}`) : h('span', { class: 'tbadge muted' }, 'sem data');
+  const fmt = { REELS: 'Reels', CAROUSEL: `Carrossel${(p.media || []).length ? ` · ${(p.media || []).length}` : ''}`, STORY: 'Story' }[p.media_type] || (p.image_url ? 'Foto' : null);
+  const card = h('article', { class: `tcard${p.status === 'failed' ? ' failed' : ''}`, draggable: 'true', tabindex: 0, onclick: (e) => { if (!e.target.closest('button')) openPost(p); },
     onkeydown: (e) => { if (e.key === 'Enter') openPost(p); } },
-    h('div', { class: 'bcard-top' }, thumb(p, 'bthumb'),
-      h('div', { class: 'bcard-txt' },
-        h('b', {}, postLabel(p)),
-        h('span', { class: 'muted' }, clientName(p.client_id)),
-        h('span', { class: 'mono muted', style: 'font-size:12px' }, p.scheduled_at ? `${fmtDate(p.scheduled_at, S.tz)} · ${fmtTime(p.scheduled_at, S.tz)}` : 'sem data'))),
-    p.status === 'changes_requested' && p.client_feedback ? h('div', { class: 'note' }, `“${p.client_feedback}”`) : null,
-    p.status === 'failed' ? h('div', { class: 'note fail' }, `Falhou: ${p.last_error || ''}`) : null,
-    p.status === 'publishing' ? h('span', { class: 'pill st-publishing' }, 'Publicando') : null,
-    col.next ? h('button', { class: 'btn sm', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
-    p.status === 'changes_requested' ? h('button', { class: 'btn sm', onclick: () => openPost(p) }, 'Ajustar') : null);
+    p.image_url ? h('div', { class: `tcover${p.media_type === 'STORY' || p.media_type === 'REELS' ? ' tall' : ''}` }, h('img', { src: p.image_url, alt: '', loading: 'lazy', draggable: 'false' })) : null,
+    h('div', { class: 'tcard-in' },
+      h('div', { class: 'tlabels' },
+        h('span', { class: 'tlabel', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, clientName(p.client_id)),
+        fmt ? h('span', { class: 'tlabel fmt' }, fmt) : null,
+        (p.notes || '').startsWith('✨') ? h('span', { class: 'tlabel ia', title: 'Planejado com IA' }, '✨ IA') : null),
+      h('div', { class: 'ttitle' }, postLabel(p)),
+      p.status === 'changes_requested' && (p.client_feedback || p.feedback_audio) ? h('div', { class: 'tnote' }, p.feedback_audio ? '🎤 ' : '', p.client_feedback && p.client_feedback !== '🎤 Pedido por áudio' ? `“${p.client_feedback}”` : 'Ajuste pedido por áudio') : null,
+      p.status === 'failed' ? h('div', { class: 'tnote fail' }, `Falhou: ${p.last_error || ''}`) : null,
+      h('div', { class: 'tbadges' },
+        dateBadge,
+        p.status === 'publishing' ? h('span', { class: 'tbadge soon' }, 'Publicando…') : null,
+        p.caption ? h('span', { class: 'tbadge', title: 'Tem legenda' }, '≡') : null,
+        p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
+        h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
+      col.next || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
+        col.next ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
+        p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null) : null));
   card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; card.classList.add('dragging'); });
   card.addEventListener('dragend', () => card.classList.remove('dragging'));
   return card;
@@ -598,7 +652,7 @@ function openPost(post = null, opts = {}) {
 
   // Data: post existente usa a dele; dia clicado no calendário; ideia começa sem data; resto = amanhã 19h.
   const when = post?.scheduled_at ? partsInTz(post.scheduled_at, S.tz)
-    : opts.date ? { date: opts.date, time: '19:00' }
+    : opts.date ? { date: opts.date, time: opts.time || '19:00' }
     : st === 'idea' ? { date: '', time: '' }
     : { date: partsInTz(new Date(Date.now() + 86400e3).toISOString(), S.tz).date, time: '19:00' };
   const dIn = h('input', { type: 'date', id: 'f-date', value: when.date, disabled: locked });
@@ -626,7 +680,9 @@ function openPost(post = null, opts = {}) {
       h('span', { class: `pill st-${post.status}` }, STATUS_LABEL[post.status]),
       post.decided_at && ['approved', 'changes_requested'].includes(post.status) ? h('span', { class: 'muted', style: 'font-size:13px' }, `decidido em ${fmtDate(post.decided_at, S.tz)} ${fmtTime(post.decided_at, S.tz)}`) : null,
       post.ig_permalink ? h('a', { href: post.ig_permalink, target: '_blank', rel: 'noopener' }, 'Ver no Instagram ↗') : null));
-    if (post.status === 'changes_requested' && post.client_feedback) body.push(h('div', { class: 'feedback' }, h('b', {}, 'O cliente pediu:'), h('span', {}, post.client_feedback)));
+    if (post.status === 'changes_requested' && (post.client_feedback || post.feedback_audio)) body.push(h('div', { class: 'feedback' }, h('b', {}, 'O cliente pediu:'),
+      post.client_feedback && !(post.feedback_audio && post.client_feedback === '🎤 Pedido por áudio') ? h('span', {}, post.client_feedback) : null,
+      post.feedback_audio ? h('div', { class: 'fb-audio' }, h('span', {}, '🎤 Áudio do cliente'), h('audio', { controls: true, preload: 'metadata', src: `/api/pasta?r=files&id=${post.feedback_audio}&open=1` })) : null));
     if (post.status === 'approved' && post.client_feedback) body.push(h('div', { class: 'feedback' }, h('b', {}, 'Comentário do cliente:'), h('span', {}, post.client_feedback)));
     if (post.last_error && ['failed', 'approved'].includes(post.status)) body.push(h('div', { class: 'errorbox' }, h('b', {}, post.status === 'failed' ? 'Não publicou: ' : 'Última tentativa: '), post.last_error));
     if (post.status === 'pending_approval') body.push(notifyBox(clientById(post.client_id)));
@@ -2497,4 +2553,87 @@ function folderSnippets(c) {
     h('div', { class: 'field' }, h('label', { for: 'sn-text' }, 'Texto'), text),
     h('label', { class: 'toggle' }, all, h('span', {}, 'Usar em todos os clientes (ex.: assinatura da agência)')), add),
   h('div', { class: 'grid-2' }, section('hashtags'), section('caption'))];
+}
+
+// ───────────────────────── agenda do dia (horários)
+const STATUS_COLOR = { idea: '#6B4FC4', draft: 'var(--s-draft)', internal_review: 'var(--s-draft)', pending_approval: 'var(--s-wait)', changes_requested: 'var(--s-change)', approved: 'var(--s-ok)', publishing: 'var(--s-pub)', published: 'var(--s-pub)', failed: 'var(--s-fail)' };
+const movable = (p) => !['publishing', 'published'].includes(p.status);
+const fmtTime24 = (iso) => partsInTz(iso, S.tz).time;
+async function reschedule(p, date, time) {
+  try {
+    const saved = await api(`/api/posts?id=${p.id}`, { method: 'PATCH', body: { scheduled_at: zonedToISO(date, time, S.tz) } });
+    upsert(saved, false);
+    const i = S.cal.posts.findIndex((x) => x.id === p.id); if (i >= 0) S.cal.posts[i] = { ...S.cal.posts[i], ...saved };
+    render();
+    toast(`Remarcado para ${fmtDay(date).slice(0, 5)} às ${time}.${['pending_approval', 'approved'].includes(saved.status) ? ' O status continua o mesmo.' : ''}`);
+    return saved;
+  } catch (e) { toast(e.message, true); return null; }
+}
+function openDay(d, special = []) {
+  const title = fmtDate(zonedToISO(d, '12:00', S.tz), S.tz, true);
+  const box = h('div', { class: 'dayplan' });
+  let best = [];
+  const dayPosts = () => S.cal.posts.filter((p) => p.scheduled_at && dayKey(p.scheduled_at, S.tz) === d && (!S.fClient || p.client_id === S.fClient))
+    .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const weekday = new Date(`${d}T12:00:00Z`).getUTCDay();
+  const isPast = d < todayLocal();
+  let openSlot = null;
+  const draw = () => {
+    const posts = dayPosts();
+    const hours = new Set(Array.from({ length: 18 }, (_, i) => i + 6)); // 06h–23h
+    posts.forEach((p) => hours.add(Number(fmtTime24(p.scheduled_at).slice(0, 2))));
+    const bestHours = new Set(best.filter((b) => b.weekday === weekday).map((b) => b.hour));
+    box.replaceChildren(
+      special.length ? h('div', { class: 'dayplan-dates' }, ...special.map((x) => h('span', { class: `cal-date${x.major ? ' major' : ''}` }, `🎉 ${x.name}`))) : null,
+      h('div', { class: 'muted', style: 'font-size:13px' }, posts.length ? `${posts.length} programaç${posts.length > 1 ? 'ões' : 'ão'} neste dia.` : 'Nada programado ainda.',
+        bestHours.size ? ' ★ = melhor horário do perfil.' : '', ' Toque num horário para programar; arraste um post para outro horário.'),
+      h('div', { class: 'slots' }, ...[...hours].sort((a, b) => a - b).map((hh) => {
+        const hs = String(hh).padStart(2, '0');
+        const inSlot = posts.filter((p) => Number(fmtTime24(p.scheduled_at).slice(0, 2)) === hh);
+        const slot = h('div', { class: `slot${bestHours.has(hh) ? ' best' : ''}${openSlot === hh ? ' open' : ''}` },
+          h('div', { class: 'slot-time mono' }, `${hs}:00`, bestHours.has(hh) ? h('span', { class: 'slot-star', title: 'Melhor horário do perfil' }, '★') : null),
+          h('div', { class: 'slot-body' },
+            ...inSlot.map((p) => h('button', { class: 'slot-post', style: `border-left-color:${STATUS_COLOR[p.status] || 'var(--line)'}`, type: 'button', draggable: movable(p) ? 'true' : null,
+              ondragstart: (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; },
+              onclick: () => { close(); openPost(p); } },
+              p.image_url ? h('img', { src: p.image_url, alt: '' }) : h('span', { class: 'slot-noimg' }, p.status === 'idea' ? '💡' : '🖼'),
+              h('span', { class: 'slot-main' }, h('b', {}, `${fmtTime24(p.scheduled_at)} · ${clientName(p.client_id)}`), h('span', {}, postLabel(p))),
+              h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]))),
+            openSlot === hh ? slotForm(hh) : h('button', { class: 'slot-add', type: 'button', onclick: () => { openSlot = hh; draw(); box.querySelector('.slot-form textarea')?.focus(); } }, isPast ? '+' : `+ Programar às ${hs}:00`)));
+        slot.addEventListener('dragover', (e) => { e.preventDefault(); slot.classList.add('drop-over'); });
+        slot.addEventListener('dragleave', (e) => { if (!slot.contains(e.relatedTarget)) slot.classList.remove('drop-over'); });
+        slot.addEventListener('drop', async (e) => {
+          e.preventDefault(); slot.classList.remove('drop-over');
+          const p = S.cal.posts.find((x) => x.id === e.dataTransfer.getData('text/plain'));
+          if (!p || Number(fmtTime24(p.scheduled_at).slice(0, 2)) === hh) return;
+          if (await reschedule(p, d, `${hs}:${fmtTime24(p.scheduled_at).slice(3)}`)) draw();
+        });
+        return slot;
+      })));
+  };
+  function slotForm(hh) {
+    const hs = String(hh).padStart(2, '0');
+    const sel = h('select', { 'aria-label': 'Cliente' }, ...S.clients.map((c) => h('option', { value: c.id, selected: c.id === (S.fClient || S.lastClient || S.clients[0].id) }, c.name)));
+    const min = h('select', { 'aria-label': 'Minutos' }, ...['00', '15', '30', '45'].map((m) => h('option', { value: m }, `${hs}:${m}`)));
+    const ta = h('textarea', { rows: 2, maxlength: 140, placeholder: special[0] ? `Ex.: ${special[0].name}` : 'Pauta do post (ex.: Promoção de banho e tosa)' });
+    const add = async (full) => {
+      const time = `${hs}:${min.value}`;
+      if (full) { close(); return openPost(null, { date: d, time, client: sel.value, title: ta.value.trim() || special[0]?.name }); }
+      const title = ta.value.trim(); if (!title) return ta.focus();
+      try {
+        const saved = await api('/api/posts', { method: 'POST', body: { client_id: sel.value, title, stage: 'draft', scheduled_at: zonedToISO(d, time, S.tz) } });
+        S.lastClient = sel.value; upsert(saved, false); if (!S.cal.posts.some((x) => x.id === saved.id)) S.cal.posts.push(saved);
+        openSlot = null; draw(); render(); toast(`Programado: ${clientName(saved.client_id)} às ${time} (em produção).`);
+      } catch (e) { toast(e.message, true); }
+    };
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(false); } if (e.key === 'Escape') { openSlot = null; draw(); } });
+    return h('div', { class: 'slot-form' }, h('div', { class: 'slot-form-row' }, sel, min), ta,
+      h('div', { class: 'slot-form-row' }, h('button', { class: 'btn primary sm', type: 'button', onclick: () => add(false) }, 'Programar'),
+        h('button', { class: 'btn sm', type: 'button', onclick: () => add(true) }, 'Abrir editor completo'),
+        h('button', { class: 'linkish', type: 'button', onclick: () => { openSlot = null; draw(); } }, 'Cancelar')));
+  }
+  draw();
+  const cid = S.fClient || (S.clients.length === 1 ? S.clients[0].id : null);
+  if (cid) api(`/api/pasta?r=besttime&client=${cid}`).then((r) => { best = r.slots || []; draw(); }).catch(() => {});
+  const close = drawer(title, [box], [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => { close(); openPost(null, { date: d, title: special[0]?.name }); } }, '+ Novo post neste dia')]);
 }

@@ -34,6 +34,20 @@
   .ch-txt { color: var(--s-change); }
   .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 600; justify-self: start; }
   .section-title { margin-top: 8px; }
+  .fb-box { display: grid; gap: 10px; }
+  .fb-box[hidden] { display: none; }
+  .rec-btn { display: flex; align-items: center; gap: 12px; text-align: left; padding: 14px; border-radius: 14px; border: 1.5px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); width: 100%; }
+  .rec-btn b { display: block; font-size: 16px; color: var(--accent); }
+  .rec-btn small { display: block; color: var(--muted); font-size: 13px; font-weight: 400; }
+  .rec-mic { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 22px; flex: none; }
+  .rec-live { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--s-fail-bg); color: var(--s-fail); font-weight: 700; }
+  .rec-live .btn { margin-left: auto; padding: 10px 14px; }
+  .rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--s-fail); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .rec-clock { font-weight: 500; }
+  .rec-done, .rec-sent { display: grid; gap: 6px; }
+  .rec-done audio, .rec-sent audio { width: 100%; }
+  .rec-actions { display: flex; gap: 16px; }
   .state { text-align: center; padding: 60px 16px; display: grid; gap: 10px; }
 </style>
 </head>

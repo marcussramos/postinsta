@@ -29,7 +29,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     requests: () => ({ id: crypto.randomUUID(), status: 'open', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     payments: () => ({ status: 'paid', amount_cents: null, paid_at: null, file_id: null, note: null, updated_at: new Date().toISOString() }),
     posts: () => ({ id: crypto.randomUUID(), status: 'draft', media_type: 'IMAGE', media: null, title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
-      ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
+      feedback_audio: null, ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   };
 

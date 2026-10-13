@@ -224,3 +224,9 @@ alter table client_files drop constraint if exists client_files_category_check;
 alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice'));
 
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V10 = `-- MC DIGITAL: atualização 10 (pedido de ajuste por áudio) — rode uma vez no SQL Editor do Supabase
+alter table client_files drop constraint if exists client_files_category_check;
+alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice','audio'));
+alter table posts add column if not exists feedback_audio uuid references client_files(id) on delete set null;
+notify pgrst, 'reload schema';`;

@@ -242,4 +242,7 @@ alter table payments add column if not exists nf_id text;
 alter table payments add column if not exists nf_status text;
 alter table payments add column if not exists nf_url text;
 alter table client_files drop constraint if exists client_files_category_check;
-alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice'));
+alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice','audio'));
+
+-- atualização 10: pedido de ajuste por áudio
+alter table posts add column if not exists feedback_audio uuid references client_files(id) on delete set null;
