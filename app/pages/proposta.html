@@ -8,56 +8,58 @@
 <meta name="referrer" content="no-referrer">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   :root {
-    --bg: #F4F3EF; --surface: #fff; --surface-2: #F8F7F3; --ink: #121317; --muted: #5F6370; --line: #E3E1DA;
-    --accent: #2B2B2B; --accent-soft: #E4E1D3; --ok: #17703F; --ok-bg: #E2F4E9; --warn-bg: #FCF1D9;
-    --display: "Poppins", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    /* identidade MC Digital: off-white, grafite e dourado */
+    --bg: #EBEBE6; --surface: #F7F7F3; --surface-2: #F1F1EC; --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF;
+    --gold: #7A6200; --gold-soft: #ECE6CF; --accent: #2B2B2B; --ok: #7A6200; --ok-bg: #ECE6CF; --warn-bg: #FCF1D9;
+    --display: "Poppins", "Helvetica Neue", Arial, sans-serif; --head: "Helvetica Neue", Helvetica, Arial, sans-serif;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--display); -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 920px; margin: 0 auto; padding: 0 18px; }
   .top { padding: 18px 0; display: flex; align-items: center; gap: 12px; }
+  .top img { width: 46px; height: 46px; }
   .brand b { display: block; font-weight: 800; letter-spacing: .14em; font-size: 14px; }
   .brand span { font-size: 10.5px; letter-spacing: .12em; color: var(--muted); }
-  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-  .hero { background: var(--ink); color: #fff; border-radius: 22px; padding: clamp(26px, 5vw, 52px); display: grid; gap: 14px; position: relative; overflow: hidden; }
-  .hero::after { content: ""; position: absolute; right: -80px; top: -80px; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(36,67,201,.55), transparent 70%); }
-  .hero .eyebrow { color: #A9AEBC; }
-  .hero h1 { margin: 0; font-size: clamp(30px, 6vw, 52px); line-height: 1.02; letter-spacing: -.02em; max-width: 14ch; }
-  .hero p { margin: 0; color: #D6D9E1; font-size: 16.5px; line-height: 1.55; max-width: 60ch; white-space: pre-wrap; }
+  .eyebrow { font-size: 12px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+  .hero { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 22px; padding: clamp(26px, 5vw, 52px); display: grid; gap: 14px; position: relative; overflow: hidden; }
+  .hero::after { content: ""; position: absolute; right: clamp(16px, 4vw, 44px); top: clamp(18px, 4vw, 40px); width: clamp(90px, 16vw, 170px); aspect-ratio: 440 / 240; opacity: .75;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 240'%3E%3Cg fill='none' stroke='%237A6200' stroke-width='4'%3E%3Cpath d='M0 2 L150 120 L0 238 L0 168 L76 120 L0 72 Z'/%3E%3Cpath d='M144 2 L294 120 L144 238 L144 168 L220 120 L144 72 Z'/%3E%3Cpath d='M288 2 L438 120 L288 238 L288 168 L364 120 L288 72 Z'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat; }
+  .hero h1 { margin: 0; font-family: var(--head); font-weight: 900; text-transform: uppercase; font-size: clamp(30px, 6vw, 54px); line-height: 1; letter-spacing: -.015em; max-width: 15ch; text-shadow: 0 5px 12px rgba(43,43,43,.16); }
+  .hero p { margin: 0; color: var(--muted); font-size: 16.5px; line-height: 1.55; max-width: 60ch; white-space: pre-wrap; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip { border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: #fff; }
+  .chip { border: 1px solid var(--gold); background: var(--gold-soft); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--ink); }
   section { margin-top: 30px; }
-  h2 { font-size: 22px; margin: 0 0 14px; letter-spacing: -.01em; }
+  h2 { font-family: var(--head); font-weight: 900; text-transform: uppercase; font-size: 22px; margin: 0 0 14px; letter-spacing: -.005em; }
   .nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
   .num { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
-  .num b { display: block; font-size: 40px; line-height: 1; letter-spacing: -.02em; }
+  .num b { display: block; font-family: var(--head); font-weight: 900; font-size: 42px; line-height: 1; letter-spacing: -.02em; color: var(--gold); }
   .num span { color: var(--muted); font-size: 14px; }
   .items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .item { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
   .check { width: 26px; height: 26px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
   .item b { display: block; font-size: 15.5px; }
   .item span { color: var(--muted); font-size: 14px; line-height: 1.45; }
-  .price { background: var(--surface); border: 2px solid var(--ink); border-radius: 20px; padding: 24px; display: grid; gap: 12px; }
+  .price { background: var(--surface); border: 2px solid var(--gold); border-radius: 20px; padding: 24px; display: grid; gap: 12px; }
   .price .val { font-size: clamp(36px, 7vw, 54px); font-weight: 800; letter-spacing: -.02em; line-height: 1; }
   .price .val small { font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
   .parcels { display: flex; gap: 8px; flex-wrap: wrap; }
   .parcels span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13.5px; font-weight: 600; }
   .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; counter-reset: s; }
   .step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 14px; line-height: 1.45; color: var(--muted); }
-  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: #fff; font-weight: 800; margin-bottom: 8px; }
+  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--gold); color: #fff; font-weight: 800; margin-bottom: 8px; }
   .step b { display: block; color: var(--ink); }
-  .note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 18px; white-space: pre-wrap; line-height: 1.55; }
+  .note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; padding: 16px 18px; white-space: pre-wrap; line-height: 1.55; }
   form.accept { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; display: grid; gap: 12px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   label { display: grid; gap: 5px; font-size: 13.5px; font-weight: 700; }
   label small { font-weight: 400; color: var(--muted); }
   input, textarea { font: inherit; font-weight: 400; color: inherit; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 11px 12px; width: 100%; }
-  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  input:focus, textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
   .agree { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; color: var(--muted); }
   .agree input { width: 18px; height: 18px; margin-top: 2px; }
   .btn { font: inherit; font-weight: 800; font-size: 16px; border: 0; background: var(--accent); color: #fff; border-radius: 12px; padding: 14px 20px; cursor: pointer; text-decoration: none; display: inline-flex; justify-content: center; }
@@ -72,12 +74,14 @@
   @media (max-width: 700px) {
     .nums { grid-template-columns: 1fr 1fr; } .items, .grid2 { grid-template-columns: 1fr; } .steps { grid-template-columns: 1fr 1fr; }
     .num b { font-size: 32px; }
+    .hero::after { display: none; }
+    .nums { grid-template-columns: repeat(3, minmax(0, 1fr)); } .num { padding: 14px 12px; } .num span { font-size: 12.5px; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><div class="brand" id="brand"><b>MC DIGITAL</b></div></div>
+  <div class="top"><img src="/brand/logo.png" alt=""><div class="brand" id="brand"><b>MC DIGITAL</b></div></div>
   <main id="app"><p class="msg">Carregando a proposta…</p></main>
 </div>
 <script type="module">
