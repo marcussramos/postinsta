@@ -6,7 +6,7 @@ import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
 import { asaasEnv } from '../lib/asaas.js';
 import { activeSecret, verifyTotp, twoFactorOff } from '../lib/totp.js';
-import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10 } from '../lib/migrations.js';
+import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, MIGRATION_V11 } from '../lib/migrations.js';
 
 // Comando pronto para colar no SQL Editor do Supabase (Etapa 4), já com endereço e segredo certos.
 function cronSql(url, secret) {
@@ -58,6 +58,7 @@ async function setupInfo() {
       await db.select('mail_log', { select: 'key', limit: 1 }); await db.select('users', { select: 'totp_secret', limit: 1 }); await db.select('payments', { select: 'nf_id,nf_url', limit: 1 });
     } catch { parts.push(MIGRATION_V9); }
     try { await db.select('posts', { select: 'feedback_audio', limit: 1 }); } catch { parts.push(MIGRATION_V10); }
+    try { await db.select('leads', { select: 'id', limit: 1 }); } catch { parts.push(MIGRATION_V11); }
     if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }

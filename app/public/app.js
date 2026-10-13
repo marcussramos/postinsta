@@ -1,10 +1,11 @@
 // MC DIGITAL — painel da agência (JavaScript puro, sem build).
 import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
 import { QUESTIONS as ONB_QUESTIONS, SECTIONS as ONB_SECTIONS } from '/onboarding-perguntas.js';
+import { reviewPost, applyFix } from '/revisor.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
-const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'propostas', 'ajustes'];
+const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
 const S = {
   admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '',
   payments: [], folderId: null, folder: { id: null, files: [], preview: null, loading: false, error: null, tab: 'contract' }, settings: undefined,
@@ -35,7 +36,7 @@ async function boot() {
   } catch { /* mostra o login */ }
   if (!S.staff) return renderLogin();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  if (S.role !== 'admin' && ['ajustes', 'propostas'].includes(S.view)) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
+  if (S.role !== 'admin' && ['ajustes', 'propostas', 'vendas'].includes(S.view)) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
   await loadAll();
 }
 
@@ -76,7 +77,7 @@ async function loadExtras() {
     api('/api/pasta?r=requests&open=1').catch(() => null),
   ]);
   S.deliv = deliv || {}; S.requests = reqs || [];
-  if (S.role === 'admin') S.proposals = await api('/api/pasta?r=proposals').catch(() => null);
+  if (S.role === 'admin') [S.proposals, S.leads] = await Promise.all([api('/api/pasta?r=proposals').catch(() => null), api('/api/pasta?r=leads').catch(() => null)]);
 }
 
 // ───────────────────────── login
@@ -114,16 +115,16 @@ function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
-    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
+    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('vendas', 'Vendas') : null, S.role === 'admin' ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
-  const page = h('main', { class: `page${S.view === 'fluxo' ? ' wide' : ''}` });
-  if (['ajustes', 'propostas'].includes(S.view) && S.role !== 'admin') S.view = 'inicio';
+  const page = h('main', { class: `page${['fluxo', 'vendas'].includes(S.view) ? ' wide' : ''}` });
+  if (['ajustes', 'propostas', 'vendas'].includes(S.view) && S.role !== 'admin') S.view = 'inicio';
   const pend = S.role === 'admin' ? setupPending() : [];
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
-  const views = { inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals };
+  const views = { inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals, vendas: viewSales };
   const main = views[S.view]().filter(Boolean);
   if (S.view === 'agenda' && S.clients.length) main.splice(1, 0, ...[approvalReminders(), requestsInbox()].filter(Boolean));
   page.append(...main);
@@ -650,6 +651,7 @@ function openPost(post = null, opts = {}) {
   };
   cap.addEventListener('input', updCounter); updCounter();
   const snipBar = locked ? null : snippetBar(() => [...picked][0], cap, updCounter);
+  const revBox = h('div', { class: 'review', hidden: true });
 
   // Data: post existente usa a dele; dia clicado no calendário; ideia começa sem data; resto = amanhã 19h.
   const when = post?.scheduled_at ? partsInTz(post.scheduled_at, S.tz)
@@ -698,7 +700,8 @@ function openPost(post = null, opts = {}) {
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
         h('button', { type: 'button', class: 'btn sm', onclick: () => openBankPicker([...picked][0], takeFromBank) }, '🗂 Banco de mídia'),
         h('span', { class: 'hint' }, 'Feed 1080×1350 · Reels 1080×1920. Baixe e arraste aqui.'))),
-    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, snipBar, locked ? null : aiPanel()),
+    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, snipBar, locked ? null : h('div', { class: 'actions' }, aiPanel(), h('button', { class: 'btn sm', type: 'button', onclick: () => runReview(false) }, '🔎 Revisar post'))),
+    revBox,
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
       h('div', { class: 'field' }, h('label', { for: 'f-time' }, 'Hora'), tIn)),
@@ -746,6 +749,47 @@ function openPost(post = null, opts = {}) {
   });
 
   let confirmLate = false;
+  // ── revisor: regras rápidas (sempre) + IA (português, tom e arte) quando ligada
+  let reviewed = false;
+  const sizeOf = (url) => new Promise((ok) => { if (!url) return ok(null); const im = new Image(); im.onload = () => ok({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => ok(null); im.src = url; });
+  const vidSize = (url) => new Promise((ok) => { if (!url) return ok(null); const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true; v.onloadedmetadata = () => ok({ w: v.videoWidth, h: v.videoHeight, duration: v.duration }); v.onerror = () => ok(null); v.src = url; });
+  async function runReview(silent) {
+    const d = collect();
+    const cid = [...picked][0];
+    const day = d.scheduled_at ? dayKey(d.scheduled_at, S.tz) : null;
+    const sameDay = day ? [...S.posts, ...S.cal.posts].filter((x, i, arr) => arr.findIndex((y) => y.id === x.id) === i && x.client_id === cid && x.id !== post?.id && x.media_type !== 'STORY' && x.scheduled_at && dayKey(x.scheduled_at, S.tz) === day).length : 0;
+    const issues = reviewPost({ media_type: mtype, caption: d.caption, scheduled_at: d.scheduled_at,
+      image: mtype !== 'CAROUSEL' ? await sizeOf(img?.url) : null, items: mtype === 'CAROUSEL' ? (await Promise.all(items.map((it) => sizeOf(it.url)))).filter(Boolean) : null,
+      video: ['REELS', 'STORY'].includes(mtype) && video ? await vidSize(video.url) : null }, { brand_kit: clientById(cid)?.brand_kit || {}, sameDay, tz: S.tz });
+    drawReview(issues, null);
+    if (!silent || issues.length) { revBox.hidden = false; revBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    return issues;
+  }
+  const LV = { erro: ['Precisa corrigir', 'st-failed'], atencao: ['Atenção', 'st-pending_approval'], dica: ['Dica', 'st-draft'] };
+  function drawReview(issues, ai) {
+    const fixBtn = (i) => (i.fix ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { cap.value = applyFix(cap.value, i.fix); updCounter(); runReview(false); toast('Corrigido.'); } }, 'Corrigir') : null);
+    const aiBtn = h('button', { class: 'btn ai sm', type: 'button', onclick: async () => {
+      if (!S.setup?.ai_ready && S.role === 'admin') return toast('A IA ainda não está ligada (Ajustes → Inteligência Artificial).', true);
+      aiBtn.disabled = true; aiBtn.textContent = 'Revisando com IA…';
+      try {
+        const payload = { client_id: [...picked][0], caption: cap.value, title: title.value, media_type: mtype };
+        const aiImg = mtype === 'CAROUSEL' ? items[0] : img;
+        if (aiImg?.blob) payload.image_base64 = await blobToDataUrl(aiImg.blob); else if (aiImg?.url && /^https:/.test(aiImg.url)) payload.image_url = aiImg.url;
+        drawReview(issues, await api('/api/pasta?r=review', { method: 'POST', body: payload }));
+      } catch (e) { toast(e.message, true); aiBtn.disabled = false; aiBtn.textContent = '✨ Revisar português e arte com IA'; }
+    } }, '✨ Revisar português e arte com IA');
+    revBox.replaceChildren(
+      h('div', { class: 'review-head' }, h('b', {}, '🔎 Revisor'), h('span', { class: 'muted' }, issues.length ? `${issues.length} ponto(s) nas regras rápidas` : 'Regras rápidas: tudo certo ✓'),
+        h('button', { class: 'linkish', type: 'button', onclick: () => { revBox.hidden = true; } }, 'Fechar')),
+      ...issues.map((i) => h('div', { class: `rev-item lv-${i.level}` }, h('span', { class: `pill ${LV[i.level][1]}` }, LV[i.level][0]), h('div', {}, h('b', {}, i.title), h('span', { class: 'muted' }, i.detail)), fixBtn(i))),
+      ai ? h('div', { class: 'rev-ai' }, h('b', {}, '✨ Revisão da IA'),
+        ai.issues.length ? null : h('span', { class: 'ig-ok' }, '✓ Nada importante a corrigir no português, no tom e na arte.'),
+        ...ai.issues.map((i) => h('div', { class: `rev-item lv-${i.level}` }, h('span', { class: `pill ${LV[i.level][1]}` }, i.area ? `${LV[i.level][0]} · ${i.area}` : LV[i.level][0]), h('div', {}, h('b', {}, i.title), h('span', { class: 'muted' }, i.detail)))),
+        ai.corrected_caption ? h('div', { class: 'rev-fix' }, h('span', { class: 'label' }, 'Legenda corrigida'), ai.changes?.length ? h('ul', { class: 'rev-changes' }, ...ai.changes.map((c) => h('li', {}, c))) : null,
+          h('p', { style: 'margin:0;white-space:pre-line;font-size:14px' }, ai.corrected_caption),
+          h('button', { class: 'btn primary sm', type: 'button', onclick: () => { cap.value = ai.corrected_caption; updCounter(); toast('Legenda corrigida aplicada.'); } }, 'Usar legenda corrigida')) : null)
+        : (mtype !== 'STORY' || img ? aiBtn : null));
+  }
   // mode: 'idea' | 'production' | 'review' | 'send' | 'approve' | 'save'
   async function save(mode) {
     const data = collect();
@@ -755,6 +799,11 @@ function openPost(post = null, opts = {}) {
     if (needsComplete && mtype === 'STORY' && !img && !video) return toast('Escolha a foto ou o vídeo do Story.', true);
     if (needsComplete && !['CAROUSEL', 'STORY'].includes(mtype) && !img) return toast(mtype === 'REELS' ? 'Falta a capa do Reels.' : 'Para enviar ou aprovar, o post precisa de imagem.', true);
     if (needsComplete && !data.scheduled_at) return toast('Para enviar ou aprovar, escolha a data e a hora.', true);
+    if (mode === 'send' && !reviewed) {
+      const found = await runReview(true);
+      if (found.some((i) => i.level === 'erro')) return toast('O revisor encontrou um erro que impede o envio. Veja no topo do painel.', true);
+      if (found.some((i) => i.level === 'atencao')) { reviewed = true; return toast('O revisor encontrou pontos de atenção (no topo do painel). Corrija ou clique de novo em Enviar para mandar assim mesmo.'); }
+    }
     if (needsComplete && new Date(data.scheduled_at) < Date.now() + 60e3 && !confirmLate) {
       confirmLate = true; return toast('Esse horário já passou: o post sai na próxima rodada (até 5 min). Clique de novo para confirmar.');
     }
@@ -1024,6 +1073,7 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsDiag(),
     ...settingsOnboarding(),
     ...settingsDevice(),
     ...settingsSecurity(),
@@ -1918,6 +1968,11 @@ function viewHome() {
       alerts.push(alertRow('', `${p.client_name}: proposta sem resposta há ${Math.floor((Date.now() - new Date(p.updated_at || p.created_at)) / 864e5)} dias`, 'Que tal um follow-up?', null, '#propostas'));
     }
   }
+  if (S.role === 'admin' && Array.isArray(S.leads)) {
+    const due = S.leads.filter((l) => !['fechado', 'perdido'].includes(l.stage) && (l.wants_contact && l.stage === 'novo' || (l.next_action_at && l.next_action_at <= today)));
+    for (const l of due.slice(0, 4)) alerts.push(alertRow(l.wants_contact ? 'bad' : 'warn', `${l.wants_contact ? '🔥 ' : ''}Follow-up: ${l.name}${l.instagram ? ` (@${l.instagram})` : ''}`, l.next_action || 'Retomar o contato', () => openLead(l)));
+    if (due.length > 4) alerts.push(alertRow('', `+${due.length - 4} follow-ups para hoje`, 'Veja em Vendas', null, '#vendas'));
+  }
   const dAlerts = commemorativeAlerts();
   for (const a of dAlerts.slice(0, 6)) alerts.push(alertRow(a.in_days <= 5 ? 'warn' : '', `${a.name} em ${a.in_days} dia${a.in_days > 1 ? 's' : ''} — sem post planejado para ${a.client}`, `${fmtDay(a.date)} · clique para criar a ideia`, () => openPost(null, { client: a.client_id, date: shiftDay(a.date, a.in_days > 1 ? -1 : 0), title: a.name, stage: 'idea' })));
   if (dAlerts.length > 6) alerts.push(alertRow('', `+${dAlerts.length - 6} datas comemorativas sem post`, 'Veja no calendário', null, '#calendario'));
@@ -2045,7 +2100,7 @@ function openProposal(p = null) {
   };
   const save = async (sendIt) => {
     try {
-      const body = { ...payload(), send: sendIt };
+      const body = { ...payload(), send: sendIt, lead_id: p?.lead_id || undefined };
       const row = isNew ? await api('/api/pasta?r=proposals', { method: 'POST', body }) : await api('/api/pasta?r=proposals', { method: 'PATCH', body: { ...body, id: p.id } });
       S.proposals = [row, ...(S.proposals || []).filter((x) => x.id !== row.id)];
       close(); render();
@@ -2730,4 +2785,156 @@ function settingsOnboarding() {
       } }, 'Salvar textos'),
       sample ? h('a', { class: 'btn sm', href: onboardingUrl(sample), target: '_blank', rel: 'noopener' }, `Pré-visualizar (como ${sample.name})`) : h('span', { class: 'muted', style: 'font-size:13px' }, 'Crie o link de um cliente para pré-visualizar.')),
     h('span', { class: 'hint muted' }, 'Apagar um campo e salvar volta ao texto original do manual.'))];
+}
+
+// ───────────────────────── VENDAS (funil de leads) + diagnóstico grátis
+const STAGES = [['novo', 'Novo lead'], ['contato', 'Em contato'], ['reuniao', 'Reunião'], ['proposta', 'Proposta'], ['fechado', 'Fechado ✓'], ['perdido', 'Perdido']];
+const SRC_LABEL = { diagnostico: 'Diagnóstico', manual: 'Manual', indicacao: 'Indicação', instagram: 'Instagram', site: 'Site' };
+const diagUrl = () => `${location.origin}/diagnostico`;
+const daysTo = (d) => daysBetween(todayLocal(), d);
+function leadMessage(l) {
+  const first = (l.name || '').split(' ')[0];
+  if (l.stage === 'novo' && l.diagnosis) return `Oi, ${first}! Aqui é da MC Digital 🙂 Vi o diagnóstico que você fez do @${l.instagram} (nota ${l.diagnosis.score}/100). Separei algumas ideias práticas para o seu perfil, posso te mostrar em uma conversa rápida de 15 minutos?`;
+  if (l.stage === 'proposta') return `Oi, ${first}! Conseguiu dar uma olhada na proposta? Fico à disposição para ajustar o que precisar 🙂`;
+  if (l.stage === 'reuniao') return `Oi, ${first}! Confirmando a nossa conversa. Qual horário fica melhor para você?`;
+  return `Oi, ${first}! Aqui é da MC Digital 🙂 Tudo bem?`;
+}
+function viewSales() {
+  if (S.leads === undefined) { S.leads = null; api('/api/pasta?r=leads').then((v) => { S.leads = v; }).catch(() => { S.leads = false; }).finally(() => render()); }
+  const head = h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Comercial'), h('h1', {}, 'Vendas')), h('div', { class: 'spacer' }),
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn sm', onclick: () => copyText(diagUrl(), 'Link do diagnóstico copiado. Coloque na bio e nos Stories!') }, '🎯 Copiar link do diagnóstico'),
+      h('a', { class: 'btn sm', href: diagUrl(), target: '_blank', rel: 'noopener' }, 'Ver página'),
+      h('button', { class: 'btn primary', onclick: () => openLead() }, '+ Novo lead')));
+  if (S.leads === false) return [head, h('div', { class: 'banner' }, 'O funil de vendas precisa da atualização do banco. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.')];
+  if (!S.leads) return [head, h('p', { class: 'muted' }, 'Carregando…')];
+  const L = S.leads;
+  const open = L.filter((l) => !['fechado', 'perdido'].includes(l.stage));
+  const month = todayLocal().slice(0, 7);
+  const wonMonth = L.filter((l) => l.stage === 'fechado' && (l.updated_at || '').slice(0, 7) === month);
+  const decided = L.filter((l) => ['fechado', 'perdido'].includes(l.stage));
+  const stats = h('div', { class: 'stats' },
+    stat('Em negociação', String(open.length), `${brl(open.reduce((s, l) => s + (l.value_cents || 0), 0))} / mês em propostas`),
+    stat('Fechados no mês', String(wonMonth.length), `${brl(wonMonth.reduce((s, l) => s + (l.value_cents || 0), 0))} / mês`, 'good'),
+    stat('Conversão', decided.length ? `${Math.round((100 * L.filter((l) => l.stage === 'fechado').length) / decided.length)}%` : '—', `${L.filter((l) => l.source === 'diagnostico').length} vieram do diagnóstico`));
+  const board = h('div', { class: 'tboard' }, ...STAGES.map(([st, label]) => {
+    const items = L.filter((l) => l.stage === st).sort((a, b) => (b.wants_contact - a.wants_contact) || String(a.next_action_at || '9').localeCompare(String(b.next_action_at || '9')));
+    const col = h('section', { class: 'tlist droppable', 'data-col': st },
+      h('header', { class: 'tlist-head' }, h('h2', {}, label), h('span', { class: 'tlist-n' }, String(items.length))),
+      h('div', { class: 'tlist-cards' }, ...items.map(leadCard)),
+      st === 'novo' ? h('div', { class: 'tadd' }, h('button', { class: 'tadd-btn', type: 'button', onclick: () => openLead() }, '+ Adicionar lead')) : null);
+    col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
+    col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('over'); });
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault(); col.classList.remove('over');
+      const l = L.find((x) => x.id === e.dataTransfer.getData('text/plain'));
+      if (!l || l.stage === st) return;
+      if (st === 'perdido') return openLead(l, { lose: true });
+      try { Object.assign(l, await api('/api/pasta?r=leads', { method: 'PATCH', body: { id: l.id, stage: st } })); render(); toast(`Movido para ${label}.`); } catch (err) { toast(err.message, true); }
+    });
+    return col;
+  }));
+  return [head, stats, h('div', { class: 'tboard-wrap' }, board),
+    h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Arraste os cartões entre as etapas. Quem faz o diagnóstico grátis entra sozinho em "Novo lead"; quando a proposta é aceita, o lead vai para "Fechado".')];
+}
+function leadCard(l) {
+  const d = l.next_action_at ? daysTo(l.next_action_at) : null;
+  const card = h('article', { class: 'tcard', draggable: 'true', tabindex: 0, onclick: () => openLead(l), onkeydown: (e) => { if (e.key === 'Enter') openLead(l); } },
+    h('div', { class: 'tcard-in' },
+      h('div', { class: 'tlabels' },
+        l.wants_contact && !['fechado', 'perdido'].includes(l.stage) ? h('span', { class: 'tlabel', style: '--lc:#F87168' }, '🔥 quer conversar') : null,
+        h('span', { class: 'tlabel fmt' }, SRC_LABEL[l.source] || l.source),
+        l.diagnosis?.score != null ? h('span', { class: 'tlabel', style: `--lc:${l.diagnosis.score >= 70 ? '#4BCE97' : l.diagnosis.score >= 45 ? '#F5CD47' : '#FEA362'}` }, `nota ${l.diagnosis.score}`) : null),
+      h('div', { class: 'ttitle' }, h('b', {}, l.name), l.company ? ` · ${l.company}` : ''),
+      l.instagram ? h('div', { class: 'muted', style: 'font-size:13px' }, `@${l.instagram}`) : null,
+      h('div', { class: 'tbadges' },
+        l.value_cents ? h('span', { class: 'tbadge' }, `${brl(l.value_cents)}/mês`) : null,
+        d != null && !['fechado', 'perdido'].includes(l.stage) ? h('span', { class: `tbadge${d < 0 ? ' late' : d === 0 ? ' soon' : ''}`, title: l.next_action || 'Próximo contato' }, `📅 ${d < 0 ? `atrasado ${-d}d` : d === 0 ? 'hoje' : fmtDay(l.next_action_at).slice(0, 5)}`) : null,
+        l.stage === 'perdido' && l.lost_reason ? h('span', { class: 'tbadge' }, l.lost_reason.slice(0, 40)) : null)));
+  card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', l.id); card.classList.add('dragging'); });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  return card;
+}
+function openLead(l = null, { lose = false } = {}) {
+  const isNew = !l;
+  const v = (x) => x ?? '';
+  const inp = (id, label, value, attrs = {}) => { const el = h(attrs.tag || 'input', { id, ...attrs, tag: null }); el.value = v(value); return [el, h('div', { class: 'field' }, h('label', { for: id }, label), el)]; };
+  const [name, fName] = inp('ld-name', 'Nome do contato', l?.name);
+  const [company, fCo] = inp('ld-co', 'Empresa', l?.company);
+  const [ig, fIg] = inp('ld-ig', 'Instagram', l?.instagram ? `@${l.instagram}` : '', { placeholder: '@perfil' });
+  const [wa, fWa] = inp('ld-wa', 'WhatsApp', l?.whatsapp ? l.whatsapp.replace(/^55/, '') : '', { type: 'tel', placeholder: '65 99999-9999' });
+  const [email, fEm] = inp('ld-em', 'E-mail', l?.email, { type: 'email' });
+  const [val, fVal] = inp('ld-val', 'Valor mensal estimado (R$)', l?.value_cents ? (l.value_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '', { inputmode: 'decimal', placeholder: '1.500,00' });
+  const [next, fNext] = inp('ld-next', 'Próximo passo', l?.next_action, { placeholder: 'Ex.: mandar proposta, ligar, marcar reunião' });
+  const [nextAt, fNextAt] = inp('ld-nextat', 'Data do próximo contato', l?.next_action_at, { type: 'date' });
+  const [notes, fNotes] = inp('ld-notes', 'Anotações', l?.notes, { tag: 'textarea', style: 'min-height:90px' });
+  const src = h('select', { id: 'ld-src' }, ...Object.entries(SRC_LABEL).map(([k, t]) => h('option', { value: k, selected: (l?.source || 'manual') === k }, t)));
+  const stage = h('select', { id: 'ld-stage' }, ...STAGES.map(([k, t]) => h('option', { value: k, selected: (l?.stage || 'novo') === k }, t)));
+  const [lost, fLost] = inp('ld-lost', 'Motivo da perda', l?.lost_reason, { placeholder: 'Ex.: preço, timing, fechou com outra agência' });
+  const syncLost = () => { fLost.hidden = stage.value !== 'perdido'; };
+  stage.addEventListener('change', syncLost);
+  if (lose) stage.value = 'perdido';
+  syncLost();
+  const quick = h('div', { class: 'actions' }, ...[['Hoje', 0], ['+1 dia', 1], ['+3 dias', 3], ['+1 semana', 7]].map(([t, n]) => h('button', { class: 'chip', type: 'button', onclick: () => { nextAt.value = shiftDay(todayLocal(), n); } }, t)));
+  const body = [];
+  if (l?.diagnosis) {
+    const D = l.diagnosis;
+    body.push(h('div', { class: 'card lead-diag' }, h('div', { class: 'eyebrow' }, `Diagnóstico · ${fmtDate(D.at, S.tz)}`),
+      h('div', { style: 'display:flex;gap:14px;align-items:center' }, h('div', { class: 'stat-v' }, `${D.score}`, h('span', { class: 'muted', style: 'font-size:14px' }, '/100')), h('b', {}, D.headline)),
+      D.profile ? h('span', { class: 'muted', style: 'font-size:13px' }, `${(D.profile.followers ?? 0).toLocaleString('pt-BR')} seguidores · ${D.profile.posts_per_week ?? '—'} posts/semana · engajamento ${D.profile.engagement_rate ?? '—'}%`) : null,
+      h('div', { class: 'diag-areas' }, ...D.areas.map((a) => h('span', { class: 'pill st-draft' }, `${a.name}: ${a.score}`))),
+      h('details', {}, h('summary', { class: 'muted' }, 'Ver análise e respostas'),
+        h('ol', { style: 'margin:8px 0;padding-left:18px;display:grid;gap:6px;font-size:14px' }, ...D.actions.map((a) => h('li', {}, h('b', {}, a.title), ` — ${a.detail}`))),
+        h('dl', { class: 'onb-dl' }, ...Object.entries(D.answers || {}).flatMap(([k, v2]) => [h('dt', {}, k.replace('_', ' ')), h('dd', {}, v2)])))));
+  }
+  body.push(h('div', { class: 'grid-2 tight' }, fName, fCo), h('div', { class: 'grid-2 tight' }, fIg, fWa), h('div', { class: 'grid-2 tight' }, fEm, fVal),
+    h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'ld-stage' }, 'Etapa'), stage), h('div', { class: 'field' }, h('label', { for: 'ld-src' }, 'Origem'), src)),
+    fLost, fNext, fNextAt, quick, fNotes);
+  if (l && l.whatsapp) body.push(h('div', { class: 'actions' },
+    h('a', { class: 'btn wa sm', href: waLink(l.whatsapp, leadMessage(l)), target: '_blank', rel: 'noopener' }, 'WhatsApp com mensagem pronta'),
+    l.instagram ? h('a', { class: 'btn sm', href: `https://instagram.com/${l.instagram}`, target: '_blank', rel: 'noopener' }, 'Ver Instagram') : null));
+  const payload = () => ({ name: name.value, company: company.value, instagram: ig.value, whatsapp: wa.value, email: email.value, value: val.value,
+    next_action: next.value, next_action_at: nextAt.value, notes: notes.value, source: src.value, stage: stage.value, lost_reason: lost.value });
+  const save = async () => {
+    try {
+      const row = isNew ? await api('/api/pasta?r=leads', { method: 'POST', body: payload() }) : await api('/api/pasta?r=leads', { method: 'PATCH', body: { ...payload(), id: l.id } });
+      if (isNew && stage.value !== 'novo') Object.assign(row, await api('/api/pasta?r=leads', { method: 'PATCH', body: { id: row.id, stage: stage.value } }));
+      S.leads = [row, ...(S.leads || []).filter((x) => x.id !== row.id)];
+      close(); render(); toast(isNew ? 'Lead criado.' : 'Lead salvo.');
+    } catch (e) { toast(e.message, true); }
+  };
+  const foot = [];
+  if (!isNew) foot.push(confirmButton('Apagar', 'Confirmar exclusão', async () => { await api(`/api/pasta?r=leads&id=${l.id}`, { method: 'DELETE' }); S.leads = S.leads.filter((x) => x.id !== l.id); close(); render(); toast('Lead apagado.'); }, 'btn ghost danger'));
+  foot.push(h('span', { class: 'spacer' }));
+  if (l && !l.proposal_id && !['fechado', 'perdido'].includes(l.stage)) foot.push(h('button', { class: 'btn', onclick: () => { close(); openProposal({ id: null, status: 'draft', client_name: l.company || l.name, contact: { name: l.name, whatsapp: l.whatsapp, email: l.email }, lead_id: l.id, monthly_fee_cents: l.value_cents || undefined }); } }, 'Criar proposta'));
+  if (l?.proposal_id) foot.push(h('a', { class: 'btn', href: '#propostas', onclick: () => close() }, 'Ver proposta'));
+  foot.push(h('button', { class: 'btn primary', onclick: save }, isNew ? 'Criar lead' : 'Salvar'));
+  const close = drawer(isNew ? 'Novo lead' : l.name, body, foot);
+  if (lose) lost.focus(); else if (isNew) name.focus();
+}
+function settingsDiag() {
+  if (S.diag === undefined) { S.diag = null; api('/api/pasta?r=diagcfg').then((v) => { S.diag = v; }).catch(() => { S.diag = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Atrair clientes'), h('h2', { style: 'font-size:22px' }, 'Diagnóstico grátis')));
+  if (!S.diag) return [head, h('p', { class: 'muted' }, S.diag === false ? 'Indisponível agora.' : 'Carregando…')];
+  const D = S.diag;
+  const en = h('input', { type: 'checkbox', checked: D.enabled });
+  const wa = h('input', { id: 'dg-wa', type: 'tel', value: D.whatsapp ? D.whatsapp.replace(/^55/, '') : '', placeholder: '65 99999-9999' });
+  const hl = h('input', { id: 'dg-hl', value: D.headline });
+  const cta = h('input', { id: 'dg-cta', value: D.cta });
+  const connected = S.clients.filter((c) => c.ig_connected);
+  const acc = h('select', { id: 'dg-acc' }, h('option', { value: '' }, '— sem consulta de dados (só as respostas) —'), ...connected.map((c) => h('option', { value: c.id, selected: D.lookup_client_id === c.id }, `@${c.ig_username || c.name}`)));
+  return [head, h('article', { class: 'card' },
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Uma página pública onde a pessoa coloca o @ e recebe na hora uma análise do perfil feita pela IA (nota, o que está bom e 3 ações). Para ver, ela deixa nome e WhatsApp, e vira lead em Vendas, com aviso no seu celular. Coloque o link na bio, nos Stories e nos anúncios.'),
+    h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, diagUrl()), h('button', { class: 'btn sm', onclick: () => copyText(diagUrl(), 'Link copiado.') }, 'Copiar')),
+    S.setup?.ai_ready ? null : h('div', { class: 'errorbox' }, 'Precisa da IA ligada (ANTHROPIC_API_KEY). Cada diagnóstico custa centavos de IA.'),
+    h('label', { class: 'toggle' }, en, h('span', {}, 'Página do diagnóstico aberta')),
+    h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'dg-wa' }, 'Seu WhatsApp (botão "Quero ajuda")'), wa), h('div', { class: 'field' }, h('label', { for: 'dg-cta' }, 'Texto do botão'), cta)),
+    h('div', { class: 'field' }, h('label', { for: 'dg-hl' }, 'Título da página'), hl),
+    h('div', { class: 'field' }, h('label', { for: 'dg-acc' }, 'Perfil usado para ler os dados públicos'), acc,
+      h('span', { class: 'hint' }, 'Com um perfil conectado (o ideal é o da própria MC Digital: cadastre-a como cliente e conecte), o app tenta ler seguidores, frequência e engajamento reais do @ informado. Se a Meta não liberar essa leitura, o diagnóstico usa só as respostas.')),
+    h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async (e) => {
+      e.target.disabled = true;
+      try { S.diag = await api('/api/pasta?r=diagcfg', { method: 'PUT', body: { enabled: en.checked, whatsapp: wa.value, headline: hl.value, cta: cta.value, lookup_client_id: acc.value } }); toast('Diagnóstico salvo.'); render(); }
+      catch (err) { toast(err.message, true); e.target.disabled = false; }
+    } }, 'Salvar'))];
 }

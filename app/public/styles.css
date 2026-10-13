@@ -696,3 +696,15 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .card-tags:empty { display: none; }
 .card-tags .pill { white-space: nowrap; }
 .grid-clients > .card { min-width: 0; }
+
+/* revisor */
+.review { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px; display: grid; gap: 10px; }
+.review-head { display: flex; gap: 10px; align-items: center; } .review-head .linkish { margin-left: auto; }
+.rev-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; font-size: 14px; }
+.rev-item > div { display: grid; gap: 2px; } .rev-item .pill { font-size: 11px; white-space: nowrap; }
+.rev-ai { display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.rev-fix { display: grid; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.rev-changes { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+/* vendas */
+.lead-diag { gap: 8px; padding: 14px; }
+.diag-areas { display: flex; flex-wrap: wrap; gap: 6px; }

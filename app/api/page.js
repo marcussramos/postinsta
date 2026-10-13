@@ -8,7 +8,7 @@ import path from 'node:path';
 import { db } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 
-const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas'];
+const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico'];
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const tokenOk = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
@@ -20,6 +20,7 @@ const DEFAULTS = {
   cliente: { image: 'cliente', title: 'Área do cliente', description: 'Contrato, relatórios, financeiro e pedidos do seu Instagram em um só lugar.' },
   relatorio: { image: 'relatorio', title: 'Relatório mensal do Instagram', description: 'Alcance, interações, seguidores e os melhores posts do mês.' },
   proposta: { image: 'proposta', title: 'Proposta comercial', description: 'Gestão de Instagram: planejamento, criação, aprovação e publicação.' },
+  diagnostico: { image: 'diagnostico', title: 'Diagnóstico grátis do seu Instagram', description: 'Responda 2 minutos de perguntas e receba na hora uma análise do seu perfil com 3 ações para crescer.' },
   boasvindas: { image: 'boasvindas', title: 'Bem-vindo à MC Digital', description: 'Conheça como vamos trabalhar juntos e responda ao questionário da sua marca.' },
   historico: { image: 'historico', title: 'Histórico de aprovações', description: 'Registro de envios, aprovações e publicações com data e hora.' },
 };

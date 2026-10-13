@@ -65,6 +65,7 @@ export default route({
     const data = clean(b);
     if (!data.installments) data.installments = [{ day: 10, cents: data.monthly_fee_cents }];
     const row = await db.insert('proposals', { ...data, token: randomToken(20), status: b.send ? 'sent' : 'draft' });
+    if (b.lead_id) await db.update('leads', { id: `eq.${b.lead_id}` }, { proposal_id: row.id, stage: 'proposta', value_cents: data.monthly_fee_cents, next_action: 'Acompanhar a proposta', updated_at: new Date().toISOString() }).catch(() => {});
     send(res, 201, withUrl(row));
   },
   PATCH: async (req, res) => {
@@ -158,6 +159,7 @@ export const publicProposal = route({
       portal_token: randomToken(),
     });
     await db.update('proposals', { id: `eq.${p.id}` }, { client_id: client.id });
+    await db.update('leads', { proposal_id: `eq.${p.id}` }, { stage: 'fechado', client_id: client.id, next_action: null, next_action_at: null, updated_at: new Date().toISOString() }).catch(() => {});
     await notify({ title: `🎉 ${p.client_name} aceitou a proposta`, body: `${(p.monthly_fee_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · início ${a.inicio.split('-').reverse().join('/')}. Cadastro e pasta já criados.`, url: `/#pasta/${client.id}` }, { adminOnly: true });
     send(res, 200, { status: 'accepted', portal_url: `${appUrl()}/cliente?t=${client.portal_token}`, onboarding_url: `${appUrl()}/boasvindas?t=${client.portal_token}` });
   },

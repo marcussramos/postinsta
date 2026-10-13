@@ -92,6 +92,10 @@
     {
       "source": "/boasvindas",
       "destination": "/api/page?p=boasvindas"
+    },
+    {
+      "source": "/diagnostico",
+      "destination": "/api/page?p=diagnostico"
     }
   ]
 }

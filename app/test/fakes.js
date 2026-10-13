@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
-  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [], push_subs: [], snippets: [], media_bank: [], mail_log: [] };
+  const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [], push_subs: [], snippets: [], media_bank: [], mail_log: [], leads: [] };
   const files = new Map();
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail,
     // métricas simuladas: feed extra, métricas por post e totais da conta
@@ -23,6 +23,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     snippets: () => ({ id: crypto.randomUUID(), client_id: null, created_at: new Date().toISOString() }),
     media_bank: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
     mail_log: () => ({ sent_at: new Date().toISOString() }),
+    leads: () => ({ id: crypto.randomUUID(), stage: 'novo', source: 'manual', wants_contact: false, proposal_id: null, client_id: null, diagnosis: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     proposals: () => ({ id: crypto.randomUUID(), status: 'draft', accepted: null, accepted_at: null, client_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     post_events: () => ({ id: crypto.randomUUID(), created_at: new Date().toISOString() }),
     users: () => ({ id: crypto.randomUUID(), active: true, created_at: new Date().toISOString() }),
@@ -142,6 +143,12 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       const all = [...pub, ...ig.feed].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       return json(200, { data: all });
     }
+    if ((u.searchParams.get('fields') || '').startsWith('business_discovery')) {
+      if (ig.discoveryDenied) return deny();
+      const now = Date.now();
+      return json(200, { business_discovery: { username: 'padariadobairro', name: 'Padaria do Bairro', biography: 'Pães artesanais em Cuiabá', followers_count: 2000, follows_count: 300, media_count: 120,
+        media: { data: [0, 2, 4, 9].map((d, i) => ({ id: `bd${i}`, caption: `post ${i}`, like_count: 40 + i, comments_count: 4, timestamp: new Date(now - d * 864e5).toISOString(), media_type: i === 1 ? 'CAROUSEL_ALBUM' : 'IMAGE', media_product_type: i === 2 ? 'REELS' : 'FEED' })) } } });
+    }
     let mm = u.pathname.match(/\/([^/]+)\/insights$/);
     if (mm) {
       if (ig.insightsDenied) return deny();
@@ -215,6 +222,8 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     if (new URL(url).host === 'api.anthropic.com') {
       const req = JSON.parse(init.body); ig.aiCalls = (ig.aiCalls || []).concat([req]);
       const prompt = req.messages[0].content.map((b) => b.text || '').join('');
+      if (prompt.startsWith('DIAGNÓSTICO')) return json(200, { content: [{ type: 'text', text: JSON.stringify({ score: 58, headline: 'Boa base, falta constância', areas: [{ name: 'Perfil e bio', score: 70, comment: 'Bio clara.' }, { name: 'Constância', score: 40, comment: 'Posta pouco.' }, { name: 'Conteúdo', score: 60, comment: 'ok' }, { name: 'Engajamento', score: 62, comment: 'ok' }], strengths: ['Fotos bonitas'], actions: [{ title: 'Poste 3x por semana', detail: 'agenda fixa' }, { title: 'Reels', detail: 'x' }, { title: 'Bio', detail: 'y' }], closing: 'Vamos conversar?' }) }] });
+      if (prompt.startsWith('REVISÃO')) return json(200, { content: [{ type: 'text', text: JSON.stringify({ issues: [{ level: 'atencao', area: 'legenda', title: 'Erro de digitação', detail: 'voce → você' }], corrected_caption: 'Você vai amar!', changes: ['voce → você'] }) }] });
       if (prompt.startsWith('PLANEJAMENTO')) {
         const month = (prompt.match(/Período: (\d{4}-\d{2})/) || [])[1];
         return json(200, { content: [{ type: 'text', text: JSON.stringify({ strategy: 'Mês de autoridade e datas.', items: [

@@ -230,3 +230,31 @@ alter table client_files drop constraint if exists client_files_category_check;
 alter table client_files add constraint client_files_category_check check (category in ('contract','receipt','report','other','brand','briefing','invoice','audio'));
 alter table posts add column if not exists feedback_audio uuid references client_files(id) on delete set null;
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V11 = `-- MC DIGITAL: atualização 11 (funil de vendas e diagnóstico grátis) — rode uma vez no SQL Editor do Supabase
+create table if not exists leads (
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null,
+  company         text,
+  instagram       text,
+  whatsapp        text,
+  email           text,
+  niche           text,
+  source          text not null default 'manual',
+  stage           text not null default 'novo' check (stage in ('novo','contato','reuniao','proposta','fechado','perdido')),
+  value_cents     int,
+  next_action     text,
+  next_action_at  date,
+  notes           text,
+  diagnosis       jsonb,
+  wants_contact   boolean not null default false,
+  proposal_id     uuid references proposals(id) on delete set null,
+  client_id       uuid references clients(id) on delete set null,
+  lost_reason     text,
+  ip_hash         text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists leads_stage on leads (stage, updated_at desc);
+alter table leads enable row level security;
+notify pgrst, 'reload schema';`;
