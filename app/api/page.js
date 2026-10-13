@@ -70,7 +70,7 @@ async function personalize(p, t) {
 }
 
 // Dados públicos do CNPJ da agência (cartão MEI), usados quando Ajustes → Dados da agência estiver vazio.
-const AGENCY_PUBLIC = { razao_social: '55.846.288 MARIA CAROLINA SILVESTRI DE FIGUEIREDO', cnpj: '55.846.288/0001-01', cidade: 'Cuiabá – MT', marca: 'MC DIGITAL' };
+const AGENCY_PUBLIC = { razao_social: '55.846.288 MARIA CAROLINA SILVESTRI DE FIGUEIREDO', cnpj: '55.846.288/0001-01', cidade: 'Cuiabá – MT', email: 'mariacarolsf01@gmail.com', marca: 'MC DIGITAL' };
 
 // Preenche {{campos}} das páginas legais com os dados da agência; o que faltar vira um texto neutro (nunca um colchete).
 async function fillLegal(p, html, q, base) {
