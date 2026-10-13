@@ -96,6 +96,30 @@
     {
       "source": "/diagnostico",
       "destination": "/api/page?p=diagnostico"
+    },
+    {
+      "source": "/privacidade",
+      "destination": "/api/page?p=privacidade"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/api/page?p=privacidade"
+    },
+    {
+      "source": "/exclusao-de-dados",
+      "destination": "/api/page?p=exclusao"
+    },
+    {
+      "source": "/data-deletion",
+      "destination": "/api/page?p=exclusao"
+    },
+    {
+      "source": "/termos",
+      "destination": "/api/page?p=termos"
+    },
+    {
+      "source": "/terms",
+      "destination": "/api/page?p=termos"
     }
   ]
 }

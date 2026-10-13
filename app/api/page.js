@@ -7,8 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
+import { getState } from '../lib/appstate.js';
 
-const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico'];
+const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico', 'privacidade', 'exclusao', 'termos'];
+// Páginas legais (exigidas pela Meta): públicas, indexáveis e preenchidas com os dados da agência (Ajustes → Dados da agência).
+const LEGAL = { privacidade: '/privacidade', exclusao: '/exclusao-de-dados', termos: '/termos' };
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const tokenOk = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
@@ -22,6 +25,9 @@ const DEFAULTS = {
   proposta: { image: 'proposta', title: 'Proposta comercial', description: 'Gestão de Instagram: planejamento, criação, aprovação e publicação.' },
   diagnostico: { image: 'diagnostico', title: 'Diagnóstico grátis do seu Instagram', description: 'Responda 2 minutos de perguntas e receba na hora uma análise do seu perfil com 3 ações para crescer.' },
   boasvindas: { image: 'boasvindas', title: 'Bem-vindo à MC Digital', description: 'Conheça como vamos trabalhar juntos e responda ao questionário da sua marca.' },
+  privacidade: { image: 'boasvindas', title: 'Política de Privacidade · MC DIGITAL', description: 'Como o MC DIGITAL trata os dados dos perfis de Instagram dos clientes. Privacy Policy in English included.' },
+  exclusao: { image: 'boasvindas', title: 'Exclusão de dados · MC DIGITAL', description: 'Como apagar os dados que o MC DIGITAL recebeu do seu Instagram. Data deletion instructions.' },
+  termos: { image: 'boasvindas', title: 'Termos de Uso · MC DIGITAL', description: 'Termos de uso do MC DIGITAL. Terms of Service.' },
   historico: { image: 'historico', title: 'Histórico de aprovações', description: 'Registro de envios, aprovações e publicações com data e hora.' },
 };
 
@@ -63,6 +69,33 @@ async function personalize(p, t) {
   return {};
 }
 
+// Preenche {{campos}} das páginas legais com os dados da agência; o que faltar vira um texto neutro (nunca um colchete).
+async function fillLegal(p, html, q, base) {
+  let a = {};
+  try { a = (await getState('agency', {})) || {}; } catch { /* sem banco */ }
+  const cidade = a.cidade || 'Brasil';
+  const v = {
+    marca: a.marca || 'MC DIGITAL',
+    razao: a.razao_social || a.marca || 'MC Digital',
+    cnpj: a.cnpj || 'informado no contrato',
+    email: a.email || '—',
+    cidade, cidade_en: `${cidade}, Brazil`,
+    endereco: a.endereco ? `${a.endereco} · ` : '',
+    app_url: base,
+    status: '',
+  };
+  if (p === 'exclusao' && q.get('code')) {
+    const code = String(q.get('code')).replace(/[^a-z0-9]/gi, '').slice(0, 40);
+    let r = null;
+    try { r = ((await getState('ig_deletions', {})) || {})[code] || null; } catch { /* sem banco */ }
+    const when = r ? new Date(r.at).toLocaleDateString('pt-BR', { timeZone: 'America/Cuiaba' }) : '';
+    v.status = `<div class="status"><div class="eyebrow">Pedido ${esc(code)} · Request ${esc(code)}</div>${r
+      ? `<p><b>Concluído em ${esc(when)}.</b> O token de acesso, o ID e o nome de usuário do Instagram foram apagados do sistema.<br><span lang="en"><b>Completed on ${esc(new Date(r.at).toISOString().slice(0, 10))}.</b> The Instagram access token, account ID and username were deleted.</span></p>`
+      : '<p>Não encontramos esse código. Se você acabou de pedir, aguarde alguns minutos ou escreva para o e-mail abaixo.<br><span lang="en">We could not find this code. If you just made the request, wait a few minutes or email us.</span></p>'}</div>`;
+  }
+  return html.replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'status' ? v.status : k in v ? esc(v[k]) : ''));
+}
+
 const files = new Map();
 function readPage(p) {
   // caminho relativo a este arquivo (a Vercel inclui app/pages/ no pacote da função via includeFiles)
@@ -86,7 +119,8 @@ export default async function handler(req, res) {
   try { Object.assign(meta, await personalize(p, u.searchParams.get('t'))); } catch { /* sem banco: usa o padrão */ }
   let base = '';
   try { base = appUrl(); } catch { base = `https://${req.headers.host}`; }
-  const pageUrl = `${base}/${p}${u.searchParams.get('t') ? `?t=${encodeURIComponent(u.searchParams.get('t'))}` : ''}`;
+  if (LEGAL[p]) html = await fillLegal(p, html, u.searchParams, base);
+  const pageUrl = LEGAL[p] ? `${base}${LEGAL[p]}` : `${base}/${p}${u.searchParams.get('t') ? `?t=${encodeURIComponent(u.searchParams.get('t'))}` : ''}`;
   const tags = `
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MC DIGITAL">
@@ -106,7 +140,7 @@ export default async function handler(req, res) {
   html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>${tags}`);
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'private, no-store');
-  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  if (LEGAL[p] && !u.searchParams.get('code')) res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300');
+  else { res.setHeader('Cache-Control', 'private, no-store'); res.setHeader('X-Robots-Tag', 'noindex, nofollow'); }
   res.end(html);
 }

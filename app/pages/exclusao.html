@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exclusão de dados · MC DIGITAL</title>
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .doc { max-width: 760px; margin: 0 auto; padding: 36px 16px 80px; display: grid; gap: 12px; }
+  .doc header img { height: 40px; width: auto; }
+  .doc h1 { font-size: 30px; line-height: 1.15; }
+  .doc h2 { font-size: 19px; margin-top: 16px; }
+  .doc p, .doc li { max-width: 70ch; }
+  .doc > *, .doc section > * { min-width: 0; }
+  .doc code { overflow-wrap: anywhere; font-size: .9em; }
+  .doc ol, .doc ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0 8px; }
+  .doc .status { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 14px 16px; }
+  .doc footer { margin-top: 24px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="doc">
+  <header><img src="/brand/logo.png" alt="{{marca}}"></header>
+  {{status}}
+
+  <section id="pt" style="display:grid;gap:12px">
+  <div class="eyebrow">{{marca}} · LGPD</div>
+  <h1>Como excluir os seus dados</h1>
+  <p>Você pode apagar a qualquer momento os dados que o {{marca}} recebeu do seu Instagram. Há dois caminhos:</p>
+
+  <h2>Opção 1 — Remover o app pelo Instagram (automático)</h2>
+  <ol>
+    <li>No Instagram, abra o seu perfil e toque em <b>☰ → Configurações e privacidade</b>.</li>
+    <li>Vá em <b>Permissões de apps e sites</b> (ou <i>Apps e sites</i>) → <b>Ativos</b>.</li>
+    <li>Toque em <b>{{marca}}</b> e depois em <b>Remover</b>.</li>
+  </ol>
+  <p>Assim que você remove, a Meta nos avisa e o sistema apaga sozinho o token de acesso, o ID e o nome de usuário da conta. Nenhum post é publicado depois disso. Se você também pedir a exclusão pelo Instagram, receberá um código para acompanhar o pedido nesta página.</p>
+
+  <h2>Opção 2 — Pedir por e-mail</h2>
+  <p>Envie um e-mail para <a href="mailto:{{email}}?subject=Exclus%C3%A3o%20de%20dados">{{email}}</a> com o @ do perfil e o assunto “Exclusão de dados”. Apagamos o token, as métricas, os relatórios e os posts guardados em até <b>30 dias</b> e confirmamos por e-mail. Dados de cobrança e notas fiscais ficam guardados só pelo prazo exigido pela lei fiscal.</p>
+
+  <p>Mais detalhes na <a href="/privacidade">Política de Privacidade</a>. Responsável: <b>{{razao}}</b>, CNPJ {{cnpj}}.</p>
+  </section>
+
+  <hr>
+
+  <section id="en" lang="en" style="display:grid;gap:12px">
+  <h1>Data deletion instructions</h1>
+  <p>You can delete the data {{marca}} received from your Instagram account at any time:</p>
+  <h2>Option 1 — Remove the app in Instagram (automatic)</h2>
+  <ol>
+    <li>In Instagram, go to your profile → <b>☰ → Settings and privacy</b>.</li>
+    <li>Open <b>Website permissions / Apps and websites</b> → <b>Active</b>.</li>
+    <li>Select <b>{{marca}}</b> and tap <b>Remove</b>.</li>
+  </ol>
+  <p>Meta notifies us and our system automatically deletes the access token, account ID and username. If you also request data deletion through Instagram, you receive a confirmation code to track the request on this page.</p>
+  <h2>Option 2 — Email request</h2>
+  <p>Email <a href="mailto:{{email}}?subject=Data%20deletion">{{email}}</a> with your Instagram @ and the subject “Data deletion”. We delete the token, insights, reports and stored posts within <b>30 days</b> and confirm by email.</p>
+  </section>
+
+  <footer><a href="/privacidade">Política de Privacidade / Privacy Policy</a> · <a href="/termos">Termos / Terms</a></footer>
+</main>
+</body>
+</html>

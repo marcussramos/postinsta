@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Política de Privacidade · MC DIGITAL</title>
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .doc { max-width: 760px; margin: 0 auto; padding: 36px 16px 80px; display: grid; gap: 12px; }
+  .doc header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .doc header img { height: 40px; width: auto; }
+  .doc h1 { font-size: 30px; line-height: 1.15; }
+  .doc h2 { font-size: 19px; margin-top: 16px; }
+  .doc p, .doc li { max-width: 70ch; }
+  .doc > *, .doc section > * { min-width: 0; }
+  .doc code { overflow-wrap: anywhere; font-size: .9em; }
+  .doc ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .doc table { border-collapse: collapse; width: 100%; font-size: 14px; table-layout: fixed; }
+  @media (max-width: 560px) { .doc table, .doc tbody, .doc tr, .doc td, .doc th { display: block; width: auto; } .doc tr:first-child { display: none; } .doc tr { border: 1px solid var(--line); border-radius: 10px; padding: 4px 0; margin-bottom: 8px; } .doc td { border: 0; padding: 4px 12px; } }
+  .doc td, .doc th { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .doc .lang { display: flex; gap: 8px; flex-wrap: wrap; }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0 8px; }
+  .doc footer { margin-top: 24px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="doc">
+  <header><img src="/brand/logo.png" alt="{{marca}}"></header>
+  <div class="lang"><a class="btn sm" href="#pt">Português</a><a class="btn sm" href="#en">English</a></div>
+
+  <section id="pt" style="display:grid;gap:12px">
+  <div class="eyebrow">Atualizada em 13 de outubro de 2026</div>
+  <h1>Política de Privacidade</h1>
+  <p>O <b>{{marca}}</b> é o sistema usado pela agência <b>{{razao}}</b>, CNPJ <b>{{cnpj}}</b> (“nós”), para planejar, aprovar, publicar e medir os posts dos perfis de Instagram dos nossos clientes, sempre com a autorização do titular de cada perfil. Esta política explica quais dados tratamos, para quê e como você pode pedir a exclusão, nos termos da Lei Geral de Proteção de Dados (Lei 13.709/2018).</p>
+
+  <h2>1. Dados que recebemos do Instagram</h2>
+  <p>Só recebemos dados quando o titular de uma conta profissional do Instagram (Empresa ou Criador de conteúdo) clica em <i>Conectar Instagram</i> e autoriza o acesso na tela oficial da Meta. Com as permissões concedidas, tratamos:</p>
+  <table>
+    <tr><th>Permissão</th><th>O que usamos</th><th>Para quê</th></tr>
+    <tr><td><code>instagram_business_basic</code></td><td>ID da conta, nome de usuário, foto e nome do perfil, número de seguidores e lista de mídias já publicadas</td><td>Identificar qual perfil foi conectado e mostrar a prévia do feed para o cliente aprovar</td></tr>
+    <tr><td><code>instagram_business_content_publish</code></td><td>Envio de fotos, carrosséis, Reels e Stories que o cliente aprovou</td><td>Publicar o post no perfil do cliente na data e hora combinadas</td></tr>
+    <tr><td><code>instagram_business_manage_insights</code></td><td>Métricas da conta e dos posts (alcance, impressões, interações, seguidores ganhos, horários de maior atividade)</td><td>Montar o relatório mensal de resultados que entregamos ao cliente e sugerir os melhores horários</td></tr>
+  </table>
+  <p>Também guardamos o <b>token de acesso</b> fornecido pela Meta, de forma protegida, apenas para executar as ações acima. Não lemos mensagens diretas, não acessamos dados pessoais de seguidores e não publicamos nada que não tenha sido aprovado pelo cliente.</p>
+
+  <h2>2. Outros dados</h2>
+  <ul>
+    <li>Conteúdo dos posts criados pela agência: imagens, vídeos, legendas, datas e horários.</li>
+    <li>Decisões de aprovação do cliente (aprovado ou pedido de ajuste), com o comentário escrito ou o áudio gravado pelo próprio cliente.</li>
+    <li>Dados de contato e de contrato informados pelo cliente (nome, e-mail, WhatsApp, razão social, CNPJ, endereço) e respostas do questionário de marca.</li>
+    <li>Dados de cobrança (valor, vencimento e status de pagamento).</li>
+    <li>No diagnóstico gratuito: nome, WhatsApp, e-mail e @ informados pela própria pessoa, além de informações <b>públicas</b> do perfil profissional informado.</li>
+  </ul>
+
+  <h2>3. Como usamos</h2>
+  <p>Usamos os dados somente para prestar o serviço de gestão de Instagram contratado: mostrar os posts para aprovação, publicá-los, gerar relatórios, enviar avisos e lembretes e emitir cobranças. <b>Não vendemos dados</b> e não os usamos para publicidade de terceiros.</p>
+
+  <h2>4. Com quem compartilhamos</h2>
+  <p>Apenas com os fornecedores necessários para o sistema funcionar, que tratam os dados em nosso nome:</p>
+  <ul>
+    <li><b>Meta Platforms</b> — publicação e métricas do Instagram.</li>
+    <li><b>Vercel</b> e <b>Supabase</b> — hospedagem do sistema e do banco de dados.</li>
+    <li><b>Anthropic</b> — sugestões de legenda e revisão de posts com inteligência artificial, apenas quando a equipe aciona o recurso. O conteúdo enviado não é usado para treinar modelos.</li>
+    <li><b>Resend</b> — envio de e-mails de aviso. <b>Asaas</b> — cobranças por Pix e notas fiscais.</li>
+  </ul>
+
+  <h2>5. Por quanto tempo guardamos</h2>
+  <p>Enquanto durar o contrato com o cliente. Ao fim do contrato, ou a pedido do titular, apagamos o token de acesso e os dados obtidos do Instagram em até 30 dias. Dados de cobrança e notas fiscais são mantidos pelo prazo exigido pela lei fiscal.</p>
+
+  <h2>6. Como pedir a exclusão dos dados</h2>
+  <p>O titular pode, a qualquer momento:</p>
+  <ul>
+    <li>Remover o acesso do app no Instagram: <i>Configurações → Apps e sites → Ativos → {{marca}} → Remover</i>. Ao remover, apagamos automaticamente o token e os identificadores da conta.</li>
+    <li>Pedir a exclusão completa pelo e-mail <a href="mailto:{{email}}">{{email}}</a>.</li>
+  </ul>
+  <p>Instruções completas: <a href="/exclusao-de-dados">{{app_url}}/exclusao-de-dados</a>.</p>
+
+  <h2>7. Segurança</h2>
+  <p>O acesso ao sistema exige senha (com verificação em duas etapas para administradores), as conexões são criptografadas (HTTPS) e cada membro da equipe só vê os clientes e funções liberados para ele.</p>
+
+  <h2>8. Seus direitos (LGPD)</h2>
+  <p>Você pode pedir confirmação, acesso, correção, portabilidade, anonimização ou exclusão dos seus dados, e revogar o consentimento, pelo e-mail <a href="mailto:{{email}}">{{email}}</a>. Respondemos em até 15 dias.</p>
+
+  <h2>9. Contato e controlador</h2>
+  <p><b>{{razao}}</b> · CNPJ {{cnpj}}<br>{{endereco}}{{cidade}}<br>E-mail: <a href="mailto:{{email}}">{{email}}</a></p>
+  </section>
+
+  <hr>
+
+  <section id="en" lang="en" style="display:grid;gap:12px">
+  <div class="eyebrow">Last updated: October 13, 2026</div>
+  <h1>Privacy Policy</h1>
+  <p><b>{{marca}}</b> is the platform used by the social media agency <b>{{razao}}</b> (Brazilian company registration CNPJ <b>{{cnpj}}</b>, “we”) to plan, get approval for, publish and measure posts on our clients' Instagram professional accounts, always with the authorization of each account owner.</p>
+
+  <h2>1. Data we receive from Instagram</h2>
+  <p>We only receive data when the owner of an Instagram professional account clicks <i>Connect Instagram</i> and authorizes access on Meta's official login screen.</p>
+  <ul>
+    <li><code>instagram_business_basic</code> — account ID, username, profile picture and name, follower count and existing media, used to identify the connected account and show a feed preview to the client.</li>
+    <li><code>instagram_business_content_publish</code> — used to publish the photos, carousels, Reels and Stories that the client has approved, at the scheduled date and time.</li>
+    <li><code>instagram_business_manage_insights</code> — account and media metrics (reach, impressions, interactions, follower growth, online hours), used to build the monthly performance report delivered to the client and to suggest the best posting times.</li>
+  </ul>
+  <p>We store the access token issued by Meta securely and only to perform the actions above. We do not read direct messages, we do not collect personal data about followers, and we never publish anything the client has not approved.</p>
+
+  <h2>2. How we use and share data</h2>
+  <p>Data is used only to provide the contracted Instagram management service. We do not sell data. We share it only with the processors needed to run the service: Meta Platforms (publishing and insights), Vercel and Supabase (hosting and database), Anthropic (optional AI caption suggestions and post review; content is not used for model training), Resend (notification emails) and Asaas (billing).</p>
+
+  <h2>3. Retention and deletion</h2>
+  <p>We keep data while the service contract is active. When the contract ends or the account owner asks, we delete the access token and all data obtained from Instagram within 30 days. You can remove the app at any time in Instagram <i>Settings → Apps and websites</i> — this automatically deletes the token and account identifiers on our side — or request full deletion by emailing <a href="mailto:{{email}}">{{email}}</a>. Full instructions: <a href="/exclusao-de-dados#en">{{app_url}}/exclusao-de-dados</a>.</p>
+
+  <h2>4. Your rights and contact</h2>
+  <p>Under Brazil's General Data Protection Law (LGPD) you may request access, correction, portability or deletion of your data at <a href="mailto:{{email}}">{{email}}</a>. Data controller: <b>{{razao}}</b>, {{cidade_en}}.</p>
+  </section>
+
+  <footer><a href="/termos">Termos de uso / Terms of Service</a> · <a href="/exclusao-de-dados">Exclusão de dados / Data deletion</a></footer>
+</main>
+</body>
+</html>

@@ -9,6 +9,8 @@ import { installFakes, setEnv } from './fakes.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
+const REWRITES = JSON.parse(await fs.readFile(path.join(ROOT, 'vercel.json'), 'utf8')).rewrites;
+
 export async function startServer(port = 4321) {
   setEnv({ APP_URL: `http://localhost:${port}` });
   const fakes = installFakes();
@@ -16,9 +18,9 @@ export async function startServer(port = 4321) {
     const u = new URL(req.url, 'http://x');
     // Vercel define res.status/json? Nossas funções usam só a API nativa do Node.
     // mesmos rewrites do vercel.json: páginas públicas passam pela função que monta a prévia do link
-    const PAGES = ['/aprovar', '/cliente', '/relatorio', '/proposta', '/historico', '/boasvindas', '/diagnostico'];
-    if (PAGES.includes(u.pathname)) {
-      req.url = `/api/page?p=${u.pathname.slice(1)}&${u.searchParams.toString()}`;
+    const rw = REWRITES.find((r) => r.source === u.pathname);
+    if (rw) {
+      req.url = `${rw.destination}&${u.searchParams.toString()}`;
       const mod = await import(pathToFileURL(path.join(ROOT, 'api/page.js')).href);
       return mod.default(req, res);
     }

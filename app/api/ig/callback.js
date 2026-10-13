@@ -3,6 +3,7 @@ import { route, query, redirect } from '../../lib/http.js';
 import { verify } from '../../lib/auth.js';
 import { connectAccount } from '../../lib/ig.js';
 import { db } from '../../lib/db.js';
+import { rememberScopedId } from '../../lib/pasta/meta.js';
 
 function back(res, state, params) {
   const p = new URLSearchParams(params);
@@ -17,13 +18,14 @@ export default route({
     if (q.error) return back(res, state, { ig: 'cancelado', msg: q.error_description || 'Conexão cancelada.' });
     if (!state?.client) return back(res, null, { ig: 'erro', msg: 'Link de conexão expirado. Tente de novo.' });
     try {
-      const acc = await connectAccount(q.code);
+      const { scoped_id, ...acc } = await connectAccount(q.code);
       // O mesmo perfil não pode ficar em dois clientes (publicaria em dobro).
       const dup = await db.one('clients', { select: 'id,name', ig_user_id: `eq.${acc.ig_user_id}`, id: `neq.${state.client}` });
       if (dup) return back(res, state, { ig: 'erro', msg: state.back === 'panel'
         ? `Este Instagram já está conectado ao cliente "${dup.name}".`
         : 'Este Instagram já está conectado em outro cadastro. Fale com a agência.' });
       await db.update('clients', { id: `eq.${state.client}` }, { ...acc, ig_connected_at: new Date().toISOString() });
+      await rememberScopedId(scoped_id, state.client).catch(() => {});
       back(res, state, { ig: 'ok', msg: `@${acc.ig_username || 'perfil'} conectado.` });
     } catch (e) {
       console.error(e);

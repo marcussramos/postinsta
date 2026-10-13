@@ -717,3 +717,9 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .perm input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
 .perm small { display: block; color: var(--muted); font-size: 12.5px; }
 .perm-sum { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; } .perm-sum .pill { font-size: 11px; }
+
+/* Ajustes → links para a revisão da Meta */
+.meta-urls { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.meta-urls[open] { display: grid; }
+.meta-urls summary { cursor: pointer; font-weight: 600; color: var(--gold); }
+.meta-urls[open] > *:not(summary) { margin-top: 2px; }

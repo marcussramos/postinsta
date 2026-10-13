@@ -74,6 +74,7 @@ export async function connectAccount(code) {
     ig_username: me.username || null,
     ig_token: long.access_token,
     ig_token_expires_at: new Date(Date.now() + (Number(long.expires_in) || 5184000) * 1000).toISOString(),
+    scoped_id: String(me.id || s.user_id || ''), // ID no escopo do app: é o que a Meta manda ao remover o app ou pedir exclusão
   };
 }
 
