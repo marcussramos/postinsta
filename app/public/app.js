@@ -2093,7 +2093,11 @@ function viewProposals() {
           p.status === 'sent' && p.contact?.whatsapp ? h('a', { class: 'btn wa sm', href: waLink(p.contact.whatsapp, msg), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
           p.status === 'accepted' && p.client_id ? h('a', { class: 'btn primary sm', href: `#pasta/${p.client_id}` }, 'Abrir pasta do cliente') : null,
           p.status !== 'accepted' ? h('button', { class: 'btn sm', onclick: () => openProposal(p) }, 'Editar') : null,
-          h('button', { class: 'btn ghost sm', onclick: () => openProposal({ ...p, id: null, status: 'draft', client_name: `${p.client_name} (cópia)` }) }, 'Duplicar')));
+          h('button', { class: 'btn ghost sm', onclick: () => openProposal({ ...p, id: null, status: 'draft', client_name: `${p.client_name} (cópia)` }) }, 'Duplicar'),
+          Object.assign(confirmButton('Apagar', 'Confirmar exclusão', async () => {
+            try { await api(`/api/pasta?r=proposals&id=${p.id}`, { method: 'DELETE' }); S.proposals = S.proposals.filter((x) => x.id !== p.id); render(); toast(p.status === 'accepted' ? 'Proposta apagada. O cliente e o contrato continuam.' : 'Proposta apagada.'); }
+            catch (e) { toast(e.message, true); }
+          }, 'btn ghost danger sm'), { style: 'margin-left:auto' })));
     }))];
 }
 
