@@ -7,49 +7,80 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Carlito:wght@400;700&family=Caladea:wght@700&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
-  :root { --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF; --bg: #EBEBE6; --accent: #2B2B2B; --warn: #8A5A00; --warn-bg: #FCF1D9; }
+  /* Layout igual ao modelo da agência (Word): Calibri Light no texto, cabeçalho centralizado,
+     marca-d'água MC no meio de cada página e rodapé com linha grossa, marca e logo. */
+  :root { --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF; --bg: #EBEBE6; --warn-bg: #FCF1D9;
+    --txt: "Calibri Light", "Calibri", "Carlito", "Segoe UI", Arial, sans-serif; --txt-forte: "Calibri", "Carlito", "Segoe UI", Arial, sans-serif; }
   * { box-sizing: border-box; }
   html { color-scheme: light; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Poppins", Arial, sans-serif; }
-  .bar { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid var(--line); }
+  .bar { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--line); }
   .bar-in { max-width: 900px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .bar h1 { font-size: 15px; margin: 0; flex: 1; min-width: 180px; }
   .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; color: var(--ink); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
   .note { max-width: 900px; margin: 14px auto 0; padding: 0 16px; }
   .note div { background: var(--warn-bg); color: #3b2a00; border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.45; }
-  .sheet { background: #fff; width: min(210mm, 100% - 32px); margin: 18px auto 40px; padding: 22mm 20mm; box-shadow: 0 1px 2px rgba(20,22,27,.06), 0 8px 24px rgba(20,22,27,.08); border-radius: 4px;
-    font-family: "Source Serif 4", Georgia, serif; font-size: 11.5pt; line-height: 1.6; text-align: justify; hyphens: auto; }
-  .sheet h1 { font-family: "Poppins", Arial, sans-serif; font-size: 15pt; text-align: center; letter-spacing: .02em; margin: 0 0 18pt; line-height: 1.3; }
-  .sheet h2 { font-family: "Poppins", Arial, sans-serif; font-size: 11pt; text-transform: uppercase; letter-spacing: .04em; margin: 16pt 0 6pt; break-after: avoid; }
-  .sheet p { margin: 0 0 9pt; orphans: 3; widows: 3; }
-  .sheet .campo { font-weight: 600; }
-  .sheet .campo.longo { font-weight: 400; }
-  mark.falta { background: #FFE58A; color: #5a3d00; padding: 0 3px; border-radius: 3px; font-family: "Poppins", Arial, sans-serif; font-size: 9.5pt; font-weight: 700; }
-  .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 40pt 28pt; margin-top: 40pt; break-inside: avoid; text-align: center; font-size: 10pt; line-height: 1.45; }
-  .ass-linha { border-top: 1px solid var(--ink); margin-bottom: 5pt; }
-  .sheet table.quadro { width: 100%; border-collapse: collapse; margin: 6pt 0 14pt; font-size: 10.5pt; line-height: 1.45; text-align: left; break-inside: avoid; }
-  .sheet table.quadro th, .sheet table.quadro td { border: 1px solid #A6A499; padding: 6pt 8pt; vertical-align: top; }
-  .sheet table.quadro th { width: 32%; font-family: "Poppins", Arial, sans-serif; font-size: 9.5pt; letter-spacing: .03em; background: #EFEEE8; }
-  .sheet p.direita { text-align: right; margin-top: 18pt; }
-  .sheet h1 + h2 { text-align: center; margin-top: 4pt; }
-  table.frame { width: 100%; border-collapse: collapse; }
-  table.frame > thead td, table.frame > tfoot td { padding: 0; }
-  .run-head { text-align: center; font-family: "Poppins", Arial, sans-serif; font-size: 8pt; letter-spacing: .08em; color: var(--muted); padding-bottom: 14pt !important; }
-  .run-foot { text-align: center; font-family: "Poppins", Arial, sans-serif; padding-top: 16pt !important; line-height: 1.3; }
-  .run-foot b { display: block; font-size: 10pt; letter-spacing: .14em; }
-  .run-foot span { font-size: 7.5pt; letter-spacing: .12em; color: var(--muted); }
   .msg { max-width: 560px; margin: 80px auto; text-align: center; padding: 0 16px; }
-  @media (max-width: 640px) { .sheet { padding: 20px 18px; font-size: 11pt; } .assinaturas { grid-template-columns: 1fr; } }
-  @page { size: A4; margin: 20mm 18mm; }
+
+  /* folha */
+  .sheet { position: relative; isolation: isolate; background: #fff; width: min(216mm, 100% - 32px); margin: 18px auto 40px; padding: 14mm 33mm 8mm;
+    box-shadow: 0 1px 2px rgba(20,22,27,.06), 0 8px 24px rgba(20,22,27,.08); border-radius: 3px;
+    font-family: var(--txt); font-size: 11pt; line-height: 1.43; color: #262626; text-align: justify; hyphens: manual; }
+  .run-head { font-family: var(--txt-forte); font-size: 11pt; line-height: 1.35; text-align: center; color: #000; margin-bottom: 24mm; }
+  .run-foot { position: relative; margin: 18mm -29mm 0 -29mm; padding-top: 3.2mm; border-top: 2.4pt solid #000; text-align: center;
+    font-family: "Cambria", "Caladea", Georgia, serif; font-weight: 700; font-size: 9.5pt; line-height: 1.25; letter-spacing: .02em; color: #000; min-height: 12mm; }
+  .run-foot img { position: absolute; right: 6mm; top: 2.4mm; height: 11mm; width: auto; }
+  .wm { position: absolute; left: 50%; top: 92mm; width: 82mm; transform: translateX(-50%); opacity: .2; filter: grayscale(1); mix-blend-mode: multiply; pointer-events: none; z-index: 1; }
+  .frame { width: 100%; border-collapse: collapse; }
+  .frame > thead, .frame > tfoot { display: none; }
+  .frame td { padding: 0; }
+  .corpo > h1:first-child { display: none; } /* o título já está no cabeçalho de cada página */
+  .corpo h1 { font-family: var(--txt-forte); font-weight: 400; font-size: 11pt; text-align: center; color: #000; margin: 0 0 14pt; }
+  .corpo h2 { font-family: var(--txt-forte); font-weight: 400; font-size: 11pt; color: #000; margin: 15pt 0 8pt; text-align: left; break-after: avoid; }
+  .corpo p { margin: 0 0 7pt; orphans: 3; widows: 3; }
+  .corpo strong, .corpo .num { font-family: var(--txt-forte); font-weight: 400; color: #000; }
+  .corpo .campo { font-weight: inherit; }
+  mark.falta { background: #FFE58A; color: #5a3d00; padding: 0 3px; border-radius: 3px; font-family: "Poppins", Arial, sans-serif; font-size: 9pt; font-weight: 700; }
+  .corpo table.quadro { width: 100%; border-collapse: collapse; margin: 22pt 0 26pt; text-align: left; break-inside: avoid; line-height: 1.47; }
+  .corpo table.quadro th, .corpo table.quadro td { border: 1.4pt solid #000; padding: 1.5pt 7pt 9pt; vertical-align: top; }
+  .corpo table.quadro th { width: 30%; font-family: var(--txt-forte); font-weight: 400; color: #000; }
+  .corpo table.quadro td { text-align: justify; }
+  .corpo table.quadro tr:not(.cap):nth-child(even) > * { background: #F2F2F2; }
+  .corpo table.quadro tr.cap th { width: auto; text-align: center; text-decoration: underline; padding: 0 7pt; background: none; }
+  .corpo p.direita { text-align: right; margin: 26pt 0 34pt; break-after: avoid; }
+  .assinaturas { text-align: left; }
+  .ass, .testemunhas { break-inside: avoid; }
+  .ass { width: 92mm; margin: 0 0 22pt; line-height: 1.45; }
+  .ass-linha { border-top: 1px solid #000; margin-bottom: 9pt; }
+  .testemunhas p { margin: 18pt 0 12pt !important; font-family: var(--txt-forte); color: #000; }
+  .test { margin: 0 0 18pt 9mm; line-height: 1.75; }
+  .test-n { display: flex; align-items: flex-end; gap: 6mm; }
+  .test-n .ass-linha { flex: 1; margin: 0 0 4pt; }
+  @media (max-width: 760px) {
+    .sheet { padding: 20px 18px 8px; font-size: 10.5pt; }
+    .run-head { margin-bottom: 28px; }
+    .run-foot { margin: 28px -14px 0; }
+    .wm { top: 220px; width: 60%; }
+    .ass { width: 100%; }
+  }
+  @page { size: letter; margin: 0; }
   @media print {
     body { background: #fff; }
     .bar, .note { display: none; }
-    .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; border-radius: 0; }
-    mark.falta { background: none; border-bottom: 1px solid #000; color: #000; }
+    .sheet { width: auto; margin: 0; padding: 0 33mm; box-shadow: none; border-radius: 0; }
+    /* repetidos em toda página: cabeçalho, marca-d'água e rodapé fixos; espaços do thead/tfoot fazem as margens */
+    .run-head { position: fixed; top: 13mm; left: 0; right: 0; margin: 0; }
+    .run-foot { position: fixed; bottom: 6mm; left: 9mm; right: 6mm; margin: 0; }
+    .wm { position: fixed; top: 96mm; }
+    .frame > thead, .frame > tfoot { display: table-header-group; }
+    .frame > tfoot { display: table-footer-group; }
+    .frame > thead td { height: 31mm; }
+    .frame > tfoot td { height: 27mm; }
+    mark.falta { background: none; border-bottom: 1px solid #000; color: #000; font-family: inherit; font-weight: 400; }
   }
 </style>
 </head>
@@ -77,25 +108,24 @@ try {
   document.getElementById('t').textContent = data.title;
   const sheet = document.createElement('article');
   sheet.className = 'sheet';
-  // Moldura: cabeçalho e rodapé com a marca se repetem em cada página impressa (thead/tfoot).
-  const b = data.brand || {};
+  const el = (tag, cls, lines) => { const e = document.createElement(tag); if (cls) e.className = cls; (lines || []).forEach((t, i) => { if (i) e.append(document.createElement('br')); e.append(t); }); return e; };
+  const header = data.header?.length ? data.header : (data.brand?.titulo ? [data.brand.titulo] : []);
+  if (header.length) sheet.append(el('div', 'run-head', header));
+  sheet.append(Object.assign(document.createElement('img'), { className: 'wm', src: '/brand/logo.png', alt: '' }));
+  // thead/tfoot vazios: repetem em cada página impressa e reservam o espaço do cabeçalho e do rodapé fixos
   const frame = document.createElement('table');
   frame.className = 'frame';
-  const row = (tag, cls) => { const s = document.createElement(tag); const tr = s.insertRow(); const td = tr.insertCell(); if (cls) td.className = cls; return [s, td]; };
-  const [thead, th] = row('thead', 'run-head'); th.textContent = b.titulo || '';
-  const [tfoot, tf] = row('tfoot', 'run-foot');
-  if (b.marca) tf.append(Object.assign(document.createElement('b'), { textContent: b.marca }));
-  if (b.slogan) tf.append(Object.assign(document.createElement('span'), { textContent: b.slogan }));
-  const [tbody, body] = row('tbody');
-  body.innerHTML = data.html; // HTML montado no servidor com todo texto escapado
-  if (b.titulo) frame.append(thead);
-  frame.append(tbody);
-  if (b.marca || b.slogan) frame.append(tfoot);
+  frame.innerHTML = '<thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td class="corpo"></td></tr></tbody>';
+  frame.querySelector('.corpo').innerHTML = data.html; // HTML montado no servidor com todo texto escapado
   sheet.append(frame);
+  if (data.footer?.length) {
+    const f = el('div', 'run-foot', data.footer);
+    f.append(Object.assign(document.createElement('img'), { src: '/brand/logo.png', alt: '' }));
+    sheet.append(f);
+  }
   doc.replaceChildren(sheet);
   const notes = [];
   if (data.missing?.length) notes.push(`<b>Faltam ${data.missing.length} dado(s)</b>, marcados em amarelo: ${data.missing.map((m) => m.replace(/[<>&]/g, '')).join(' · ')}. Preencha em "Editar dados" na pasta do cliente (ou em Ajustes, para os dados da agência). Se imprimir assim, eles saem como linha em branco para preencher à mão.`);
-  if (data.template_is_default) notes.push('Este é o <b>modelo provisório</b>. Cole o seu modelo em Ajustes → Modelo de contrato.');
   if (notes.length) { const n = document.getElementById('note'); n.hidden = false; n.firstElementChild.innerHTML = notes.join('<br><br>'); }
   btn.disabled = false;
 } catch (e) {

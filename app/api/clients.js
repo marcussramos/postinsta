@@ -71,6 +71,10 @@ function cleanClient(input) {
         keep[q] = n;
       }
     }
+    if (k.retroativo) { // contrato que substitui outro: data em que o serviço começou
+      need(/^\d{4}-\d{2}-\d{2}$/.test(String(k.retroativo)), 400, 'Data de início do serviço inválida.');
+      keep.retroativo = String(k.retroativo);
+    }
     if (k.total_conteudos !== undefined && k.total_conteudos !== '' && k.total_conteudos !== null) {
       const n = Number(k.total_conteudos);
       need(Number.isInteger(n) && n > 0 && n <= 999, 400, 'Total de conteúdos por mês inválido.');

@@ -98,7 +98,8 @@ test('contrato: dados do cliente + agência viram contrato preenchido', async ()
   // modelo padrão: faltam dados da agência
   let k = (await call(`/api/pasta?r=contract&client=${c.id}`)).data;
   assert.equal(k.template_is_default, true);
-  assert.ok(k.missing.includes('Razão social da agência'));
+  assert.ok(k.missing.includes('Endereço da agência'));
+  assert.match(k.html, /55\.846\.288\/0001-01/, 'CNPJ da agência por padrão');
   assert.match(k.html, /Pão Quente Ltda/);
   assert.match(k.html, /mil e quinhentos reais/);
   assert.match(k.html, /dia 10/);
@@ -132,4 +133,29 @@ test('modelo: tabela de resumo, texto à direita e identificação automática d
   const { html } = renderContract('| MENSALIDADE | {{contrato.valor}}\n| VIGÊNCIA | indeterminado\n\n>> Cuiabá/MT, hoje', { 'contrato.valor': 'R$ 1,00' });
   assert.match(html, /<table class="quadro">.*<th scope="row">MENSALIDADE<\/th><td><span class="campo">R\$ 1,00<\/span><\/td>/);
   assert.match(html, /<p class="direita">Cuiabá\/MT, hoje<\/p>/);
+});
+
+test('modelo da agência: condicionais, renumeração e pagamento montado das parcelas', async () => {
+  const { contractValues, DEFAULT_TEMPLATE } = await import('../lib/contract.js');
+  const base = { name: 'MY PET', monthly_fee_cents: 130000, due_day: 4, billing_start: '2026-10-01', contract_data: { documento: '35.762.465/0001-64', quota_posts: 8, quota_reels: 4 } };
+  // cliente novo, à vista, sem contrato anterior
+  let v = contractValues({ client: base, today: '2026-10-13' });
+  let r = renderContract(DEFAULT_TEMPLATE, v);
+  const txt = (h) => h.replace(/<[^>]+>/g, '');
+  assert.deepEqual(r.header, ['CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 'SOCIAL MEDIA']);
+  assert.deepEqual(r.footer, ['MCAROLINA DIGITAL', 'SOCIAL MEDIA | VIDEO MAKER']);
+  assert.doesNotMatch(txt(r.html), /retroativ|substitui, para todos|\n6\.4\.|O parcelamento/);
+  assert.match(txt(r.html), /Prazo indeterminado, a partir de 01\/10\/2026, nos termos/);
+  assert.match(txt(r.html), /6\.2\. O pagamento remunera/);
+  assert.match(txt(r.html), /via Pix, com vencimento no dia 4 de cada mês\./);
+  assert.match(txt(r.html), /3\.2\. Os 8 \(oito\) posts e os 4 \(quatro\) Reels/);
+  // contrato que substitui outro, em 3 parcelas (igual ao modelo em PDF)
+  v = contractValues({ client: { ...base, installments: [{ day: 4, cents: 43334 }, { day: 14, cents: 43333 }, { day: 24, cents: 43333 }], contract_data: { ...base.contract_data, retroativo: '2025-02-02' } }, today: '2026-09-23' });
+  r = renderContract(DEFAULT_TEMPLATE, v);
+  assert.match(txt(r.html), /Via Pix, em 3 \(três\) parcelas mensais: R\$\s433,34 no dia 4; R\$\s433,33 no dia 14; e R\$\s433,33 no dia 24 de cada mês\./);
+  assert.match(txt(r.html), /com efeitos retroativos a 02\/02\/2025/);
+  assert.match(txt(r.html), /2\.4\. A data de assinatura/);
+  assert.match(txt(r.html), /6\.4\. A mensalidade poderá ser reajustada/);
+  assert.match(txt(r.html), /quatrocentos e trinta e três reais e trinta e quatro centavos/);
+  assert.match(txt(r.html), /CLÁUSULA SEGUNDA – DA VIGÊNCIA E DA RETROATIVIDADE/);
 });
