@@ -1,6 +1,6 @@
 // Clientes (marcas). GET lista | POST cria | PATCH ?id= edita | DELETE ?id= remove
 import { route, send, readJson, query, need } from '../lib/http.js';
-import { requireAdmin, requireStaff, randomToken } from '../lib/auth.js';
+import { requireAdmin, requireStaff, requirePerm, can, seesClient, needClient, randomToken } from '../lib/auth.js';
 import { db, storage, docs } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
@@ -90,12 +90,13 @@ function teamClient(c, url) {
 export default route({
   GET: async (req, res) => {
     const u = await requireStaff(req);
-    const rows = await db.select('clients', { select: '*', order: 'name.asc' });
-    send(res, 200, rows.map((c) => (u.role === 'admin' ? publicClient(c, appUrl()) : teamClient(c, appUrl()))));
+    const rows = (await db.select('clients', { select: '*', order: 'name.asc' })).filter((c) => seesClient(u, c.id));
+    send(res, 200, rows.map((c) => (can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl()))));
   },
 
   POST: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'clientes');
+    need(!u.clients, 403, 'Contas com acesso a clientes específicos não cadastram clientes novos.');
     const data = cleanClient(await readJson(req));
     need(data.name, 400, 'Dê um nome ao cliente.');
     const row = await db.insert('clients', data);
@@ -103,10 +104,14 @@ export default route({
   },
 
   PATCH: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'clientes', 'financeiro');
     const { id } = query(req);
     need(id, 400, 'Cliente não informado.');
+    needClient(u, id);
     const body = await readJson(req);
+    const MONEY = ['monthly_fee', 'monthly_fee_cents', 'due_day', 'billing_start', 'installments', 'contract_data', 'portal'];
+    if (!can(u, 'financeiro')) need(!MONEY.some((k) => body[k] !== undefined), 403, 'Sem permissão para mexer no financeiro, no contrato ou na área do cliente.');
+    if (!can(u, 'clientes')) need(Object.keys(body).every((k) => MONEY.includes(k)), 403, 'Sem permissão para editar o cadastro do cliente.');
     const patch = cleanClient(body);
     if (body.new_approval_link) patch.approval_token = randomToken(); // invalida o link antigo
     // Área do cliente: 'enable' cria o link (ou mantém o atual), 'regenerate' troca, 'disable' desliga
@@ -117,7 +122,7 @@ export default route({
     if (body.disconnect_instagram) Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null });
     const [row] = await db.update('clients', { id: `eq.${id}` }, patch);
     need(row, 404, 'Cliente não encontrado.');
-    send(res, 200, publicClient(row, appUrl()));
+    send(res, 200, can(u, 'financeiro') ? publicClient(row, appUrl()) : teamClient(row, appUrl()));
   },
 
   DELETE: async (req, res) => {

@@ -1,7 +1,7 @@
 // Propostas comerciais. Agência: GET lista | POST cria | PATCH {id, ...} edita/envia | DELETE ?id=
 // Público (link do cliente, rota "proposal"): GET ?t= mostra | POST ?t= aceita (cria o cliente) ou recusa.
 import { route, send, readJson, query, need } from '../http.js';
-import { requireAdmin, randomToken, currentUser } from '../auth.js';
+import { requirePerm, randomToken, currentUser, can } from '../auth.js';
 import { db } from '../db.js';
 import { appUrl, TIMEZONE } from '../env.js';
 import { loadSettings } from './settings.js';
@@ -56,11 +56,11 @@ const withUrl = (p) => ({ ...p, url: `${appUrl()}/proposta?t=${p.token}` });
 
 export default route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     send(res, 200, (await db.select('proposals', { select: '*', order: 'created_at.desc', limit: 200 })).map(withUrl));
   },
   POST: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const b = await readJson(req);
     const data = clean(b);
     if (!data.installments) data.installments = [{ day: 10, cents: data.monthly_fee_cents }];
@@ -69,7 +69,7 @@ export default route({
     send(res, 201, withUrl(row));
   },
   PATCH: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const b = await readJson(req);
     need(b.id, 400, 'Proposta não informada.');
     const cur = await db.one('proposals', { select: 'status', id: `eq.${b.id}` });
@@ -82,7 +82,7 @@ export default route({
     send(res, 200, withUrl(row));
   },
   DELETE: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const { id } = query(req);
     need(id, 400, 'Proposta não informada.');
     await db.remove('proposals', { id: `eq.${id}` });
@@ -100,7 +100,7 @@ async function byToken(t) {
 export const publicProposal = route({
   GET: async (req, res) => {
     const p = await byToken(query(req).t);
-    const admin = (await currentUser(req))?.role === 'admin';
+    const admin = can(await currentUser(req), 'vendas');
     need(p.status !== 'draft' || admin, 404, 'Proposta não encontrada.');
     const { agency } = await loadSettings();
     const expired = p.status === 'sent' && p.valid_until && p.valid_until < today();

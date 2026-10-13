@@ -4,7 +4,7 @@
 //   direto ao Supabase (vídeos passam do limite de 4,5 MB da Vercel).
 import crypto from 'node:crypto';
 import { route, send, readRaw, query, need } from '../lib/http.js';
-import { requireStaff } from '../lib/auth.js';
+import { requirePerm, needClient } from '../lib/auth.js';
 import { storage } from '../lib/db.js';
 
 const MAX = 4 * 1024 * 1024; // a Vercel limita o corpo em ~4,5 MB
@@ -12,8 +12,9 @@ const VIDEO_EXT = { mp4: 'mp4', mov: 'mov', m4v: 'mp4' };
 
 export default route({
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'conteudo', 'marca');
     const { client, kind, ext } = query(req);
+    if (/^[0-9a-f-]{36}$/.test(client || '')) needClient(u, client);
     const folder = /^[0-9a-f-]{36}$/.test(client || '') ? client : 'geral';
     const month = new Date().toISOString().slice(0, 7);
     if (kind === 'video') {

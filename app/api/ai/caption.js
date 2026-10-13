@@ -1,7 +1,7 @@
 // IA: sugere legendas + hashtags olhando a imagem do post (API do Claude, com visão).
 // Precisa da variável ANTHROPIC_API_KEY na Vercel (console.anthropic.com → API Keys).
 import { route, send, readJson, need } from '../../lib/http.js';
-import { requireStaff } from '../../lib/auth.js';
+import { requirePerm, needClient } from '../../lib/auth.js';
 import { db } from '../../lib/db.js';
 import { brandBrief } from '../../lib/onboarding.js';
 
@@ -45,9 +45,10 @@ Responda SOMENTE com JSON válido, neste formato:
 
 export default route({
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'ia');
     need(process.env.ANTHROPIC_API_KEY, 503, 'A IA ainda não está ligada: falta ANTHROPIC_API_KEY na Vercel (veja a aba Ajustes).');
     const body = await readJson(req);
+    if (body.client_id) needClient(u, body.client_id);
     const client = body.client_id
       ? await db.one('clients', { select: '*', id: `eq.${body.client_id}` })
       : null;

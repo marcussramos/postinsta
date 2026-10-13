@@ -1,6 +1,6 @@
 // Controle de mensalidades. GET ?client= | PUT (marca o mês) | DELETE ?client=&month= (volta a "em aberto")
 import { route, send, readJson, query, need } from '../http.js';
-import { requireAdmin } from '../auth.js';
+import { requirePerm, needClient, seesClient } from '../auth.js';
 import { db } from '../db.js';
 import { cancelCharge } from '../asaas.js';
 
@@ -8,16 +8,18 @@ const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '');
 
 export default route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'financeiro');
     const { client } = query(req);
+    if (client) needClient(u, client);
     const params = { select: '*', order: 'ref_month.desc', limit: 1000 };
     if (client) params.client_id = `eq.${client}`;
-    send(res, 200, await db.select('payments', params));
+    send(res, 200, (await db.select('payments', params)).filter((p) => seesClient(u, p.client_id)));
   },
 
   PUT: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'financeiro');
     const b = await readJson(req);
+    needClient(u, b.client_id);
     // Em lote: marcar várias parcelas como pagas/isentas de uma vez (ex.: meses antigos ao cadastrar um cliente)
     if (Array.isArray(b.items)) {
       need(b.client_id && b.items.length <= 500, 400, 'Lote inválido.');
@@ -53,7 +55,7 @@ export default route({
   },
 
   DELETE: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'financeiro');
     const { client, month, n } = query(req);
     need(client && isMonth(month), 400, 'Informe cliente e mês.');
     const f = { client_id: `eq.${client}`, ref_month: `eq.${month}` };

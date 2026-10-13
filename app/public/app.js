@@ -2,6 +2,7 @@
 import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } from '/billing.js';
 import { QUESTIONS as ONB_QUESTIONS, SECTIONS as ONB_SECTIONS } from '/onboarding-perguntas.js';
 import { reviewPost, applyFix } from '/revisor.js';
+import { PERMS, TEAM_DEFAULT } from '/permissoes.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
@@ -19,6 +20,7 @@ function viewFromHash() {
   return VIEWS.includes(v) ? v : 'inicio';
 }
 const root = document.getElementById('app');
+const can = (p) => S.role === 'admin' || Boolean(S.perms?.[p]);
 const sinceISO = () => new Date(Date.now() - 7 * 86400e3).toISOString();
 
 boot();
@@ -32,11 +34,11 @@ async function boot() {
   S.view = viewFromHash();
   try {
     const s = await api('/api/session');
-    Object.assign(S, { admin: s.admin, staff: s.staff ?? s.admin, role: s.role || (s.admin ? 'admin' : null), userName: s.name, tz: s.timezone, setup: s.setup || null });
+    Object.assign(S, { admin: s.admin, staff: s.staff ?? s.admin, role: s.role || (s.admin ? 'admin' : null), userName: s.name, perms: s.perms || null, limitClients: s.clients || null, tz: s.timezone, setup: s.setup || null });
   } catch { /* mostra o login */ }
   if (!S.staff) return renderLogin();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  if (S.role !== 'admin' && ['ajustes', 'propostas', 'vendas'].includes(S.view)) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
+  if ((S.view === 'ajustes' && S.role !== 'admin') || (['propostas', 'vendas'].includes(S.view) && !can('vendas'))) { S.view = 'inicio'; history.replaceState(null, '', '#inicio'); }
   await loadAll();
 }
 
@@ -44,7 +46,7 @@ async function loadAll() {
   try {
     const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
     S.clients = clients; S.posts = posts;
-    if (S.role === 'admin') S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
+    if (can('financeiro')) S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
     await loadExtras();
   } catch (e) {
     if (e.status === 401) { S.admin = false; S.staff = false; return renderLogin(); }
@@ -77,7 +79,7 @@ async function loadExtras() {
     api('/api/pasta?r=requests&open=1').catch(() => null),
   ]);
   S.deliv = deliv || {}; S.requests = reqs || [];
-  if (S.role === 'admin') [S.proposals, S.leads] = await Promise.all([api('/api/pasta?r=proposals').catch(() => null), api('/api/pasta?r=leads').catch(() => null)]);
+  if (can('vendas')) [S.proposals, S.leads] = await Promise.all([api('/api/pasta?r=proposals').catch(() => null), api('/api/pasta?r=leads').catch(() => null)]);
 }
 
 // ───────────────────────── login
@@ -115,13 +117,13 @@ function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
-    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), S.role === 'admin' ? tab('vendas', 'Vendas') : null, S.role === 'admin' ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
+    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), can('vendas') ? tab('vendas', 'Vendas') : null, can('vendas') ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
-    h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post'),
+    can('conteudo') ? h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post') : null,
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
   const page = h('main', { class: `page${['fluxo', 'vendas'].includes(S.view) ? ' wide' : ''}` });
-  if (['ajustes', 'propostas', 'vendas'].includes(S.view) && S.role !== 'admin') S.view = 'inicio';
+  if ((S.view === 'ajustes' && S.role !== 'admin') || (['propostas', 'vendas'].includes(S.view) && !can('vendas'))) S.view = 'inicio';
   const pend = S.role === 'admin' ? setupPending() : [];
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
   const views = { inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals, vendas: viewSales };
@@ -270,8 +272,8 @@ function viewCalendar() {
     h('div', {}, h('div', { class: 'eyebrow' }, 'Planejamento'), h('h1', {}, label)),
     h('div', { class: 'spacer' }),
     h('div', { class: 'actions' },
-      h('button', { class: 'btn ai sm', onclick: () => openPlan({ month: m }) }, '✨ Planejar o mês'),
-      h('button', { class: 'btn sm', onclick: () => openDuplicate() }, 'Duplicar semana'),
+      can('ia') ? h('button', { class: 'btn ai sm', onclick: () => openPlan({ month: m }) }, '✨ Planejar o mês') : null,
+      can('conteudo') ? h('button', { class: 'btn sm', onclick: () => openDuplicate() }, 'Duplicar semana') : null,
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Modo de exibição' },
         ...[['thumbs', 'Miniaturas'], ['list', 'Lista']].map(([k, l]) => h('button', { class: 'seg-btn', 'aria-pressed': String(S.cal.mode === k),
           onclick: () => { S.cal.mode = k; savePref('mc_cal_mode', k); render(); } }, l))),
@@ -369,7 +371,7 @@ function viewBoard() {
     const colEl = h('section', { class: `tlist${col.drop ? ' droppable' : ''}`, 'data-col': col.id, 'aria-label': col.label },
       h('header', { class: 'tlist-head' }, h('span', { class: `tlist-dot st-${col.id}`, 'aria-hidden': 'true' }), h('h2', {}, col.label), h('span', { class: 'tlist-n' }, String(items.length))),
       body,
-      ['idea', 'draft', 'internal_review'].includes(col.id) ? quickAdd(col) : h('div', { class: 'tlist-foot muted' }, col.id === 'pending_approval' ? 'Envie pelo cartão ou arraste para cá' : col.id === 'approved' ? 'Sai sozinho no horário' : col.id === 'published' ? 'Últimos 7 dias' : 'Volta para produção ao ajustar'));
+      ['idea', 'draft', 'internal_review'].includes(col.id) && can('conteudo') ? quickAdd(col) : h('div', { class: 'tlist-foot muted' }, col.id === 'pending_approval' ? 'Envie pelo cartão ou arraste para cá' : col.id === 'approved' ? 'Sai sozinho no horário' : col.id === 'published' ? 'Últimos 7 dias' : 'Volta para produção ao ajustar'));
     if (col.drop) {
       colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.classList.add('over'); });
       colEl.addEventListener('dragleave', (e) => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove('over'); });
@@ -387,7 +389,7 @@ function viewBoard() {
     oninput: (e) => { S.boardQ = e.target.value; clearTimeout(S.boardT); S.boardT = setTimeout(() => { render(); const el = document.querySelector('.tsearch'); el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); }, 250); } });
   return [
     h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Workflow de criação e aprovação'), h('h1', {}, 'Fluxo')), h('div', { class: 'spacer' }),
-      h('div', { class: 'actions' }, search, h('button', { class: 'btn ai sm', onclick: () => openPlan({}) }, '✨ Planejar o mês com IA'))),
+      h('div', { class: 'actions' }, search, can('ia') ? h('button', { class: 'btn ai sm', onclick: () => openPlan({}) }, '✨ Planejar o mês com IA') : null)),
     clientFilter(),
     h('div', { class: 'tboard-wrap' }, board),
     h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Arraste os cartões entre as listas. Para ir ao cliente ou à fila, o post precisa de mídia e data.'),
@@ -443,7 +445,7 @@ function boardCard(p, col) {
         p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
         h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
       col.next || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
-        col.next ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
+        col.next && (col.next[0] !== 'send' || can('enviar')) && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
         p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null) : null));
   card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; card.classList.add('dragging'); });
   card.addEventListener('dragend', () => card.classList.remove('dragging'));
@@ -700,7 +702,7 @@ function openPost(post = null, opts = {}) {
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
         h('button', { type: 'button', class: 'btn sm', onclick: () => openBankPicker([...picked][0], takeFromBank) }, '🗂 Banco de mídia'),
         h('span', { class: 'hint' }, 'Feed 1080×1350 · Reels 1080×1920. Baixe e arraste aqui.'))),
-    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, snipBar, locked ? null : h('div', { class: 'actions' }, aiPanel(), h('button', { class: 'btn sm', type: 'button', onclick: () => runReview(false) }, '🔎 Revisar post'))),
+    h('div', { class: 'field' }, h('label', { for: 'f-cap' }, 'Legenda'), capNote, cap, counter, snipBar, locked ? null : h('div', { class: 'actions' }, can('ia') ? aiPanel() : null, h('button', { class: 'btn sm', type: 'button', onclick: () => runReview(false) }, '🔎 Revisar post'))),
     revBox,
     h('div', { class: 'two' },
       h('div', { class: 'field' }, h('label', { for: 'f-date' }, 'Data'), dIn),
@@ -788,7 +790,7 @@ function openPost(post = null, opts = {}) {
         ai.corrected_caption ? h('div', { class: 'rev-fix' }, h('span', { class: 'label' }, 'Legenda corrigida'), ai.changes?.length ? h('ul', { class: 'rev-changes' }, ...ai.changes.map((c) => h('li', {}, c))) : null,
           h('p', { style: 'margin:0;white-space:pre-line;font-size:14px' }, ai.corrected_caption),
           h('button', { class: 'btn primary sm', type: 'button', onclick: () => { cap.value = ai.corrected_caption; updCounter(); toast('Legenda corrigida aplicada.'); } }, 'Usar legenda corrigida')) : null)
-        : (mtype !== 'STORY' || img ? aiBtn : null));
+        : (can('ia') && (mtype !== 'STORY' || img) ? aiBtn : null));
   }
   // mode: 'idea' | 'production' | 'review' | 'send' | 'approve' | 'save'
   async function save(mode) {
@@ -877,6 +879,9 @@ function openPost(post = null, opts = {}) {
     if (st === 'approved') foot.push(B('Tirar da fila', 'ghost', () => action('to_production', 'Saiu da fila: voltou para produção.')), B('Salvar', 'primary', () => save('save')));
     if (st === 'failed') foot.push(B('Voltar p/ produção', 'ghost', () => action('to_production', 'Voltou para produção.')), B('Tentar de novo', 'primary', () => action('retry', 'Na fila de novo. Sai em até 5 minutos.')));
   }
+  if (!can('enviar')) foot = foot.filter((b) => !(b instanceof HTMLButtonElement) || !/Enviar para aprovação|Aprovar|reenviar|Tentar de novo/.test(b.textContent));
+  if (!can('apagar') && foot[0]?.textContent === 'Apagar') foot = foot.slice(1);
+  if (!can('conteudo')) foot = [h('span', { class: 'muted' }, 'Só leitura: sem permissão para editar posts.')];
   const footBtns = foot.filter((b) => b instanceof HTMLButtonElement);
   if (post && ['pending_approval', 'approved'].includes(post.status) && !locked) {
     body.push(h('p', { class: 'hint muted', style: 'margin:0;font-size:13px' }, 'Mudar imagem, legenda ou texto alternativo volta o post para produção, para o cliente aprovar a versão nova. Mudar só data, hora, pauta ou notas mantém o status.'));
@@ -926,7 +931,7 @@ function viewClients() {
   const out = [h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, `${S.clients.length} de 10 clientes`), h('h1', {}, 'Clientes')),
     h('div', { class: 'spacer' }),
-    S.role === 'admin' ? h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente') : null)];
+    can('clientes') && !S.limitClients ? h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente') : null)];
   if (!S.clients.length) {
     out.push(h('div', { class: 'empty' }, h('h3', {}, 'Nenhum cliente ainda'),
       h('p', { class: 'muted' }, 'Cadastre o cliente, conecte o Instagram dele e mande o link de aprovação.'),
@@ -959,11 +964,11 @@ function cardClient(c) {
     h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Link fixo de aprovação'),
       h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.approval_url), h('button', { class: 'btn sm', onclick: () => copyText(c.approval_url, 'Link copiado.') }, 'Copiar'))),
     h('div', { class: 'actions' },
-      c.ig_connected && !expired || S.role !== 'admin' ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
+      c.ig_connected && !expired || !can('clientes') ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
       c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, approvalMessage(c)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
       c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, approvalSubject(c), approvalMessage(c)) }, 'E-mail') : null,
-      S.role === 'admin' ? h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, '🔒 Pasta') : h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, 'Marca e pedidos'),
-      S.role === 'admin' ? h('button', { class: 'btn sm', onclick: () => openClient(c) }, 'Editar') : null));
+      folderTabsFor().length ? h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, can('financeiro') ? '🔒 Pasta' : 'Marca e pedidos') : null,
+      can('clientes') ? h('button', { class: 'btn sm', onclick: () => openClient(c) }, 'Editar') : null));
 }
 
 function openClient(c = null) {
@@ -1140,6 +1145,15 @@ function settingsContract() {
 // ───────────────────────── pasta privada do cliente (contrato, financeiro, relatórios)
 const FOLDER_TABS = [['contract', 'Contrato'], ['finance', 'Financeiro'], ['report', 'Relatórios'], ['history', 'Aprovações'], ['requests', 'Pedidos'], ['brand', 'Marca'], ['media', 'Banco de mídia'], ['snippets', 'Modelos'], ['other', 'Outros']];
 const TEAM_TABS = ['requests', 'brand', 'media', 'snippets'];
+// seções da pasta que a pessoa pode abrir
+function folderTabsFor() {
+  if (can('financeiro')) return FOLDER_TABS.map(([k]) => k);
+  const out = [];
+  if (can('relatorios')) out.push('report', 'history');
+  if (can('marca')) out.push('requests', 'brand', 'media', 'snippets');
+  else if (can('conteudo')) out.push('media', 'snippets');
+  return FOLDER_TABS.map(([k]) => k).filter((k) => out.includes(k));
+}
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt';
 const todayLocal = () => partsInTz(new Date().toISOString(), S.tz).date;
 const nextMonth = (m) => shiftMonth(m, 1);
@@ -1150,9 +1164,12 @@ const lateCount = (c) => billingMonths(c).filter((m) => m.status === 'late').len
 const PAY_LABEL = { paid: ['Pago', 'st-approved'], waived: ['Isento', 'st-draft'], open: ['Em aberto', 'st-pending_approval'], late: ['Atrasado', 'st-failed'] };
 
 async function loadFolder(id) {
-  if (S.role !== 'admin') { // equipe: só marca e pedidos
-    try { S.folder.files = await api(`/api/pasta?r=files&client=${id}`); S.folder.error = null; } catch (e) { S.folder.error = e.message; }
-    S.folder.loading = false; if (!TEAM_TABS.includes(S.folder.tab)) S.folder.tab = 'requests';
+  if (!can('financeiro')) { // equipe: só as seções liberadas
+    try {
+      const [files, reports] = await Promise.all([api(`/api/pasta?r=files&client=${id}`).catch(() => []), can('relatorios') ? api(`/api/pasta?r=reports&client=${id}`).catch(() => null) : null]);
+      Object.assign(S.folder, { files, reports, error: null });
+    } catch (e) { S.folder.error = e.message; }
+    S.folder.loading = false; if (!folderTabsFor().includes(S.folder.tab)) S.folder.tab = folderTabsFor()[0] || 'requests';
     if (S.view === 'pasta' && S.folderId === id) render();
     return;
   }
@@ -1178,10 +1195,10 @@ function viewFolder() {
     h('div', {}, h('a', { class: 'eyebrow back', href: '#clientes' }, '← Clientes'), h('h1', {}, c.name)),
     h('div', { class: 'spacer' }),
     h('div', { class: 'actions' },
-      h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, S.role === 'admin' ? '🔒 Pasta privada' : '🔒 Marca e pedidos'),
-      S.role === 'admin' ? h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente') : null));
+      h('span', { class: 'lock', title: 'Os arquivos ficam num cofre privado. Cada link abre por 2 minutos e só com você logado.' }, can('financeiro') ? '🔒 Pasta privada' : '🔒 Pasta do cliente'),
+      can('financeiro') ? h('button', { class: `btn sm${c.portal_url ? '' : ' primary'}`, onclick: () => openPortal(c) }, c.portal_url ? '🔗 Link do cliente' : '🔗 Criar link do cliente') : null));
   const tabs = h('div', { class: 'seg folder-tabs', role: 'group', 'aria-label': 'Seções da pasta' },
-    ...FOLDER_TABS.filter(([k]) => S.role === 'admin' || TEAM_TABS.includes(k)).map(([k, l]) => {
+    ...FOLDER_TABS.filter(([k]) => folderTabsFor().includes(k)).map(([k, l]) => {
       const n = k === 'finance' ? late : k === 'report' ? count('report') + (F.reports?.length || 0)
         : k === 'requests' ? (S.requests || []).filter((r) => r.client_id === c.id && r.status !== 'done').length
         : ['history', 'brand', 'media', 'snippets'].includes(k) ? 0 : count(k);
@@ -1388,7 +1405,7 @@ const stat = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` 
 
 // Dados da agência (PIX para a cobrança). Carrega uma vez.
 function ensureSettings() {
-  if (S.settings !== undefined || S.role !== 'admin') return;
+  if (S.settings !== undefined || !can('financeiro')) return;
   S.settings = null;
   api('/api/pasta?r=settings').then((v) => { S.settings = v; }).catch(() => { S.settings = false; }).finally(() => render());
 }
@@ -1409,7 +1426,7 @@ function chargeButton(c, m, p) {
 
 // Painel de cobranças: por cliente — atrasado somado + o que vence em até 2 dias.
 function chargesCard() {
-  if (S.role !== 'admin') return null;
+  if (!can('financeiro')) return null;
   ensureSettings();
   const rows = [];
   for (const c of S.clients) {
@@ -1835,10 +1852,12 @@ function settingsTeam() {
   if (S.team === false) return [head, h('p', { class: 'muted' }, 'Disponível depois da atualização do banco de dados.')];
   if (!S.team) return [head, h('p', { class: 'muted' }, 'Carregando…')];
   return [head, h('article', { class: 'card' },
-    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cada pessoa entra com o próprio e-mail e senha. "Equipe" cria e edita posts, usa a agenda, a IA, a marca e os pedidos dos clientes, mas não vê financeiro, contratos, relatórios, pastas nem Ajustes. "Administrador" vê tudo. Você (senha principal) é sempre administrador.'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Cada pessoa entra com o próprio e-mail e senha. Em "Editar" você escolhe exatamente o que ela acessa (posts, IA, marca, relatórios, financeiro, vendas…) e de quais clientes. "Administrador" vê tudo, inclusive Ajustes. Você (senha principal) é sempre administrador.'),
     S.team.length ? h('div', { class: 'charge-list' }, ...S.team.map((u) => h('div', { class: 'charge' },
       h('div', {}, h('b', {}, u.name), ' ', h('span', { class: `pill ${u.active ? (u.role === 'admin' ? 'st-published' : 'st-internal_review') : 'st-draft'}` }, u.active ? (u.role === 'admin' ? 'Administrador' : 'Equipe') : 'Desativado'),
-        h('div', { class: 'muted', style: 'font-size:13px' }, u.email)),
+        h('div', { class: 'muted', style: 'font-size:13px' }, u.email),
+        u.role !== 'admin' ? h('div', { class: 'perm-sum' }, ...PERMS.filter(([k]) => (u.perms || TEAM_DEFAULT)[k]).map(([, l]) => h('span', { class: 'pill st-draft' }, l)),
+          h('span', { class: 'pill st-pending_approval' }, u.client_ids?.length ? `${u.client_ids.length} cliente(s)` : 'Todos os clientes')) : null),
       h('button', { class: 'btn sm', onclick: () => openMember(u) }, 'Editar'))))
       : h('p', { class: 'muted files-empty' }, 'Só você por enquanto.'))];
 }
@@ -1848,7 +1867,24 @@ function openMember(u = null) {
   const pw = h('input', { id: 'u-pw', type: 'password', autocomplete: 'new-password', placeholder: u ? 'deixe em branco para manter' : 'mínimo 8 caracteres' });
   let role = u?.role || 'team';
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Papel' }, ...[['team', 'Equipe'], ['admin', 'Administrador']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn', 'aria-pressed': String(role === k),
-    onclick: (e) => { role = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); } }, l)));
+    onclick: (e) => { role = k; for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.currentTarget)); drawPerms(); } }, l)));
+  // permissões (só para "Equipe")
+  const perms = { ...TEAM_DEFAULT, ...(u?.perms || {}) };
+  let onlySome = Boolean(u?.client_ids?.length);
+  const chosen = new Set(u?.client_ids || []);
+  const permBox = h('div', { class: 'perm-box' });
+  const drawPerms = () => {
+    permBox.hidden = role === 'admin';
+    permBox.replaceChildren(
+      h('div', { class: 'perm-head' }, h('b', {}, 'O que pode fazer'), h('span', { class: 'muted' }, 'Marque só o que a pessoa precisa.')),
+      ...PERMS.map(([k, label, hint]) => h('label', { class: 'perm' }, h('input', { type: 'checkbox', checked: perms[k], onchange: (e) => { perms[k] = e.target.checked; if (k === 'conteudo' && !e.target.checked) { perms.enviar = false; perms.apagar = false; drawPerms(); } } }),
+        h('span', {}, h('b', {}, label), hint ? h('small', {}, hint) : null))),
+      h('div', { class: 'perm-head', style: 'margin-top:8px' }, h('b', {}, 'Quais clientes')),
+      h('div', { class: 'seg', role: 'group' }, ...[[false, 'Todos os clientes'], [true, 'Só alguns']].map(([v, l]) => h('button', { type: 'button', class: 'seg-btn', 'aria-pressed': String(onlySome === v), onclick: () => { onlySome = v; drawPerms(); } }, l))),
+      onlySome ? h('div', { class: 'pick' }, ...S.clients.map((c) => h('button', { type: 'button', class: 'chip', 'aria-pressed': String(chosen.has(c.id)), onclick: () => { if (chosen.has(c.id)) chosen.delete(c.id); else chosen.add(c.id); drawPerms(); } }, c.name))) : null,
+      onlySome ? h('span', { class: 'hint muted' }, 'A pessoa só vê posts, calendário, pastas e pedidos desses clientes.') : null);
+  };
+  const access = () => (role === 'admin' ? {} : { perms, client_ids: onlySome ? [...chosen] : null });
   const done = (row, msg) => { S.team = [...S.team.filter((x) => x.id !== row.id), row].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')); close(); render(); toast(msg); };
   const foot = [];
   if (u) foot.push(
@@ -1857,17 +1893,20 @@ function openMember(u = null) {
   foot.push(h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async () => {
     try {
       const row = u
-        ? await api('/api/pasta?r=users', { method: 'PATCH', body: { id: u.id, name: name.value, role, password: pw.value || undefined } })
-        : await api('/api/pasta?r=users', { method: 'POST', body: { name: name.value, email: email.value, role, password: pw.value } });
-      done(row, u ? 'Conta atualizada.' : `Conta criada. Mande o e-mail e a senha para ${row.name} entrar.`);
+        ? await api('/api/pasta?r=users', { method: 'PATCH', body: { id: u.id, name: name.value, role, password: pw.value || undefined, ...access() } })
+        : await api('/api/pasta?r=users', { method: 'POST', body: { name: name.value, email: email.value, role, password: pw.value, ...access() } });
+      if (onlySome && role !== 'admin' && !chosen.size) return toast('Escolha pelo menos um cliente ou marque "Todos os clientes".', true);
+      done(row, u ? 'Conta atualizada. Vale no próximo clique da pessoa (se estiver logada, ela só precisa atualizar a página).' : `Conta criada. Mande o e-mail e a senha para ${row.name} entrar.`);
     } catch (e) { toast(e.message, true); }
   } }, u ? 'Salvar' : 'Criar conta'));
   const close = drawer(u ? `Equipe · ${u.name}` : 'Nova pessoa na equipe', [
     h('div', { class: 'field' }, h('label', { for: 'u-name' }, 'Nome'), name),
     h('div', { class: 'field' }, h('label', { for: 'u-email' }, 'E-mail (login)'), email),
     h('div', { class: 'field' }, h('label', { for: 'u-pw' }, u ? 'Nova senha' : 'Senha inicial'), pw, h('span', { class: 'hint' }, 'Combine a senha com a pessoa por um canal seguro.')),
-    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Papel'), seg),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Papel'), seg, h('span', { class: 'hint' }, 'Administrador vê e faz tudo, inclusive Ajustes e as contas da equipe.')),
+    permBox,
   ], foot);
+  drawPerms();
   name.focus();
 }
 
@@ -1892,7 +1931,7 @@ async function openFeedPreview(clientId, current) {
 
 // ───────────────────────── INÍCIO: a "entrada" do MC DIGITAL (clique na logo)
 function viewHome() {
-  if (S.role === 'admin') ensureSettings();
+  if (can('financeiro')) ensureSettings();
   const today = todayLocal();
   const hour = Number(partsInTz(new Date().toISOString(), S.tz).time.slice(0, 2));
   const hello = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
@@ -1914,14 +1953,14 @@ function viewHome() {
       h('p', { class: 'muted' }, todays.length ? `Hoje saem ${todays.length} publicaç${todays.length > 1 ? 'ões' : 'ão'}.` : 'Nenhuma publicação marcada para hoje.',
         waiting ? ` ${waiting} post${waiting > 1 ? 's' : ''} esperando aprovação dos clientes.` : '')),
     h('div', { class: 'home-quick' },
-      h('button', { class: 'btn primary', onclick: () => openPost() }, '+ Novo post'),
+      can('conteudo') ? h('button', { class: 'btn primary', onclick: () => openPost() }, '+ Novo post') : null,
       h('a', { class: 'btn', href: '#calendario' }, 'Calendário'),
       h('a', { class: 'btn', href: '#fluxo' }, 'Fluxo'),
-      S.role === 'admin' ? h('button', { class: 'btn', onclick: () => openProposal() }, '+ Proposta') : null));
+      can('vendas') ? h('button', { class: 'btn', onclick: () => openProposal() }, '+ Proposta') : null));
 
   // números
   const tiles = [];
-  if (S.role === 'admin') {
+  if (can('financeiro')) {
     let mrr = 0, received = 0, toReceive = 0, late = 0, active = 0;
     for (const c of S.clients) {
       if (!c.billing_start || c.monthly_fee_cents == null) continue;
@@ -1960,7 +1999,7 @@ function viewHome() {
     if (!c.ig_connected) alerts.push(alertRow('warn', `${c.name}: Instagram não conectado`, 'Sem conexão, nada publica', null, `#clientes`));
     else if (exp !== null && exp <= 5) alerts.push(alertRow('warn', `${c.name}: conexão do Instagram vence em ${Math.max(0, exp)} dia(s)`, 'Reconecte', null, '#clientes'));
   }
-  if (S.role === 'admin' && Array.isArray(S.proposals)) {
+  if (can('vendas') && Array.isArray(S.proposals)) {
     for (const p of S.proposals.filter((x) => x.status === 'accepted' && x.accepted_at && Date.now() - new Date(x.accepted_at) < 10 * 864e5)) {
       alerts.push(alertRow('good', `🎉 ${p.client_name} aceitou a proposta`, 'Gere o contrato e conecte o Instagram', null, p.client_id ? `#pasta/${p.client_id}` : '#propostas'));
     }
@@ -1968,7 +2007,7 @@ function viewHome() {
       alerts.push(alertRow('', `${p.client_name}: proposta sem resposta há ${Math.floor((Date.now() - new Date(p.updated_at || p.created_at)) / 864e5)} dias`, 'Que tal um follow-up?', null, '#propostas'));
     }
   }
-  if (S.role === 'admin' && Array.isArray(S.leads)) {
+  if (can('vendas') && Array.isArray(S.leads)) {
     const due = S.leads.filter((l) => !['fechado', 'perdido'].includes(l.stage) && (l.wants_contact && l.stage === 'novo' || (l.next_action_at && l.next_action_at <= today)));
     for (const l of due.slice(0, 4)) alerts.push(alertRow(l.wants_contact ? 'bad' : 'warn', `${l.wants_contact ? '🔥 ' : ''}Follow-up: ${l.name}${l.instagram ? ` (@${l.instagram})` : ''}`, l.next_action || 'Retomar o contato', () => openLead(l)));
     if (due.length > 4) alerts.push(alertRow('', `+${due.length - 4} follow-ups para hoje`, 'Veja em Vendas', null, '#vendas'));
@@ -1998,7 +2037,7 @@ function viewHome() {
 
   // reajustes (aniversário do contrato)
   let reaj = null;
-  if (S.role === 'admin') {
+  if (can('financeiro')) {
     const list = S.clients.filter((c) => c.billing_start && c.billing_start.slice(5, 7) === month.slice(5, 7) && c.billing_start.slice(0, 4) < month.slice(0, 4));
     if (list.length) reaj = h('section', { class: 'card' }, h('h3', {}, 'Reajustes do mês'),
       h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Contratos que fazem aniversário este mês: hora de aplicar o IPCA de 12 meses (cláusula 6.4) e avisar o cliente.'),

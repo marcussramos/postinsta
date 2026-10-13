@@ -5,7 +5,7 @@
 //   media      GET ?client= | POST {client_id, url, path, name} | DELETE ?id=    banco de mídia do cliente
 //   duplicate  POST {from, days, shift, client_id?}       duplica uma semana (ou período) de posts
 import { route, send, readJson, query, need } from '../http.js';
-import { requireStaff } from '../auth.js';
+import { requireStaff, requirePerm, needClient, seesClient } from '../auth.js';
 import { db, storage } from '../db.js';
 import { env, TIMEZONE } from '../env.js';
 import { generatePlan, createPlanPosts, zonedISO } from '../planner.js';
@@ -17,9 +17,10 @@ const uuid = (v) => /^[0-9a-f-]{36}$/i.test(String(v || ''));
 
 export const planRoute = route({
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'ia');
     const b = await readJson(req);
     need(uuid(b.client_id), 400, 'Escolha o cliente.');
+    needClient(u, b.client_id);
     const c = await db.one('clients', { select: '*', id: `eq.${b.client_id}` });
     need(c, 404, 'Cliente não encontrado.');
     if (b.create) {
@@ -47,19 +48,22 @@ function cleanSnippet(b, partial = false) {
 
 export const snippetsRoute = route({
   GET: async (req, res) => {
-    await requireStaff(req);
+    const u = await requireStaff(req);
     const { client } = query(req);
+    if (uuid(client)) needClient(u, client);
     const params = { select: '*', order: 'name.asc', limit: 300 };
     if (uuid(client)) params.or = `(client_id.eq.${client},client_id.is.null)`;
     send(res, 200, await db.select('snippets', params));
   },
   POST: async (req, res) => {
-    await requireStaff(req);
-    const row = await db.insert('snippets', cleanSnippet(await readJson(req)));
+    const u = await requirePerm(req, 'marca', 'conteudo');
+    const data = cleanSnippet(await readJson(req));
+    if (data.client_id) needClient(u, data.client_id);
+    const row = await db.insert('snippets', data);
     send(res, 201, row);
   },
   PATCH: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'marca', 'conteudo');
     const b = await readJson(req);
     need(uuid(b.id), 400, 'Modelo não informado.');
     const cur = await db.one('snippets', { select: 'kind', id: `eq.${b.id}` });
@@ -68,9 +72,11 @@ export const snippetsRoute = route({
     send(res, 200, row);
   },
   DELETE: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'marca', 'conteudo');
     const { id } = query(req);
     need(uuid(id), 400, 'Modelo não informado.');
+    const own = await db.one('snippets', { select: 'client_id', id: `eq.${id}` });
+    if (own?.client_id) needClient(u, own.client_id);
     await db.remove('snippets', { id: `eq.${id}` });
     send(res, 200, { ok: true });
   },
@@ -78,15 +84,17 @@ export const snippetsRoute = route({
 
 export const mediaRoute = route({
   GET: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'marca', 'conteudo');
     const { client } = query(req);
     need(uuid(client), 400, 'Cliente não informado.');
+    needClient(u, client);
     send(res, 200, await db.select('media_bank', { select: '*', client_id: `eq.${client}`, order: 'created_at.desc', limit: 500 }));
   },
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'marca', 'conteudo');
     const b = await readJson(req);
     need(uuid(b.client_id), 400, 'Cliente não informado.');
+    needClient(u, b.client_id);
     const prefix = `${env('SUPABASE_URL')}/storage/v1/object/public/posts/`;
     const items = (Array.isArray(b.items) ? b.items : [b]).slice(0, 30);
     const rows = [];
@@ -97,9 +105,11 @@ export const mediaRoute = route({
     send(res, 201, Array.isArray(b.items) ? rows : rows[0]);
   },
   DELETE: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'marca', 'conteudo');
     const { id } = query(req);
     need(uuid(id), 400, 'Mídia não informada.');
+    const own = await db.one('media_bank', { select: 'client_id', id: `eq.${id}` });
+    if (own) needClient(u, own.client_id);
     const [row] = await db.remove('media_bank', { id: `eq.${id}` });
     need(row, 404, 'Mídia não encontrada.');
     if (row.path) { // só apaga o arquivo se nenhum post e nenhuma outra entrada do banco usa
@@ -114,15 +124,16 @@ export const mediaRoute = route({
 
 export const duplicateRoute = route({
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'conteudo');
     const b = await readJson(req);
     need(isDay(b.from), 400, 'Escolha o primeiro dia do período.');
+    if (b.client_id) needClient(u, b.client_id);
     const days = Number(b.days ?? 7), shift = Number(b.shift ?? 7);
     need(Number.isInteger(days) && days >= 1 && days <= 31, 400, 'Período de 1 a 31 dias.');
     need(Number.isInteger(shift) && shift >= 1 && shift <= 366, 400, 'Escolha para quantos dias depois copiar.');
     const params = { select: '*', and: `(scheduled_at.gte.${zonedISO(b.from, '00:00', TIMEZONE())},scheduled_at.lt.${zonedISO(addDays(b.from, days), '00:00', TIMEZONE())})`, order: 'scheduled_at.asc', limit: 300 };
     if (b.client_id) { need(uuid(b.client_id), 400, 'Cliente inválido.'); params.client_id = `eq.${b.client_id}`; }
-    const src = await db.select('posts', params);
+    const src = (await db.select('posts', params)).filter((p) => seesClient(u, p.client_id));
     need(src.length, 404, 'Não há posts nesse período para duplicar.');
     const rows = [];
     for (const p of src) {

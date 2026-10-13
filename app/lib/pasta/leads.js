@@ -4,7 +4,7 @@
 //   diagcfg     (admin)  GET | PUT configuração do diagnóstico
 import crypto from 'node:crypto';
 import { route, send, readJson, query, need } from '../http.js';
-import { requireAdmin } from '../auth.js';
+import { requirePerm, requireAdmin } from '../auth.js';
 import { db } from '../db.js';
 import { sessionSecret } from '../env.js';
 import { setState } from '../appstate.js';
@@ -34,16 +34,16 @@ function cleanLead(b, partial = false) {
 
 export const leadsRoute = route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     send(res, 200, await db.select('leads', { select: '*', order: 'updated_at.desc', limit: 500 }));
   },
   POST: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const row = await db.insert('leads', { ...cleanLead(await readJson(req)), stage: 'novo' });
     send(res, 201, row);
   },
   PATCH: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const b = await readJson(req);
     need(b.id, 400, 'Lead não informado.');
     const [row] = await db.update('leads', { id: `eq.${b.id}` }, { ...cleanLead(b, true), updated_at: new Date().toISOString() });
@@ -51,7 +51,7 @@ export const leadsRoute = route({
     send(res, 200, row);
   },
   DELETE: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'vendas');
     const { id } = query(req);
     need(id, 400, 'Lead não informado.');
     await db.remove('leads', { id: `eq.${id}` });

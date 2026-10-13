@@ -1,7 +1,7 @@
 // Relatórios mensais. Agência: GET ?client= lista | POST {client_id, ref_month} gera/atualiza
 // | PATCH {id, note} observações | DELETE ?id=.  Público (cliente): rota "report" com ?t=token.
 import { route, send, readJson, query, need } from '../http.js';
-import { requireAdmin } from '../auth.js';
+import { requirePerm, needClient, seesClient } from '../auth.js';
 import { db } from '../db.js';
 import { appUrl } from '../env.js';
 import { saveReport, summary, isMonth } from '../reports.js';
@@ -14,15 +14,17 @@ const listItem = (r) => ({
 
 export default route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'relatorios');
     const { client } = query(req);
+    if (client) needClient(u, client);
     const params = { select: '*', order: 'ref_month.desc', limit: 200 };
     if (client) params.client_id = `eq.${client}`;
-    send(res, 200, (await db.select('reports', params)).map(listItem));
+    send(res, 200, (await db.select('reports', params)).filter((r) => seesClient(u, r.client_id)).map(listItem));
   },
   POST: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'relatorios');
     const b = await readJson(req);
+    needClient(u, b.client_id);
     need(isMonth(b.ref_month), 400, 'Escolha o mês do relatório.');
     const client = await db.one('clients', { select: '*', id: `eq.${b.client_id}` });
     need(client, 404, 'Cliente não encontrado.');
@@ -30,7 +32,7 @@ export default route({
     send(res, 200, listItem(row));
   },
   PATCH: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'relatorios');
     const b = await readJson(req);
     need(b.id, 400, 'Relatório não informado.');
     const [row] = await db.update('reports', { id: `eq.${b.id}` }, { note: String(b.note || '').trim().slice(0, 3000) || null });
@@ -38,7 +40,7 @@ export default route({
     send(res, 200, listItem(row));
   },
   DELETE: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'relatorios');
     const { id } = query(req);
     need(id, 400, 'Relatório não informado.');
     await db.remove('reports', { id: `eq.${id}` });

@@ -1,6 +1,6 @@
 // Posts. GET lista | POST cria (um ou vários clientes) | PATCH ?id= edita ou executa ação | DELETE ?id= remove
 import { route, send, readJson, query, need } from '../lib/http.js';
-import { requireStaff } from '../lib/auth.js';
+import { requireStaff, requirePerm, can, needClient, seesClient } from '../lib/auth.js';
 import { db, storage } from '../lib/db.js';
 import { logEvent } from '../lib/events.js';
 import { cleanPostInput, actionPatch, statusAfterEdit, readyProblem, EDITABLE, CONTENT_FIELDS } from '../lib/posts.js';
@@ -28,20 +28,23 @@ const pathsOf = (media) => new Set((media || []).map((m) => m.path).filter(Boole
 
 export default route({
   GET: async (req, res) => {
-    await requireStaff(req);
+    const u = await requireStaff(req);
     const q = query(req);
+    if (q.client) needClient(u, q.client);
     const params = { select: LIST_FIELDS, order: 'scheduled_at.asc.nullslast', limit: 1000 };
     if (q.client) params.client_id = `eq.${q.client}`;
     if (q.status) params.status = `in.(${q.status})`;
     if (q.from && q.to) params.and = `(scheduled_at.gte.${q.from},scheduled_at.lt.${q.to})`;
     // posts sem data (ideias) sempre aparecem
     else if (q.from) params.or = `(scheduled_at.gte.${q.from},scheduled_at.is.null)`;
-    send(res, 200, await db.select('posts', params));
+    const rows = await db.select('posts', params);
+    send(res, 200, u.clients ? rows.filter((p) => seesClient(u, p.client_id)) : rows);
   },
 
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'conteudo');
     const body = await readJson(req);
+    if (body.remind_client) needClient(u, body.remind_client);
     // Lembrete de aprovação: registra no histórico de cada post pendente do cliente (o envio é pelo WhatsApp/e-mail do painel).
     if (body.remind_client) {
       const pend = await db.select('posts', { select: '*', client_id: `eq.${body.remind_client}`, status: 'eq.pending_approval' });
@@ -52,6 +55,8 @@ export default route({
     const ids = [...new Set((Array.isArray(body.client_ids) ? body.client_ids : [body.client_id]).filter(Boolean))];
     need(ids.length, 400, 'Escolha pelo menos um cliente.');
     need(ids.length <= 20, 400, 'No máximo 20 clientes por vez.');
+    ids.forEach((cid) => needClient(u, cid));
+    if (body.send || body.approved) need(can(u, 'enviar'), 403, 'Sem permissão para enviar ao cliente ou aprovar direto. Salve em produção e peça ao responsável.');
     const found = await db.select('clients', { select: 'id', id: `in.(${ids.join(',')})` });
     need(found.length === ids.length, 404, 'Cliente não encontrado.');
 
@@ -75,10 +80,14 @@ export default route({
   },
 
   PATCH: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'conteudo');
     const { id } = query(req);
     need(id, 400, 'Post não informado.');
     const body = await readJson(req);
+    const own = await db.one('posts', { select: 'client_id', id: `eq.${id}` });
+    need(own, 404, 'Post não encontrado.');
+    needClient(u, own.client_id);
+    if (body.send || ['send', 'approve', 'retry'].includes(body.action)) need(can(u, 'enviar'), 403, 'Sem permissão para enviar ao cliente ou aprovar direto.');
 
     if (body.action) {
       const a = actionPatch(body.action);
@@ -122,9 +131,11 @@ export default route({
   },
 
   DELETE: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'apagar');
     const { id } = query(req);
     need(id, 400, 'Post não informado.');
+    const own = await db.one('posts', { select: 'client_id', id: `eq.${id}` });
+    if (own) needClient(u, own.client_id);
     const [row] = await db.remove('posts', { id: `eq.${id}`, status: 'neq.publishing' });
     need(row, 409, 'Post em publicação não pode ser apagado agora.');
     // Post já publicado: apaga do painel, mas mantém a imagem (o Instagram já tem a dele).

@@ -1,6 +1,6 @@
 // Dados da agência e modelo de contrato (guardados em app_state). Só para a agência.
 import { route, send, readJson, need } from '../http.js';
-import { requireAdmin } from '../auth.js';
+import { requireAdmin, requirePerm } from '../auth.js';
 import { db } from '../db.js';
 import { DEFAULT_TEMPLATE, FIELDS } from '../contract.js';
 
@@ -18,7 +18,7 @@ export async function loadSettings() {
 
 export default route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    await requirePerm(req, 'financeiro');
     send(res, 200, await loadSettings());
   },
   PUT: async (req, res) => {

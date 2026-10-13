@@ -2,7 +2,7 @@
 //   pela agência:  /api/ig/connect?client=<id>       (precisa estar logado no painel)
 //   pelo cliente:  /api/ig/connect?t=<token-de-aprovação>  (link que o próprio cliente abre no celular)
 import { route, query, need, redirect } from '../../lib/http.js';
-import { isAdmin, sign } from '../../lib/auth.js';
+import { currentUser, can, seesClient, sign } from '../../lib/auth.js';
 import { authorizeUrl } from '../../lib/ig.js';
 import { db } from '../../lib/db.js';
 import { igReady } from '../../lib/env.js';
@@ -25,8 +25,10 @@ export default route({
       need(c, 404, 'Este link não existe mais. Peça um novo para a agência.');
       client = c.id; back = q.t;
     } else {
-      need(await isAdmin(req), 401, 'Entre no painel para conectar o Instagram.');
+      const u = await currentUser(req);
+      need(u && can(u, 'clientes'), 401, 'Entre no painel (com permissão de editar clientes) para conectar o Instagram.');
       need(q.client, 400, 'Cliente não informado.');
+      need(seesClient(u, q.client), 403, 'Você não tem acesso a este cliente.');
       client = q.client;
     }
     // "state" assinado: garante que a volta do Instagram é desta conexão e deste cliente.

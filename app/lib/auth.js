@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { env, sessionSecret } from './env.js';
 import { HttpError } from './http.js';
+import { cleanPerms, PERM_LABEL } from '../public/permissoes.js';
 
 const COOKIE = 'pauta_sess';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 dias
@@ -47,11 +48,25 @@ export function sessionOf(req) {
 export async function currentUser(req) {
   const s = sessionOf(req);
   if (!s || !['admin', 'team'].includes(s.role)) return null;
-  if (!s.uid) return s.role === 'admin' ? { role: 'admin', name: 'Dono', uid: null } : null;
+  if (!s.uid) return s.role === 'admin' ? { role: 'admin', name: 'Dono', uid: null, perms: null, clients: null } : null;
   const { db } = await import('./db.js');
-  const u = await db.one('users', { select: 'id,name,role,active', id: `eq.${s.uid}` }).catch(() => null);
+  const u = await db.one('users', { select: '*', id: `eq.${s.uid}` }).catch(() => null); // '*': antes da atualização 12 não há perms/client_ids
   if (!u || !u.active) return null;
-  return { role: u.role, name: u.name, uid: u.id };
+  if (u.role === 'admin') return { role: 'admin', name: u.name, uid: u.id, perms: null, clients: null };
+  return { role: u.role, name: u.name, uid: u.id, perms: cleanPerms(u.perms || {}), clients: Array.isArray(u.client_ids) && u.client_ids.length ? u.client_ids : null };
+}
+
+// Permissões: administrador pode tudo; equipe conforme marcado em Ajustes → Equipe.
+export const can = (u, perm) => u?.role === 'admin' || Boolean(u?.perms?.[perm]);
+export async function requirePerm(req, ...perms) { // passa se tiver QUALQUER uma das permissões
+  const u = await requireStaff(req);
+  if (!perms.some((p) => can(u, p))) throw new HttpError(403, `Sem permissão para isto (${perms.map((p) => PERM_LABEL[p]).join(' ou ')}). Peça ao administrador.`);
+  return u;
+}
+// Clientes que a pessoa enxerga (null = todos)
+export const seesClient = (u, id) => u?.role === 'admin' || !u?.clients || u.clients.includes(id);
+export function needClient(u, id) {
+  if (id && !seesClient(u, id)) throw new HttpError(403, 'Você não tem acesso a este cliente.');
 }
 
 export async function isAdmin(req) {

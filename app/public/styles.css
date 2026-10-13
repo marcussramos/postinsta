@@ -708,3 +708,12 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 /* vendas */
 .lead-diag { gap: 8px; padding: 14px; }
 .diag-areas { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* permissões da equipe */
+.perm-box { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface-2); }
+.perm-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; } .perm-head .muted { font-size: 13px; }
+.perm { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; padding: 6px 0; border-top: 1px solid var(--line); }
+.perm:first-of-type { border-top: 0; }
+.perm input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+.perm small { display: block; color: var(--muted); font-size: 12.5px; }
+.perm-sum { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; } .perm-sum .pill { font-size: 11px; }

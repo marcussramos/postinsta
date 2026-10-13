@@ -1,6 +1,6 @@
 // Contrato preenchido de um cliente: GET ?client=  → { html, missing, title }
 import { route, send, query, need } from '../http.js';
-import { requireAdmin } from '../auth.js';
+import { requirePerm, needClient } from '../auth.js';
 import { db } from '../db.js';
 import { TIMEZONE } from '../env.js';
 import { renderContract, contractValues, FIELDS } from '../contract.js';
@@ -8,9 +8,10 @@ import { loadSettings } from './settings.js';
 
 export default route({
   GET: async (req, res) => {
-    await requireAdmin(req);
+    const u = await requirePerm(req, 'financeiro');
     const { client: id } = query(req);
     need(id, 400, 'Cliente não informado.');
+    needClient(u, id);
     const client = await db.one('clients', { select: '*', id: `eq.${id}` });
     need(client, 404, 'Cliente não encontrado.');
     const s = await loadSettings();

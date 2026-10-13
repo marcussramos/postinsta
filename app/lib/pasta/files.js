@@ -4,14 +4,15 @@
 // DELETE ?id=  apaga
 import crypto from 'node:crypto';
 import { route, send, readRaw, query, need, redirect } from '../http.js';
-import { requireStaff } from '../auth.js';
+import { requireStaff, can, seesClient, needClient } from '../auth.js';
 import { db, docs } from '../db.js';
 
 const CATEGORIES = ['contract', 'receipt', 'report', 'other', 'brand', 'briefing', 'invoice', 'audio'];
 const TEAM_CATEGORIES = ['brand', 'briefing', 'audio']; // a equipe só mexe na identidade da marca e nos anexos de pedidos
 async function who(req) {
   const u = await requireStaff(req);
-  return { u, allowed: (cat) => u.role === 'admin' || TEAM_CATEGORIES.includes(cat) };
+  const allowed = (cat) => can(u, 'financeiro') || (['brand', 'briefing'].includes(cat) && can(u, 'marca')) || (cat === 'audio' && (can(u, 'conteudo') || can(u, 'marca'))) || (cat === 'report' && can(u, 'relatorios'));
+  return { u, allowed };
 }
 const MAX = 4 * 1024 * 1024; // limite da Vercel para envio
 const TYPES = {
@@ -32,21 +33,23 @@ export default route({
     const { u, allowed } = await who(req);
     const q = query(req);
     if (q.id) {
-      const f = await db.one('client_files', { select: 'path,name,category', id: `eq.${q.id}` });
-      need(f && allowed(f.category), 404, 'Arquivo não encontrado.');
+      const f = await db.one('client_files', { select: 'path,name,category,client_id', id: `eq.${q.id}` });
+      need(f && allowed(f.category) && seesClient(u, f.client_id), 404, 'Arquivo não encontrado.');
       return redirect(res, await docs.signedUrl(f.path, { expiresIn: f.category === 'audio' ? 1800 : 120, downloadName: q.download ? f.name : undefined }), { 'Cache-Control': 'no-store' });
     }
     need(q.client, 400, 'Cliente não informado.');
     const params = { select: 'id,client_id,category,name,mime,size,ref_month,created_at', client_id: `eq.${q.client}`, order: 'created_at.desc', limit: 500 };
     if (q.category) params.category = `eq.${q.category}`;
-    if (u.role !== 'admin') { need(!q.category || allowed(q.category), 403, 'Sem acesso a esta seção.'); if (!q.category) params.category = `in.(${TEAM_CATEGORIES.join(',')})`; }
+    needClient(u, q.client);
+    if (!can(u, 'financeiro')) { need(!q.category || allowed(q.category), 403, 'Sem acesso a esta seção.'); if (!q.category) params.category = `in.(${CATEGORIES.filter(allowed).join(',') || 'nenhuma'})`; }
     send(res, 200, await db.select('client_files', params));
   },
 
   POST: async (req, res) => {
-    const { allowed } = await who(req);
+    const { u, allowed } = await who(req);
     const q = query(req);
     need(q.client, 400, 'Cliente não informado.');
+    needClient(u, q.client);
     need(CATEGORIES.includes(q.category), 400, 'Escolha a seção da pasta.');
     need(allowed(q.category), 403, 'Sem acesso a esta seção.');
     need(!q.ref_month || isMonth(q.ref_month), 400, 'Mês inválido.');
@@ -69,11 +72,11 @@ export default route({
   },
 
   DELETE: async (req, res) => {
-    const { allowed } = await who(req);
+    const { u, allowed } = await who(req);
     const { id } = query(req);
     need(id, 400, 'Arquivo não informado.');
-    const cur = await db.one('client_files', { select: 'category', id: `eq.${id}` });
-    need(cur && allowed(cur.category), 404, 'Arquivo não encontrado.');
+    const cur = await db.one('client_files', { select: 'category,client_id', id: `eq.${id}` });
+    need(cur && allowed(cur.category) && seesClient(u, cur.client_id), 404, 'Arquivo não encontrado.');
     const [row] = await db.remove('client_files', { id: `eq.${id}` });
     need(row, 404, 'Arquivo não encontrado.');
     await docs.remove(row.path);

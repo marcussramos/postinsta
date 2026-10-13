@@ -1,7 +1,7 @@
 // Revisão com IA antes de enviar ao cliente (admin e equipe): português da legenda, tom da marca e a arte.
 //   review  POST {client_id, caption, title, media_type, image_url | image_base64}
 import { route, send, readJson, need } from '../http.js';
-import { requireStaff } from '../auth.js';
+import { requirePerm, needClient } from '../auth.js';
 import { db } from '../db.js';
 import { askClaude, jsonFrom } from '../ai.js';
 
@@ -9,8 +9,9 @@ const TYPE = { IMAGE: 'post de feed (foto)', CAROUSEL: 'carrossel (a imagem é a
 
 export const reviewRoute = route({
   POST: async (req, res) => {
-    await requireStaff(req);
+    const u = await requirePerm(req, 'ia');
     const b = await readJson(req);
+    if (b.client_id) needClient(u, b.client_id);
     const c = b.client_id ? await db.one('clients', { select: 'name,brand_voice,brand_kit', id: `eq.${b.client_id}` }) : null;
     const content = [];
     const data = String(b.image_base64 || '');

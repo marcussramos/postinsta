@@ -258,3 +258,8 @@ create table if not exists leads (
 create index if not exists leads_stage on leads (stage, updated_at desc);
 alter table leads enable row level security;
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V12 = `-- MC DIGITAL: atualização 12 (permissões por pessoa da equipe) — rode uma vez no SQL Editor do Supabase
+alter table users add column if not exists perms jsonb;
+alter table users add column if not exists client_ids jsonb;
+notify pgrst, 'reload schema';`;
