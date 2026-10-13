@@ -23,6 +23,12 @@ test('signed_request: aceita só com a assinatura certa', () => {
   assert.equal(parseSignedRequest('lixo', 'segredo'), null);
 });
 
+test('páginas legais sem Ajustes preenchido usam o CNPJ da agência', async () => {
+  const html = await (await fetch(`${base}/privacidade`)).text();
+  assert.match(html, /55\.846\.288\/0001-01/);
+  assert.match(html, /Cuiabá – MT/);
+});
+
 test('páginas legais: dados da agência, inglês incluído e nada de colchetes', async () => {
   await fetch(`${base}/api/pasta?r=settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json', cookie: owner }, body: JSON.stringify({ agency: { razao_social: 'MC Digital Marketing LTDA', cnpj: '12.345.678/0001-90', email: 'contato@mc.com', cidade: 'Cuiabá – MT', marca: 'MC DIGITAL' } }) });
   for (const p of ['/privacidade', '/privacy', '/termos', '/exclusao-de-dados', '/data-deletion']) {

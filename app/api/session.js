@@ -62,7 +62,7 @@ async function setupInfo() {
     try { await db.select('users', { select: 'perms,client_ids', limit: 1 }); } catch { parts.push(MIGRATION_V12); }
     try {
       const a = (await db.one('app_state', { select: 'value', key: 'eq.agency' }))?.value || {};
-      info.legal_missing = [['razao_social', 'Razão social'], ['cnpj', 'CNPJ'], ['email', 'E-mail'], ['cidade', 'Cidade']].filter(([k]) => !String(a[k] || '').trim()).map(([, l]) => l);
+      info.legal_missing = [['email', 'E-mail']].filter(([k]) => !String(a[k] || '').trim()).map(([, l]) => l);
     } catch { /* sem tabela */ }
     if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');

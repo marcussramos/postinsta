@@ -69,10 +69,14 @@ async function personalize(p, t) {
   return {};
 }
 
+// Dados públicos do CNPJ da agência (cartão MEI), usados quando Ajustes → Dados da agência estiver vazio.
+const AGENCY_PUBLIC = { razao_social: '55.846.288 MARIA CAROLINA SILVESTRI DE FIGUEIREDO', cnpj: '55.846.288/0001-01', cidade: 'Cuiabá – MT', marca: 'MC DIGITAL' };
+
 // Preenche {{campos}} das páginas legais com os dados da agência; o que faltar vira um texto neutro (nunca um colchete).
 async function fillLegal(p, html, q, base) {
   let a = {};
   try { a = (await getState('agency', {})) || {}; } catch { /* sem banco */ }
+  a = { ...AGENCY_PUBLIC, ...Object.fromEntries(Object.entries(a).filter(([, x]) => String(x || '').trim())) };
   const cidade = a.cidade || 'Brasil';
   const v = {
     marca: a.marca || 'MC DIGITAL',
