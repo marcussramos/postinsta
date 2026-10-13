@@ -120,6 +120,10 @@
     {
       "source": "/terms",
       "destination": "/api/page?p=termos"
+    },
+    {
+      "source": "/sobre",
+      "destination": "/api/page?p=sobre"
     }
   ]
 }

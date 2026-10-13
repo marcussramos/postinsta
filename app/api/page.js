@@ -9,9 +9,9 @@ import { db } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { getState } from '../lib/appstate.js';
 
-const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico', 'privacidade', 'exclusao', 'termos'];
+const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico', 'privacidade', 'exclusao', 'termos', 'sobre'];
 // Páginas legais (exigidas pela Meta): públicas, indexáveis e preenchidas com os dados da agência (Ajustes → Dados da agência).
-const LEGAL = { privacidade: '/privacidade', exclusao: '/exclusao-de-dados', termos: '/termos' };
+const LEGAL = { privacidade: '/privacidade', exclusao: '/exclusao-de-dados', termos: '/termos', sobre: '/sobre' };
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const tokenOk = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
@@ -27,6 +27,7 @@ const DEFAULTS = {
   boasvindas: { image: 'boasvindas', title: 'Bem-vindo à MC Digital', description: 'Conheça como vamos trabalhar juntos e responda ao questionário da sua marca.' },
   privacidade: { image: 'boasvindas', title: 'Política de Privacidade · MC DIGITAL', description: 'Como o MC DIGITAL trata os dados dos perfis de Instagram dos clientes. Privacy Policy in English included.' },
   exclusao: { image: 'boasvindas', title: 'Exclusão de dados · MC DIGITAL', description: 'Como apagar os dados que o MC DIGITAL recebeu do seu Instagram. Data deletion instructions.' },
+  sobre: { image: 'painel', title: 'MC Digital · Agência de social media', description: 'Planejamento, criação, aprovação pelo celular e publicação do Instagram da sua empresa, com relatório todo mês.' },
   termos: { image: 'boasvindas', title: 'Termos de Uso · MC DIGITAL', description: 'Termos de uso do MC DIGITAL. Terms of Service.' },
   historico: { image: 'historico', title: 'Histórico de aprovações', description: 'Registro de envios, aprovações e publicações com data e hora.' },
 };

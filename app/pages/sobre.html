@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MC Digital · Agência de social media</title>
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
+<style>
+  :root { --bg: #EBEBE6; --surface: #F7F7F3; --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF; --gold: #7A6200; --gold-soft: #ECE6CF;
+    --head: "Helvetica Neue", Helvetica, Arial, sans-serif; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 "Poppins", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--gold); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  header.top { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
+  header.top img { width: 52px; height: 52px; }
+  header.top b { font-weight: 700; letter-spacing: .14em; font-size: 14px; }
+  header.top .sp { flex: 1; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; font: inherit; font-weight: 600; font-size: 15px; text-decoration: none; border-radius: 12px; padding: 11px 18px; border: 1px solid var(--ink); color: var(--ink); background: transparent; }
+  .btn.primary { background: var(--ink); color: #fff; }
+  .eyebrow { font-size: 12.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+  h1, h2 { font-family: var(--head); font-weight: 900; text-transform: uppercase; letter-spacing: -.015em; margin: 0; }
+  h1 { font-size: clamp(36px, 7vw, 68px); line-height: .98; text-shadow: 0 6px 14px rgba(43,43,43,.16); max-width: 13ch; }
+  h2 { font-size: clamp(24px, 4vw, 34px); line-height: 1.05; }
+  .hero { position: relative; padding: clamp(36px, 8vw, 90px) 0 clamp(30px, 6vw, 60px); display: grid; gap: 18px; }
+  .hero p { margin: 0; max-width: 58ch; color: var(--muted); font-size: 18px; }
+  .hero .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+  .chev { position: absolute; right: 0; top: clamp(40px, 9vw, 100px); width: clamp(120px, 22vw, 240px); opacity: .7; }
+  section { padding: clamp(28px, 5vw, 48px) 0; border-top: 1px solid var(--line); display: grid; gap: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 6px; align-content: start; }
+  .card b { font-size: 17px; }
+  .card span { color: var(--muted); font-size: 15px; line-height: 1.55; }
+  .steps { counter-reset: s; }
+  .steps .card::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); color: #fff; font-weight: 700; margin-bottom: 6px; }
+  .company { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; }
+  .company div { display: grid; gap: 2px; }
+  .company small { color: var(--muted); font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; }
+  footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 14px; display: flex; gap: 16px; flex-wrap: wrap; }
+  @media (max-width: 760px) { .grid, .company { grid-template-columns: 1fr; } .chev { display: none; } header.top .login { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <img src="/brand/logo.png" alt="MC Digital">
+    <b>{{marca}}</b>
+    <span class="sp"></span>
+    <a class="btn login" href="/">Área da equipe</a>
+  </header>
+
+  <div class="hero">
+    <svg class="chev" viewBox="0 0 440 240" aria-hidden="true"><g fill="none" stroke="#7A6200" stroke-width="3"><path d="M0 2 L150 120 L0 238 L0 168 L76 120 L0 72 Z"/><path d="M144 2 L294 120 L144 238 L144 168 L220 120 L144 72 Z"/><path d="M288 2 L438 120 L288 238 L288 168 L364 120 L288 72 Z"/></g></svg>
+    <div class="eyebrow">Agência de social media · Cuiabá/MT</div>
+    <h1>Cuidamos do Instagram da sua empresa</h1>
+    <p>A MC Digital planeja, cria e publica o conteúdo do Instagram de pequenas e médias empresas: posts, carrosséis, Reels e Stories no padrão da sua marca, com aprovação simples pelo celular e relatório de resultados todo mês.</p>
+    <div class="cta">
+      <a class="btn primary" href="/diagnostico">Diagnóstico grátis do seu Instagram</a>
+      <a class="btn" href="mailto:{{email}}">Fale com a gente</a>
+    </div>
+  </div>
+
+  <section>
+    <div class="eyebrow">O que fazemos</div>
+    <h2>Gestão completa do Instagram</h2>
+    <div class="grid">
+      <div class="card"><b>Planejamento</b><span>Calendário mensal de pautas alinhado aos objetivos do negócio, às datas comemorativas e aos melhores horários do perfil.</span></div>
+      <div class="card"><b>Criação</b><span>Artes, carrosséis, legendas e Reels no padrão visual e no tom de voz da sua marca.</span></div>
+      <div class="card"><b>Publicação e relatório</b><span>Publicamos no horário combinado e entregamos todo mês um relatório com alcance, interações, seguidores e os melhores posts.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Como funciona</div>
+    <h2>Nossa plataforma, a MC DIGITAL</h2>
+    <div class="grid steps">
+      <div class="card"><b>Você conecta o Instagram</b><span>O titular da conta profissional autoriza o acesso pela tela oficial de login do Instagram. Sem compartilhar senha.</span></div>
+      <div class="card"><b>Você aprova pelo celular</b><span>Cada post chega num link privado mostrando como vai ficar no feed. Você aprova ou pede ajuste com um toque, por texto ou áudio.</span></div>
+      <div class="card"><b>Publicamos e medimos</b><span>Só o que foi aprovado é publicado, na data e hora combinadas. As métricas oficiais do Instagram viram o seu relatório mensal.</span></div>
+    </div>
+    <p style="margin:0;color:var(--muted);max-width:70ch">Você pode remover o acesso a qualquer momento nas configurações do Instagram. Detalhes em <a href="/privacidade">Política de Privacidade</a> e <a href="/exclusao-de-dados">exclusão de dados</a>.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Dados da empresa</div>
+    <div class="company">
+      <div><small>Razão social</small>{{razao}}</div>
+      <div><small>CNPJ</small>{{cnpj}}</div>
+      <div><small>Cidade</small>{{cidade}}</div>
+      <div><small>Contato</small><a href="mailto:{{email}}">{{email}}</a></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© 2026 {{marca}}</span>
+    <a href="/privacidade">Privacidade / Privacy</a>
+    <a href="/termos">Termos / Terms</a>
+    <a href="/exclusao-de-dados">Exclusão de dados / Data deletion</a>
+  </footer>
+</div>
+</body>
+</html>

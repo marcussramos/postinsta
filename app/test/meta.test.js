@@ -31,7 +31,7 @@ test('páginas legais sem Ajustes preenchido usam o CNPJ da agência', async () 
 
 test('páginas legais: dados da agência, inglês incluído e nada de colchetes', async () => {
   await fetch(`${base}/api/pasta?r=settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json', cookie: owner }, body: JSON.stringify({ agency: { razao_social: 'MC Digital Marketing LTDA', cnpj: '12.345.678/0001-90', email: 'contato@mc.com', cidade: 'Cuiabá – MT', marca: 'MC DIGITAL' } }) });
-  for (const p of ['/privacidade', '/privacy', '/termos', '/exclusao-de-dados', '/data-deletion']) {
+  for (const p of ['/sobre', '/privacidade', '/privacy', '/termos', '/exclusao-de-dados', '/data-deletion']) {
     const r = await fetch(base + p); const html = await r.text();
     assert.equal(r.status, 200, p);
     assert.match(html, /MC Digital Marketing LTDA/, p);

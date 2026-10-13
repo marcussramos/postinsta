@@ -106,6 +106,7 @@ function renderLogin() {
       h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Senha'), pw),
       codeField,
       btn,
+      h('p', { class: 'muted', style: 'font-size:13px;margin:4px 0 0;text-align:center' }, h('a', { href: '/sobre' }, 'Conheça a MC Digital'), ' · ', h('a', { href: '/privacidade' }, 'Privacidade'), ' · ', h('a', { href: '/termos' }, 'Termos')),
     )));
   pw.focus();
 }
