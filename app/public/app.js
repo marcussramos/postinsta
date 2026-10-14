@@ -1971,16 +1971,22 @@ function viewHome() {
   const tiles = [];
   if (can('financeiro')) {
     let mrr = 0, received = 0, toReceive = 0, late = 0, active = 0;
+    const parts = [], missing = [], future = [];
     for (const c of S.clients) {
-      if (!c.billing_start || c.monthly_fee_cents == null) continue;
-      if (c.billing_start.slice(0, 10) <= today) { mrr += c.monthly_fee_cents; active++; }
+      if (!c.billing_start || !c.monthly_fee_cents) { if (c.monthly_fee_cents || c.billing_start || c.contract_data) missing.push(c.name); continue; }
+      if (c.billing_start.slice(0, 10) <= today) { mrr += c.monthly_fee_cents; active++; parts.push(`${c.name} ${brl(c.monthly_fee_cents)}`); }
+      else future.push(`${c.name} começa ${fmtDay(c.billing_start.slice(0, 10))}`);
       for (const m of billingMonths(c)) {
         late += m.late_cents;
         if (m.month === month) { received += m.parcels.filter((p) => p.status === 'paid').reduce((x, p) => x + (p.cents || 0), 0); toReceive += m.open_cents - m.late_cents; }
       }
     }
     tiles.push(
-      kpi('Receita mensal', brl(mrr), `${active} contrato${active === 1 ? '' : 's'} ativo${active === 1 ? '' : 's'}`),
+      kpi('Receita mensal', brl(mrr), [
+        active <= 4 && parts.length ? parts.join(' · ') : `${active} contrato${active === 1 ? '' : 's'} ativo${active === 1 ? '' : 's'}`,
+        future.length ? ` · fora da conta: ${future.join(', ')}` : '',
+        missing.length ? ` · sem valor ou início: ${missing.join(', ')}` : '',
+      ].join(''), missing.length ? 'warn' : ''),
       kpi(`Recebido em ${monthLabel(month, true)}`, brl(received), 'parcelas marcadas como pagas', 'good'),
       kpi('A receber no mês', brl(toReceive), 'ainda no prazo'),
       kpi('Em atraso', late ? brl(late) : 'Nada', late ? 'veja Cobranças abaixo' : 'tudo em dia', late ? 'bad' : 'good'));
