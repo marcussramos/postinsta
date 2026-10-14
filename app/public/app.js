@@ -82,6 +82,21 @@ async function loadExtras() {
   if (can('vendas')) [S.proposals, S.leads] = await Promise.all([api('/api/pasta?r=proposals').catch(() => null), api('/api/pasta?r=leads').catch(() => null)]);
 }
 
+// ───────────────────────── tema: Automático (segue o aparelho) → Claro → Escuro, salvo neste aparelho
+const THEMES = { auto: ['◐', 'Tema: automático (segue o aparelho)'], light: ['☀', 'Tema: claro'], dark: ['☾', 'Tema: escuro'] };
+function currentTheme() { try { const t = localStorage.getItem('mc-theme'); return THEMES[t] ? t : 'auto'; } catch { return 'auto'; } }
+function applyTheme(t) {
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { if (t === 'auto') localStorage.removeItem('mc-theme'); else localStorage.setItem('mc-theme', t); } catch { /* sem armazenamento: vale só nesta aba */ }
+}
+function themeButton() {
+  const b = h('button', { class: 'btn ghost sm theme-btn', type: 'button' });
+  const draw = () => { const t = currentTheme(); b.textContent = THEMES[t][0]; b.title = THEMES[t][1]; b.setAttribute('aria-label', `${THEMES[t][1]}. Clique para trocar.`); };
+  b.onclick = () => { const order = ['auto', 'light', 'dark']; const next = order[(order.indexOf(currentTheme()) + 1) % 3]; applyTheme(next); draw(); toast(THEMES[next][1]); };
+  draw();
+  return b;
+}
+
 // ───────────────────────── login
 function renderLogin() {
   const email = h('input', { type: 'email', id: 'em', autocomplete: 'username', placeholder: 'só para contas da equipe' });
@@ -121,6 +136,7 @@ function render() {
     h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), can('vendas') ? tab('vendas', 'Vendas') : null, can('vendas') ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     can('conteudo') ? h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post') : null,
+    themeButton(),
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
   const page = h('main', { class: `page${['fluxo', 'vendas'].includes(S.view) ? ' wide' : ''}` });
