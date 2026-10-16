@@ -10,6 +10,9 @@ export const EVENT_LABEL = {
   approved_by_agency: 'Aprovado pela agência',
   published: 'Publicado no Instagram',
   failed: 'Falha ao publicar',
+  script_sent: 'Roteiro enviado para aprovação',
+  script_approved: 'Roteiro aprovado pelo cliente',
+  script_changes: 'Cliente pediu ajuste no roteiro',
 };
 
 export function snapshot(p) {

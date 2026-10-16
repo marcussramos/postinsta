@@ -25,14 +25,14 @@ async function calendar(c, month) {
   const [y, m] = month.split('-').map(Number);
   const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
   const tz = TIMEZONE();
-  const rows = await db.select('posts', { select: 'id,title,media_type,status,scheduled_at,image_url,media,ig_permalink', client_id: `eq.${c.id}`,
+  const rows = await db.select('posts', { select: '*', client_id: `eq.${c.id}`,
     and: `(scheduled_at.gte.${zonedISO(`${month}-01`, '00:00', tz)},scheduled_at.lt.${zonedISO(`${next}-01`, '00:00', tz)})`, order: 'scheduled_at.asc', limit: 200 });
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
   const hour = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   return rows.filter((p) => CAL_GROUP[p.status]).map((p) => {
     const at = new Date(p.scheduled_at);
     const art = SHOW_ART.includes(p.status);
-    return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status],
+    return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status] === 'producao' && p.script?.status === 'sent' ? 'roteiro' : CAL_GROUP[p.status],
       image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null };
   });
 }
@@ -56,11 +56,12 @@ export default route({
       need(f && f.client_id === c.id && VISIBLE.includes(f.category), 404, 'Arquivo não encontrado.');
       return redirect(res, await docs.signedUrl(f.path, { expiresIn: 120, downloadName: q.download ? f.name : undefined }), { 'Cache-Control': 'no-store' });
     }
-    const [files, payments, reports, pending, settings, events, requests, deliv] = await Promise.all([
+    const [files, payments, reports, pending, scriptsPending, settings, events, requests, deliv] = await Promise.all([
       db.select('client_files', { select: 'id,category,name,mime,size,ref_month,created_at', client_id: `eq.${c.id}`, category: `in.(${VISIBLE.join(',')})`, order: 'created_at.desc', limit: 500 }),
       db.select('payments', { select: '*', client_id: `eq.${c.id}` }),
       db.select('reports', { select: 'ref_month,data,share_token,updated_at', client_id: `eq.${c.id}`, order: 'ref_month.desc', limit: 60 }).catch(() => []),
       db.select('posts', { select: 'id', client_id: `eq.${c.id}`, status: 'eq.pending_approval' }).catch(() => []),
+      db.select('posts', { select: 'id,script', client_id: `eq.${c.id}`, script: 'not.is.null', limit: 200 }).then((r) => r.filter((p) => p.script?.status === 'sent')).catch(() => []),
       loadSettings(),
       db.select('post_events', { select: 'type,note,snapshot,created_at', client_id: `eq.${c.id}`, order: 'created_at.desc', limit: 500 }).catch(() => []),
       db.select('requests', { select: 'id,text,wanted_date,status,file_ids,created_at', client_id: `eq.${c.id}`, order: 'created_at.desc', limit: 100 }).catch(() => []),
@@ -80,7 +81,7 @@ export default route({
       billing: c.billing_start ? { monthly_fee_cents: c.monthly_fee_cents, due_day: c.due_day, months } : null,
       files,
       reports: reports.map((r) => ({ ref_month: r.ref_month, url: `${appUrl()}/relatorio?t=${r.share_token}`, summary: summary(r.data || {}), partial: Boolean(r.data?.period?.partial), updated_at: r.updated_at })),
-      approval: { url: `${appUrl()}/aprovar?t=${c.approval_token}`, pending: pending.length },
+      approval: { url: `${appUrl()}/aprovar?t=${c.approval_token}`, pending: pending.length + scriptsPending.length, scripts: scriptsPending.length },
       history: events.map((e) => ({ type: e.type, note: e.note, at: e.created_at, title: e.snapshot?.title || null, caption: e.snapshot?.caption || '', scheduled_at: e.snapshot?.scheduled_at || null, media_type: e.snapshot?.media_type || 'IMAGE', image_url: e.snapshot?.image_url || null, permalink: e.snapshot?.permalink || null })),
       requests: requests.map((r) => ({ ...r, files: (r.file_ids || []).map((id) => files.find((f) => f.id === id)).filter(Boolean) })),
       deliveries: deliv[c.id] || null,

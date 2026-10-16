@@ -3,6 +3,7 @@ import { billingMonths as billingMonthsShared, dueSoon, splitCents, planOf } fro
 import { QUESTIONS as ONB_QUESTIONS, SECTIONS as ONB_SECTIONS } from '/onboarding-perguntas.js';
 import { reviewPost, applyFix } from '/revisor.js';
 import { PERMS, TEAM_DEFAULT } from '/permissoes.js';
+import { TEMPLATES, DURATIONS, NICHE_RULES, SCRIPT_STATUS, checkScript } from '/roteiro.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
 
@@ -451,7 +452,8 @@ function boardCard(p, col) {
       h('div', { class: 'tlabels' },
         h('span', { class: 'tlabel', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, clientName(p.client_id)),
         fmt ? h('span', { class: 'tlabel fmt' }, fmt) : null,
-        (p.notes || '').startsWith('✨') ? h('span', { class: 'tlabel ia', title: 'Planejado com IA' }, '✨ IA') : null),
+        (p.notes || '').startsWith('✨') ? h('span', { class: 'tlabel ia', title: 'Planejado com IA' }, '✨ IA') : null,
+        scriptBadge(p)),
       h('div', { class: 'ttitle' }, postLabel(p)),
       p.status === 'changes_requested' && (p.client_feedback || p.feedback_audio) ? h('div', { class: 'tnote' }, p.feedback_audio ? '🎤 ' : '', p.client_feedback && p.client_feedback !== '🎤 Pedido por áudio' ? `“${p.client_feedback}”` : 'Ajuste pedido por áudio') : null,
       p.status === 'failed' ? h('div', { class: 'tnote fail' }, `Falhou: ${p.last_error || ''}`) : null,
@@ -713,6 +715,7 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('span', { class: 'label' }, isNew ? 'Cliente(s)' : 'Cliente'), clientBox,
       isNew ? h('span', { class: 'hint' }, 'Escolha mais de um para criar o mesmo post em vários perfis.') : null),
     h('div', { class: 'field' }, h('label', { for: 'f-title' }, 'Pauta (uso interno)'), title),
+    scriptField(),
     h('div', { class: 'field' }, h('span', { class: 'label' }, 'Formato e mídia'), typeSeg, imgBox,
       h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? items[0]?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
       locked ? null : h('div', { class: 'canva-row' },
@@ -728,6 +731,21 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('label', { for: 'f-notes' }, 'Notas da equipe'), notes),
     h('div', { class: 'field' }, h('label', { for: 'f-alt' }, 'Texto alternativo (opcional)'), alt, h('span', { class: 'hint' }, 'Descrição da imagem para pessoas com deficiência visual.')),
   );
+
+  // ── roteiro do vídeo (abre o editor; post novo precisa ser salvo antes)
+  function scriptField() {
+    if (locked && !post?.script) return null;
+    const sc = post?.script;
+    const video = ['REELS', 'STORY'].includes(mtype);
+    if (!sc && !video && !isNew) return h('div', { class: 'field' }, h('button', { class: 'linkish', type: 'button', style: 'justify-self:start', onclick: () => { close(); openScript(post); } }, '🎬 Escrever roteiro de vídeo para este post'));
+    if (!sc && !video) return null;
+    return h('div', { class: 'field sc-field' }, h('span', { class: 'label' }, 'Roteiro do vídeo'),
+      isNew ? h('span', { class: 'hint' }, 'Salve o post (pode ser como ideia) para escrever o roteiro e mandar o cliente aprovar antes de gravar.')
+        : h('div', { class: 'sc-row' },
+          sc ? h('span', { class: `pill ${SCRIPT_PILL[sc.status] || 'st-draft'}` }, SCRIPT_STATUS[sc.status] || 'Roteiro') : h('span', { class: 'muted' }, 'Ainda sem roteiro'),
+          sc?.hooks?.length ? h('span', { class: 'sc-row-hook' }, `“${sc.hooks[sc.hook || 0]}”`) : null,
+          h('button', { class: `btn sm${sc ? '' : ' ai'}`, type: 'button', onclick: () => { close(); openScript(post); } }, sc ? 'Abrir roteiro' : '🎬 Escrever roteiro')));
+  }
 
   // ── IA: sugestões de legenda + hashtags
   function aiPanel() {
@@ -905,6 +923,188 @@ function openPost(post = null, opts = {}) {
   }
   const close0 = drawer(isNew ? (st === 'idea' ? 'Nova ideia' : 'Novo post') : 'Post', body, foot);
   const close = () => { document.removeEventListener('paste', onPaste); close0(); };
+}
+
+// ───────────────────────── roteiro de vídeo (Reels / Story): IA + regras do nicho + aprovação do cliente
+const scriptMessage = (c, p) => `Olá! O roteiro do vídeo "${p.title || 'novo vídeo'}" de ${c.name} está pronto para você ler antes da gravação:\n${c.approval_url}\n\nÉ só abrir e tocar em Aprovar roteiro ou Pedir ajuste (pode mandar áudio). 🎬`;
+const SCRIPT_PILL = { draft: 'st-draft', sent: 'st-pending_approval', changes: 'st-changes_requested', approved: 'st-approved' };
+
+function scriptBadge(p) {
+  const s = p.script;
+  if (!s) return null;
+  return h('span', { class: `tlabel sc-${s.status}`, title: SCRIPT_STATUS[s.status] }, `🎬 ${{ draft: 'Roteiro', sent: 'Roteiro com o cliente', changes: 'Ajustar roteiro', approved: 'Roteiro ok' }[s.status] || 'Roteiro'}`);
+}
+
+function openScript(post) {
+  const c = clientById(post.client_id);
+  const niche = c?.brand_kit?.niche || '';
+  const rules = NICHE_RULES[niche];
+  const s0 = post.script || {};
+  let hooks = [...(s0.hooks || []), '', '', ''].slice(0, 3);
+  let chosen = s0.hook || 0;
+  let scenes = (s0.scenes || []).map((x) => ({ ...x }));
+  if (!scenes.length) scenes = [{ show: '', say: '', text: '', secs: 3 }];
+  let dirty = false;
+  const touch = () => { dirty = true; check(); };
+
+  // ── gerar com IA
+  const topic = h('input', { type: 'text', id: 's-topic', value: s0.topic || post.title || '', maxlength: 300, placeholder: 'Ex.: 3 mitos sobre clareamento' });
+  const tpl = h('select', { id: 's-tpl' }, ...Object.entries(TEMPLATES).map(([k, v]) => h('option', { value: k, selected: (s0.template || 'livre') === k }, v.label)));
+  const dur = h('select', { id: 's-dur' }, ...DURATIONS.map((d) => h('option', { value: d, selected: (s0.duration || 30) === d }, `${d} segundos`)));
+  const extra = h('input', { type: 'text', id: 's-extra', maxlength: 600, placeholder: 'Opcional: quem fala, onde grava, algo que não pode faltar…' });
+  const aiOut = h('div', { class: 'sc-ai-out' });
+  const genBtn = h('button', { class: 'btn ai', type: 'button', onclick: generate }, scenes.some((x) => x.say || x.show) ? '✨ Gerar outra versão' : '✨ Gerar roteiro com IA');
+  async function generate() {
+    if (!S.setup?.ai_ready && S.role === 'admin') return toast('A IA ainda não está ligada (Ajustes → Inteligência Artificial).', true);
+    if (dirty && !genBtn.dataset.ok) { genBtn.dataset.ok = '1'; genBtn.textContent = 'Substituir o que escrevi? Clique de novo'; return; }
+    genBtn.disabled = true; genBtn.textContent = 'Escrevendo o roteiro…';
+    aiOut.replaceChildren(h('p', { class: 'muted', style: 'margin:0' }, 'A IA está lendo a marca, os ganchos que funcionaram e as regras do nicho…'));
+    try {
+      const r = await api('/api/pasta?r=script', { method: 'POST', body: { post_id: post.id, topic: topic.value, template: tpl.value, duration: Number(dur.value), extra: extra.value } });
+      hooks = [...r.script.hooks, '', '', ''].slice(0, 3); chosen = 0; scenes = r.script.scenes;
+      cta.value = r.script.cta; cover.value = r.script.cover; audio.value = r.script.audio; cap.value = r.script.caption;
+      drawHooks(); drawScenes(); dirty = true; check();
+      aiOut.replaceChildren(...(r.warnings || []).map((w) => h('div', { class: 'rev-item lv-atencao' }, h('span', { class: 'pill st-pending_approval' }, 'Adaptado'), h('div', {}, h('span', {}, w)))));
+      toast('Roteiro pronto. Revise, escolha o gancho e ajuste o que quiser.');
+    } catch (e) { aiOut.replaceChildren(h('div', { class: 'errorbox' }, e.message)); }
+    genBtn.disabled = false; genBtn.textContent = '✨ Gerar outra versão'; delete genBtn.dataset.ok;
+  }
+
+  // ── ganchos (3 opções, uma escolhida) + banco de ganchos
+  const hookBox = h('div', { class: 'sc-hooks' });
+  function drawHooks() {
+    hookBox.replaceChildren(...hooks.map((txt, i) => h('div', { class: `sc-hook-row${i === chosen ? ' on' : ''}` },
+      h('input', { type: 'radio', name: 's-hook', id: `s-hook-${i}`, checked: i === chosen, 'aria-label': `Usar o gancho ${i + 1}`, onchange: () => { chosen = i; drawHooks(); touch(); } }),
+      h('textarea', { rows: 2, maxlength: 220, placeholder: ['Curiosidade: …', 'Dor ou problema: …', 'Direto ou contraintuitivo: …'][i], 'aria-label': `Gancho ${i + 1}`, oninput: (e) => { hooks[i] = e.target.value; touch(); } }, txt))));
+  }
+  const bankBox = h('div', { class: 'sc-bank', hidden: true });
+  const bankBtn = h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => {
+    if (!bankBox.hidden) { bankBox.hidden = true; return; }
+    bankBox.hidden = false; bankBox.replaceChildren(h('p', { class: 'muted', style: 'margin:0' }, 'Buscando os ganchos deste cliente…'));
+    try {
+      const { hooks: list } = await api(`/api/pasta?r=script&hooks=1&client=${post.client_id}`);
+      const num = (n) => new Intl.NumberFormat('pt-BR').format(n);
+      bankBox.replaceChildren(
+        h('span', { class: 'muted', style: 'font-size:13px' }, list.length ? 'Ganchos que já foram ao ar ou foram aprovados, do melhor resultado para o menor (dos relatórios mensais).' : 'Ainda não há ganchos com resultado. Eles aparecem aqui quando os Reels forem publicados e o relatório do mês for gerado.'),
+        ...list.map((x) => h('div', { class: 'sc-bank-row' },
+          h('div', {}, h('p', { style: 'margin:0' }, `“${x.hook}”`),
+            h('span', { class: 'muted', style: 'font-size:12.5px' }, [x.views != null ? `${num(x.views)} visualizações` : x.reach != null ? `${num(x.reach)} de alcance` : 'ainda sem resultado', x.saves ? `${num(x.saves)} salvamentos` : null, x.status, x.source === 'legenda' ? 'da legenda' : null].filter(Boolean).join(' · ')),
+            x.permalink ? h('a', { href: x.permalink, target: '_blank', rel: 'noopener', style: 'font-size:12.5px;margin-left:8px' }, 'ver ↗') : null),
+          h('button', { class: 'btn sm', type: 'button', onclick: () => { hooks[chosen] = x.hook; drawHooks(); touch(); toast(`Colocado no gancho ${chosen + 1}. Adapte ao tema.`); } }, 'Usar'))));
+    } catch (e) { bankBox.replaceChildren(h('div', { class: 'errorbox' }, e.message)); }
+  } }, '★ Banco de ganchos');
+
+  // ── cenas
+  const sceneBox = h('ol', { class: 'sc-edit' });
+  const totalEl = h('span', { class: 'muted' });
+  function drawScenes() {
+    sceneBox.replaceChildren(...scenes.map((sc, i) => {
+      const upd = (k) => (e) => { sc[k] = k === 'secs' ? Number(e.target.value) || 0 : e.target.value; touch(); if (k === 'secs') drawTotal(); };
+      const move = (d) => { const j = i + d; if (j < 0 || j >= scenes.length) return; [scenes[i], scenes[j]] = [scenes[j], scenes[i]]; drawScenes(); touch(); };
+      return h('li', { class: 'sc-scene' },
+        h('div', { class: 'sc-scene-head' }, h('b', {}, `Cena ${i + 1}`),
+          h('label', { class: 'sc-secs' }, h('input', { type: 'number', min: 0, max: 120, value: sc.secs || 0, oninput: upd('secs'), 'aria-label': `Duração da cena ${i + 1} em segundos` }), 's'),
+          h('span', { class: 'spacer' }),
+          h('button', { class: 'btn ghost sm', type: 'button', disabled: i === 0, onclick: () => move(-1), 'aria-label': 'Subir cena' }, '↑'),
+          h('button', { class: 'btn ghost sm', type: 'button', disabled: i === scenes.length - 1, onclick: () => move(1), 'aria-label': 'Descer cena' }, '↓'),
+          h('button', { class: 'btn ghost sm', type: 'button', disabled: scenes.length === 1, onclick: () => { scenes.splice(i, 1); drawScenes(); touch(); }, 'aria-label': `Apagar cena ${i + 1}` }, '✕')),
+        h('textarea', { rows: 2, maxlength: 400, placeholder: 'O que aparece: enquadramento, ação, lugar', 'aria-label': `Cena ${i + 1}: o que aparece`, oninput: upd('show') }, sc.show || ''),
+        h('textarea', { rows: 2, maxlength: 700, placeholder: i === 0 ? 'Fala (vazia = usa o gancho escolhido)' : 'Fala, do jeito que a pessoa fala', 'aria-label': `Cena ${i + 1}: fala`, oninput: upd('say') }, sc.say || ''),
+        h('input', { type: 'text', maxlength: 160, placeholder: 'Texto na tela (curto, opcional)', value: sc.text || '', 'aria-label': `Cena ${i + 1}: texto na tela`, oninput: upd('text') }));
+    }));
+    drawTotal();
+  }
+  function drawTotal() { const t = scenes.reduce((a, x) => a + (Number(x.secs) || 0), 0); totalEl.textContent = `Total: ${t}s de ${dur.value}s`; }
+  dur.addEventListener('change', () => { drawTotal(); touch(); });
+  const addScene = h('button', { class: 'btn sm', type: 'button', onclick: () => { scenes.push({ show: '', say: '', text: '', secs: 5 }); drawScenes(); touch(); sceneBox.lastChild?.querySelector('textarea')?.focus(); } }, '+ Cena');
+
+  const cta = h('input', { type: 'text', id: 's-cta', maxlength: 300, value: s0.cta || '', placeholder: 'Ex.: Salve para lembrar na próxima consulta', oninput: touch });
+  const cover = h('input', { type: 'text', id: 's-cover', maxlength: 200, value: s0.cover || '', placeholder: 'Texto da capa (até 5 palavras)', oninput: touch });
+  const audio = h('input', { type: 'text', id: 's-audio', maxlength: 200, value: s0.audio || '', placeholder: 'Estilo de trilha (biblioteca comercial do Instagram)', oninput: touch });
+  const cap = h('textarea', { id: 's-cap', maxlength: 2200, placeholder: 'Legenda sugerida para o post', style: 'min-height:70px', oninput: touch }, s0.caption || '');
+  const notes = h('textarea', { id: 's-notes', maxlength: 1000, placeholder: 'Só a equipe vê: figurino, objetos, lugar, quem grava…', style: 'min-height:60px', oninput: touch }, s0.notes || '');
+
+  // ── checagem das regras (na hora, sem IA)
+  const checkBox = h('div', { class: 'sc-check' });
+  const LV = { erro: ['Proibido', 'st-failed'], atencao: ['Atenção', 'st-pending_approval'], dica: ['Dica', 'st-draft'] };
+  const collect = () => ({ topic: topic.value, template: tpl.value, duration: Number(dur.value), hooks, hook: chosen, scenes, cta: cta.value, cover: cover.value, audio: audio.value, caption: cap.value, notes: notes.value });
+  let issues = [];
+  function check() {
+    const data = collect();
+    issues = checkScript({ ...data, hooks: data.hooks.filter((x) => x.trim()) }, niche);
+    checkBox.replaceChildren(
+      h('div', { class: 'review-head' }, h('b', {}, rules ? `⚖ Regras: ${rules.name}` : '⚖ Checagem'), h('span', { class: 'muted' }, issues.length ? `${issues.length} ponto(s)` : 'tudo certo ✓')),
+      ...issues.map((i) => h('div', { class: `rev-item lv-${i.level}` }, h('span', { class: `pill ${LV[i.level][1]}` }, LV[i.level][0]),
+        h('div', {}, h('b', {}, i.title), i.quote ? h('span', { class: 'mono', style: 'font-size:12.5px' }, ` “${i.quote}”`) : null, h('span', { class: 'muted' }, i.detail)))));
+  }
+
+  // ── status + o que o cliente pediu
+  const head = [];
+  if (post.script) head.push(h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
+    h('span', { class: `pill ${SCRIPT_PILL[s0.status] || 'st-draft'}` }, SCRIPT_STATUS[s0.status] || 'Roteiro'),
+    s0.decided_at && ['approved', 'changes'].includes(s0.status) ? h('span', { class: 'muted', style: 'font-size:13px' }, `decidido em ${fmtDate(s0.decided_at, S.tz)} ${fmtTime(s0.decided_at, S.tz)}`) : null,
+    s0.status === 'sent' && s0.sent_at ? h('span', { class: 'muted', style: 'font-size:13px' }, `enviado em ${fmtDate(s0.sent_at, S.tz)}`) : null));
+  if (s0.status === 'changes' && (s0.feedback || s0.feedback_audio)) head.push(h('div', { class: 'feedback' }, h('b', {}, 'O cliente pediu:'),
+    s0.feedback && s0.feedback !== '🎤 Pedido por áudio' ? h('span', {}, s0.feedback) : null,
+    s0.feedback_audio ? h('div', { class: 'fb-audio' }, h('span', {}, '🎤 Áudio do cliente'), h('audio', { controls: true, preload: 'metadata', src: `/api/pasta?r=files&id=${s0.feedback_audio}&open=1` })) : null));
+  if (s0.status === 'sent' && c) head.push(h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, `Avisar ${c.name}`),
+    h('div', { class: 'actions' },
+      c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, scriptMessage(c, post)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
+      h('button', { class: 'btn sm', type: 'button', onclick: () => copyText(scriptMessage(c, post), 'Mensagem com o link copiada.') }, 'Copiar mensagem'))));
+
+  const body = [
+    ...head,
+    can('ia') ? h('div', { class: 'card sc-gen', style: 'gap:10px;padding:14px' },
+      h('b', {}, '✨ Escrever com IA'),
+      h('div', { class: 'field' }, h('label', { for: 's-topic' }, 'Tema do vídeo'), topic),
+      h('div', { class: 'two' }, h('div', { class: 'field' }, h('label', { for: 's-tpl' }, 'Modelo'), tpl), h('div', { class: 'field' }, h('label', { for: 's-dur' }, 'Duração'), dur)),
+      h('div', { class: 'field' }, h('label', { for: 's-extra' }, 'Pedido extra'), extra),
+      h('span', { class: 'hint' }, `Usa a aba Marca de ${c?.name || 'cliente'}, os ganchos que já funcionaram${rules ? ` e as regras do ${rules.name}` : ''}.`),
+      genBtn, aiOut) : h('div', { class: 'two' }, h('div', { class: 'field' }, h('label', { for: 's-tpl' }, 'Modelo'), tpl), h('div', { class: 'field' }, h('label', { for: 's-dur' }, 'Duração'), dur)),
+    h('div', { class: 'field' }, h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('span', { class: 'label', style: 'flex:1' }, 'Gancho (0 a 3 segundos)'), bankBtn),
+      h('span', { class: 'hint' }, 'Marque o que vai ser gravado. O cliente só vê o escolhido.'), hookBox, bankBox),
+    h('div', { class: 'field' }, h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('span', { class: 'label', style: 'flex:1' }, 'Cenas'), totalEl), sceneBox, h('div', {}, addScene)),
+    h('div', { class: 'field' }, h('label', { for: 's-cta' }, 'Chamada final (CTA)'), cta),
+    h('div', { class: 'two' }, h('div', { class: 'field' }, h('label', { for: 's-cover' }, 'Capa'), cover), h('div', { class: 'field' }, h('label', { for: 's-audio' }, 'Trilha'), audio)),
+    h('div', { class: 'field' }, h('label', { for: 's-cap' }, 'Legenda sugerida'), cap,
+      h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => cap.value.trim() ? copyText(cap.value, 'Legenda copiada. Cole no post quando o vídeo estiver pronto.') : toast('A legenda está vazia.', true) }, 'Copiar legenda')),
+    h('div', { class: 'field' }, h('label', { for: 's-notes' }, 'Notas da gravação (só a equipe)'), notes),
+    checkBox,
+    rules ? h('details', { class: 'sc-rules' }, h('summary', {}, `Ver as regras do ${rules.name}`), h('p', { class: 'muted', style: 'margin:6px 0' }, `${rules.summary}. Resumo para orientar a equipe; não substitui o código de ética.`),
+      h('ul', {}, ...rules.rules.map((r) => h('li', {}, r)))) : niche ? null : h('p', { class: 'hint muted', style: 'margin:0' }, 'Defina o nicho do cliente na aba Marca para ligar as regras de publicidade (dentista, saúde, advocacia…).'),
+    post.script && ['sent', 'approved'].includes(s0.status) ? h('p', { class: 'hint muted', style: 'margin:0;font-size:13px' }, 'Mudar o roteiro depois de enviado volta para escrita: reenvie para o cliente aprovar a versão nova.') : null,
+  ];
+
+  async function save(sendIt) {
+    const data = collect();
+    if (!data.hooks.some((x) => x.trim()) && !data.scenes.some((x) => x.say || x.show)) return toast('O roteiro está vazio. Escreva ou gere com IA.', true);
+    if (sendIt && issues.some((i) => i.level === 'erro')) { checkBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return toast('Tem um ponto proibido pelas regras do nicho. Corrija antes de enviar.', true); }
+    if (sendIt && !data.hooks[data.hook]?.trim()) return toast('Escreva o gancho escolhido antes de enviar.', true);
+    // ganchos vazios saem, mantendo o escolhido
+    const keep = data.hooks.map((x, i) => [x.trim(), i]).filter(([x]) => x);
+    data.hook = Math.max(0, keep.findIndex(([, i]) => i === data.hook));
+    data.hooks = keep.map(([x]) => x);
+    btns.forEach((b) => (b.disabled = true));
+    try {
+      const saved = await api('/api/pasta?r=script', { method: 'PUT', body: { post_id: post.id, script: data, send: sendIt } });
+      upsert(saved); close();
+      toast(sendIt ? 'Roteiro enviado. O cliente já vê no link de aprovação.' : saved.script.status === 'draft' && ['sent', 'approved'].includes(s0.status) ? 'Salvo. Voltou para escrita: reenvie ao cliente.' : 'Roteiro salvo.');
+      if (sendIt) openScript(saved);
+    } catch (e) { toast(e.message, true); btns.forEach((b) => (b.disabled = false)); }
+  }
+  const B = (label, cls, fn) => h('button', { class: `btn ${cls}`, type: 'button', onclick: fn }, label);
+  let foot = [
+    post.script && can('apagar') ? confirmButton('Apagar roteiro', 'Confirmar', async () => { upsert(await api(`/api/pasta?r=script&post_id=${post.id}`, { method: 'DELETE' })); close(); toast('Roteiro apagado.'); }) : null,
+    h('span', { class: 'spacer' }),
+    B('Voltar ao post', 'ghost', () => { close(); openPost(S.posts.find((x) => x.id === post.id) || post); }),
+    B('Salvar', '', () => save(false)),
+    can('enviar') ? B(s0.status === 'changes' ? 'Salvar e reenviar' : s0.status === 'sent' ? 'Reenviar ao cliente' : 'Enviar ao cliente', 'primary', () => save(true)) : null,
+  ].filter(Boolean);
+  if (!can('conteudo')) foot = [h('span', { class: 'muted' }, 'Só leitura: sem permissão para editar.')];
+  const btns = foot.filter((b) => b instanceof HTMLButtonElement);
+  drawHooks(); drawScenes(); check();
+  const close = drawer(`Roteiro · ${post.title || 'vídeo'}`, body, foot);
+  document.querySelector('.drawer')?.classList.add('wide');
 }
 
 function upsert(p, rerender = true) {

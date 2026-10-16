@@ -26,23 +26,32 @@ function render() {
   const decided = D.posts.filter((p) => ['approved', 'changes_requested'].includes(p.status));
   const out = D.posts.filter((p) => ['publishing', 'published'].includes(p.status));
   const handle = D.client.ig_username ? `@${D.client.ig_username}` : D.client.name;
+  const scripts = D.scripts || [];
+  const sOpen = scripts.filter((x) => x.script.status === 'sent');
+  const sDone = scripts.filter((x) => x.script.status !== 'sent');
+  const waiting = open.length + sOpen.length;
 
   root.replaceChildren(...[
     h('header', { class: 'ap-head' },
       h('div', { class: 'eyebrow' }, `Aprovação · ${D.client.name}`),
-      h('h1', {}, open.length ? 'Posts para você aprovar' : 'Tudo em dia'),
-      h('p', {}, open.length
+      h('h1', {}, waiting ? (open.length ? 'Posts para você aprovar' : 'Roteiros para você aprovar') : 'Tudo em dia'),
+      h('p', {}, !open.length && sOpen.length ? 'Leia o roteiro antes da gravação. Aprovado, a equipe já pode gravar.' : open.length
         ? 'Veja cada post como vai aparecer no Instagram. Aprovado, ele publica sozinho no horário marcado.'
         : 'Não há posts aguardando sua decisão. Quando a agência enviar novos, eles aparecem neste mesmo link.'),
-      open.length ? h('div', { class: 'count' }, h('span', { class: 'pill st-pending_approval' }, `${open.length} aguardando sua decisão`)) : null),
+      waiting ? h('div', { class: 'count' }, h('span', { class: 'pill st-pending_approval' }, `${waiting} aguardando sua decisão`)) : null),
     D.client.ig_connected ? null : h('div', { class: 'card', style: 'gap:10px' },
       h('b', {}, 'Conecte seu Instagram'),
       h('span', { class: 'muted' }, 'Para os posts aprovados saírem sozinhos no seu perfil, autorize a publicação uma vez. Você entra direto no Instagram; a agência não vê sua senha.'),
       h('a', { class: 'btn primary', href: `/api/ig/connect?t=${encodeURIComponent(token)}` }, 'Conectar Instagram')),
+    sOpen.length ? h('div', { class: 'eyebrow section-title' }, `Roteiros para aprovar · antes de gravar`) : null,
+    ...sOpen.map(scriptCard),
     feedPreview(),
+    open.length && sOpen.length ? h('div', { class: 'eyebrow section-title' }, 'Posts para aprovar') : null,
     ...open.map((p) => card(p, handle)),
     decided.length ? h('div', { class: 'eyebrow section-title' }, 'Já decididos (ainda dá para mudar)') : null,
     ...decided.map((p) => card(p, handle)),
+    sDone.length ? h('div', { class: 'eyebrow section-title' }, 'Roteiros já decididos') : null,
+    ...sDone.map(scriptCard),
     out.length ? h('div', { class: 'eyebrow section-title' }, 'Publicados') : null,
     ...out.map((p) => card(p, handle)),
     h('footer', { class: 'eyebrow', style: 'text-align:center;margin-top:12px' }, 'Gestão de conteúdo · MC DIGITAL'),
@@ -58,6 +67,35 @@ function card(p, handle) {
     capEl, more,
     h('div', { class: 'when eyebrow' }, p.status === 'published' ? 'Publicado' : `Publica ${when(p.scheduled_at)}`),
     decision(p));
+}
+
+// Roteiro de vídeo: o cliente lê e aprova antes da gravação.
+const FMT = { REELS: 'Reels', STORY: 'Story', IMAGE: 'Vídeo', CAROUSEL: 'Vídeo' };
+function scriptCard(x) {
+  const s = x.script;
+  const total = (s.scenes || []).reduce((a, c) => a + (Number(c.secs) || 0), 0) || s.duration;
+  const st = s.status;
+  const bottom = st === 'sent' ? form(x, false, 'script') : h('div', { class: 'decide' },
+    h('div', { class: 'done' },
+      h('b', { class: st === 'approved' ? 'ok-txt' : 'ch-txt' }, st === 'approved' ? '✓ Roteiro aprovado' : '✎ Ajuste pedido'),
+      h('span', { class: 'muted' }, st === 'approved' ? 'A equipe já pode gravar. O vídeo pronto chega aqui para a aprovação final.' : 'A agência vai ajustar e te mandar o roteiro de novo.'),
+      s.feedback && s.feedback !== '🎤 Pedido por áudio' ? h('span', {}, `Seu comentário: “${s.feedback}”`) : null,
+      s.feedback_audio ? h('div', { class: 'rec-sent' }, h('span', { class: 'muted' }, '🎤 Seu áudio:'), h('audio', { controls: true, preload: 'none', src: `/api/approval?t=${encodeURIComponent(token)}&audio=${s.feedback_audio}` })) : null),
+    h('button', { class: 'linkish', type: 'button', onclick: (e) => e.target.closest('.decide').replaceWith(form(x, true, 'script')) }, 'Mudar minha decisão'));
+  return h('article', { class: 'post sc', id: `s-${x.id}` },
+    h('div', { class: 'sc-head' },
+      h('span', { class: 'sc-tag' }, `🎬 Roteiro de ${FMT[x.media_type] || 'vídeo'} · ~${total}s`),
+      h('h2', {}, x.title || s.topic || 'Vídeo'),
+      x.scheduled_at ? h('span', { class: 'muted' }, `Previsto para ${fmtDate(x.scheduled_at, D.timezone)}`) : null),
+    s.hook ? h('div', { class: 'sc-hook' }, h('span', { class: 'eyebrow' }, 'Começa assim (primeiros 3 segundos)'), h('p', {}, `“${s.hook}”`)) : null,
+    h('ol', { class: 'sc-scenes' }, ...(s.scenes || []).map((c, i) => h('li', {},
+      h('div', { class: 'sc-n' }, h('b', {}, `Cena ${i + 1}`), c.secs ? h('span', { class: 'muted' }, `${c.secs}s`) : null),
+      c.show ? h('p', { class: 'sc-show' }, c.show) : null,
+      c.say || (i === 0 && s.hook) ? h('p', { class: 'sc-say' }, `“${c.say || s.hook}”`) : null,
+      c.text ? h('span', { class: 'sc-text' }, `Na tela: ${c.text}`) : null))),
+    s.cta ? h('div', { class: 'sc-cta' }, h('span', { class: 'eyebrow' }, 'Fecha com'), h('p', {}, s.cta)) : null,
+    s.cover || s.audio ? h('div', { class: 'sc-meta muted' }, s.cover ? h('span', {}, `Capa: “${s.cover}”`) : null, s.audio ? h('span', {}, `Trilha: ${s.audio}`) : null) : null,
+    bottom);
 }
 
 function decision(p) {
@@ -77,24 +115,24 @@ function decision(p) {
   return form(p);
 }
 
-function form(p, changing = false) {
-  const ta = h('textarea', { id: `fb-${p.id}`, placeholder: 'Ex.: trocar a frase, mudar a cor, outro horário…', style: 'min-height:80px' });
+function form(p, changing = false, kind = 'post') {
+  const ta = h('textarea', { id: `fb-${p.id}`, placeholder: kind === 'script' ? 'Ex.: mudar a frase da cena 2, gravar na recepção…' : 'Ex.: trocar a frase, mudar a cor, outro horário…', style: 'min-height:80px' });
   const rec = recorder();
   const fbBox = h('div', { class: 'fb-box', hidden: true },
     h('b', {}, 'O que você quer mudar?'),
     rec.el,
     h('label', { for: `fb-${p.id}`, class: 'muted', style: 'font-size:13.5px' }, rec.supported ? 'ou escreva (opcional se mandar áudio):' : 'Escreva:'), ta,
-    h('button', { class: 'btn primary', type: 'button', onclick: () => decide(p, 'changes', ta.value, box, rec) }, 'Enviar pedido de ajuste'));
+    h('button', { class: 'btn primary', type: 'button', onclick: () => decide(p, 'changes', ta.value, box, rec, kind) }, 'Enviar pedido de ajuste'));
   const box = h('div', { class: 'decide' },
     changing ? h('span', { class: 'muted' }, 'Escolha de novo:') : null,
     h('div', { class: 'btns' },
-      h('button', { class: 'btn primary', type: 'button', onclick: () => decide(p, 'approve', '', box) }, 'Aprovar'),
+      h('button', { class: 'btn primary', type: 'button', onclick: () => decide(p, 'approve', '', box, null, kind) }, kind === 'script' ? 'Aprovar roteiro' : 'Aprovar'),
       h('button', { class: 'btn', type: 'button', onclick: () => { fbBox.hidden = false; fbBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, 'Pedir ajuste')),
     fbBox);
   return box;
 }
 
-async function decide(p, decision, feedback, box, rec = null) {
+async function decide(p, decision, feedback, box, rec = null, kind = 'post') {
   if (rec?.recording()) return toast('Toque em "Parar" para terminar a gravação.', true);
   const blob = decision === 'changes' ? rec?.blob() : null;
   if (decision === 'changes' && !feedback.trim() && !blob) return toast('Grave um áudio ou escreva o que você quer mudar.', true);
@@ -108,7 +146,15 @@ async function decide(p, decision, feedback, box, rec = null) {
       if (!res.ok) throw Object.assign(new Error(d.error || 'Não consegui enviar o áudio.'), { status: res.status });
       audio_id = d.audio_id;
     }
-    const r = await api('/api/approval', { method: 'POST', body: { t: token, post_id: p.id, decision, feedback, audio_id } });
+    const r = await api('/api/approval', { method: 'POST', body: { t: token, post_id: p.id, decision, feedback, audio_id, kind } });
+    if (kind === 'script') {
+      p.script = r.script;
+      toast(decision === 'approve' ? 'Roteiro aprovado! A equipe já pode gravar.' : 'Pedido de ajuste no roteiro enviado.');
+      render();
+      const nx = (D.scripts || []).find((x) => x.script.status === 'sent') || D.posts.find((x) => x.status === 'pending_approval');
+      if (nx) document.getElementById(`${nx.script ? 's' : 'p'}-${nx.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     Object.assign(p, r);
     toast(decision === 'approve' ? 'Aprovado! Ele publica sozinho no horário.' : 'Pedido de ajuste enviado para a agência.');
     render();

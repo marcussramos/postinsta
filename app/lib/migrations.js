@@ -263,3 +263,7 @@ export const MIGRATION_V12 = `-- MC DIGITAL: atualização 12 (permissões por p
 alter table users add column if not exists perms jsonb;
 alter table users add column if not exists client_ids jsonb;
 notify pgrst, 'reload schema';`;
+
+export const MIGRATION_V13 = `-- MC DIGITAL: atualização 13 (roteiros de Reels e Stories) — rode uma vez no SQL Editor do Supabase
+alter table posts add column if not exists script jsonb;
+notify pgrst, 'reload schema';`;

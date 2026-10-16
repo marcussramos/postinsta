@@ -29,7 +29,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     users: () => ({ id: crypto.randomUUID(), active: true, perms: null, client_ids: null, created_at: new Date().toISOString() }),
     requests: () => ({ id: crypto.randomUUID(), status: 'open', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     payments: () => ({ status: 'paid', amount_cents: null, paid_at: null, file_id: null, note: null, updated_at: new Date().toISOString() }),
-    posts: () => ({ id: crypto.randomUUID(), status: 'draft', media_type: 'IMAGE', media: null, title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
+    posts: () => ({ id: crypto.randomUUID(), status: 'draft', media_type: 'IMAGE', media: null, script: null, title: null, notes: null, image_url: null, scheduled_at: null, caption: '', alt_text: null, client_feedback: null, decided_at: null, sent_for_approval_at: null,
       feedback_audio: null, ig_container_id: null, ig_media_id: null, ig_permalink: null, published_at: null, attempts: 0, last_error: null, image_path: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   };
@@ -223,6 +223,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       const req = JSON.parse(init.body); ig.aiCalls = (ig.aiCalls || []).concat([req]);
       const prompt = req.messages[0].content.map((b) => b.text || '').join('');
       if (prompt.startsWith('DIAGNÓSTICO')) return json(200, { content: [{ type: 'text', text: JSON.stringify({ score: 58, headline: 'Boa base, falta constância', areas: [{ name: 'Perfil e bio', score: 70, comment: 'Bio clara.' }, { name: 'Constância', score: 40, comment: 'Posta pouco.' }, { name: 'Conteúdo', score: 60, comment: 'ok' }, { name: 'Engajamento', score: 62, comment: 'ok' }], strengths: ['Fotos bonitas'], actions: [{ title: 'Poste 3x por semana', detail: 'agenda fixa' }, { title: 'Reels', detail: 'x' }, { title: 'Bio', detail: 'y' }], closing: 'Vamos conversar?' }) }] });
+      if (prompt.startsWith('ROTEIRO')) return json(200, { content: [{ type: 'text', text: JSON.stringify({ hooks: ['Você escova os dentes errado?', 'Sangra quando passa fio dental?', 'Pare de escovar logo depois do café'], scenes: [{ show: 'Close no rosto, consultório', say: '', text: 'Escova errada?', secs: 3 }, { show: 'Demonstra na arcada', say: 'O certo é inclinar a escova 45 graus.', text: '45°', secs: 12 }, { show: 'Sorri para a câmera', say: 'Salva para lembrar amanhã.', text: '', secs: 5 }], cta: 'Salve e mande para quem precisa', audio: 'instrumental leve', cover: 'Escova do jeito certo', caption: 'Salve este vídeo.', warnings: ['Tirei o preço da limpeza: o CFO não permite.'] }) }] });
       if (prompt.startsWith('REVISÃO')) return json(200, { content: [{ type: 'text', text: JSON.stringify({ issues: [{ level: 'atencao', area: 'legenda', title: 'Erro de digitação', detail: 'voce → você' }], corrected_caption: 'Você vai amar!', changes: ['voce → você'] }) }] });
       if (prompt.startsWith('PLANEJAMENTO')) {
         const month = (prompt.match(/Período: (\d{4}-\d{2})/) || [])[1];
