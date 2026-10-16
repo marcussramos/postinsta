@@ -7,10 +7,10 @@ import { route, send, readJson, query, need } from '../http.js';
 import { requirePerm, requireAdmin } from '../auth.js';
 import { db } from '../db.js';
 import { sessionSecret } from '../env.js';
-import { setState } from '../appstate.js';
+import { setState, getState } from '../appstate.js';
 import { notify } from '../push.js';
 import { loadSettings } from './settings.js';
-import { runDiagnosis, diagSettings, cleanHandle, validHandle, DIAG_DEFAULTS, DIAG_QUESTIONS } from '../diagnosis.js';
+import { runDiagnosis, diagSettings, cleanHandle, validHandle, probeProfile, DIAG_DEFAULTS, DIAG_QUESTIONS } from '../diagnosis.js';
 
 export const STAGES = ['novo', 'contato', 'reuniao', 'proposta', 'fechado', 'perdido'];
 const txt = (v, n) => { const s = String(v ?? '').trim().slice(0, n); return s || null; };
@@ -102,7 +102,19 @@ export const diagnosticoRoute = route({
 export const diagcfgRoute = route({
   GET: async (req, res) => {
     await requireAdmin(req);
-    send(res, 200, await diagSettings());
+    const [cfg, lookup_status] = await Promise.all([diagSettings(), getState('diag_lookup_status')]);
+    send(res, 200, { ...cfg, lookup_status });
+  },
+  // Testa a leitura de dados públicos de um @ com o perfil escolhido (não gasta IA, não cria lead).
+  POST: async (req, res) => {
+    await requireAdmin(req);
+    const handle = cleanHandle((await readJson(req)).handle);
+    need(validHandle(handle), 400, 'Digite um @ válido para testar.');
+    const { profile, error } = await probeProfile(handle);
+    need(error !== 'off', 400, 'Escolha um perfil conectado em "Perfil usado para ler os dados públicos" e salve antes de testar.');
+    send(res, 200, profile
+      ? { ok: true, handle, followers: profile.followers, posts_per_week: profile.posts_per_week, engagement_rate: profile.engagement_rate }
+      : { ok: false, handle, error });
   },
   PUT: async (req, res) => {
     await requireAdmin(req);
@@ -114,6 +126,6 @@ export const diagcfgRoute = route({
     if (b.whatsapp !== undefined) next.whatsapp = phone(b.whatsapp) || '';
     for (const k of ['headline', 'cta']) if (b[k] !== undefined) next[k] = String(b[k] || '').trim().slice(0, 200) || DIAG_DEFAULTS[k];
     await setState('diag_settings', next);
-    send(res, 200, next);
+    send(res, 200, { ...next, lookup_status: await getState('diag_lookup_status') });
   },
 });

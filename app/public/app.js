@@ -3221,7 +3221,8 @@ function settingsOnboarding() {
 // ───────────────────────── VENDAS (funil de leads) + diagnóstico grátis
 const STAGES = [['novo', 'Novo lead'], ['contato', 'Em contato'], ['reuniao', 'Reunião'], ['proposta', 'Proposta'], ['fechado', 'Fechado ✓'], ['perdido', 'Perdido']];
 const SRC_LABEL = { diagnostico: 'Diagnóstico', manual: 'Manual', indicacao: 'Indicação', instagram: 'Instagram', site: 'Site' };
-const diagUrl = () => `${location.origin}/diagnostico`;
+// Sempre o endereço oficial (APP_URL), mesmo abrindo o painel por um link de teste da Vercel.
+const diagUrl = () => `${S.setup?.app_url || location.origin}/diagnostico`;
 const daysTo = (d) => daysBetween(todayLocal(), d);
 function leadMessage(l) {
   const first = (l.name || '').split(' ')[0];
@@ -3343,6 +3344,25 @@ function openLead(l = null, { lose = false } = {}) {
   const close = drawer(isNew ? 'Novo lead' : l.name, body, foot);
   if (lose) lost.focus(); else if (isNew) name.focus();
 }
+// Mostra se a leitura de dados reais está funcionando e permite testar com um @.
+function diagLookupBox(D) {
+  if (!D.lookup_client_id) return null;
+  const st = D.lookup_status;
+  const status = h('div', { class: st?.ok ? 'okbox' : st ? 'errorbox' : 'hint' },
+    !st ? 'Ainda não houve leitura. Teste com um @ comercial abaixo.'
+      : st.ok ? `✓ Leitura de dados reais funcionando (último: @${st.handle}, ${fmtDate(st.at, S.tz)}).`
+      : h('span', {}, h('b', {}, 'Leitura de dados reais não está funcionando. '), st.error, ` (último teste: @${st.handle}, ${fmtDate(st.at, S.tz)})`));
+  const who = h('input', { id: 'dg-test', placeholder: '@perfilcomercial', autocapitalize: 'none', style: 'max-width:260px' });
+  const go = h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+    go.disabled = true;
+    try {
+      const r = await api('/api/pasta?r=diagcfg', { method: 'POST', body: { handle: who.value } });
+      toast(r.ok ? `Funcionou: @${r.handle} tem ${Number(r.followers || 0).toLocaleString('pt-BR')} seguidores.` : `Não funcionou: ${r.error}`, !r.ok);
+      S.diag = await api('/api/pasta?r=diagcfg'); render();
+    } catch (err) { toast(err.message, true); go.disabled = false; }
+  } }, 'Testar leitura');
+  return h('div', { class: 'field' }, status, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' }, who, go));
+}
 function settingsDiag() {
   if (S.diag === undefined) { S.diag = null; api('/api/pasta?r=diagcfg').then((v) => { S.diag = v; }).catch(() => { S.diag = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
   const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Atrair clientes'), h('h2', { style: 'font-size:22px' }, 'Diagnóstico grátis')));
@@ -3357,12 +3377,15 @@ function settingsDiag() {
   return [head, h('article', { class: 'card' },
     h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Uma página pública onde a pessoa coloca o @ e recebe na hora uma análise do perfil feita pela IA (nota, o que está bom e 3 ações). Para ver, ela deixa nome e WhatsApp, e vira lead em Vendas, com aviso no seu celular. Coloque o link na bio, nos Stories e nos anúncios.'),
     h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, diagUrl()), h('button', { class: 'btn sm', onclick: () => copyText(diagUrl(), 'Link copiado.') }, 'Copiar')),
-    S.setup?.ai_ready ? null : h('div', { class: 'errorbox' }, 'Precisa da IA ligada (ANTHROPIC_API_KEY). Cada diagnóstico custa centavos de IA.'),
+    S.setup?.ai_ready ? null : h('div', { class: 'errorbox' }, S.setup?.app_url && !S.setup.app_url.endsWith(location.host)
+      ? `Você está num endereço de teste (${location.host}), onde a IA não está ligada. O diagnóstico oficial em ${S.setup.app_url.replace(/^https?:\/\//, '')} não é afetado. Para ligar aqui também: Vercel → Settings → Environment Variables → ANTHROPIC_API_KEY → marque "Preview".`
+      : 'Precisa da IA ligada (ANTHROPIC_API_KEY na Vercel). Sem ela, a página do diagnóstico fica fechada. Cada diagnóstico custa centavos de IA.'),
     h('label', { class: 'toggle' }, en, h('span', {}, 'Página do diagnóstico aberta')),
     h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'dg-wa' }, 'Seu WhatsApp (botão "Quero ajuda")'), wa), h('div', { class: 'field' }, h('label', { for: 'dg-cta' }, 'Texto do botão'), cta)),
     h('div', { class: 'field' }, h('label', { for: 'dg-hl' }, 'Título da página'), hl),
     h('div', { class: 'field' }, h('label', { for: 'dg-acc' }, 'Perfil usado para ler os dados públicos'), acc,
-      h('span', { class: 'hint' }, 'Com um perfil conectado (o ideal é o da própria MC Digital: cadastre-a como cliente e conecte), o app tenta ler seguidores, frequência e engajamento reais do @ informado. Se a Meta não liberar essa leitura, o diagnóstico usa só as respostas.')),
+      h('span', { class: 'hint' }, 'Com um perfil conectado (o ideal é o da própria MC Digital), o app tenta ler seguidores, frequência e engajamento reais do @ informado. Se a Meta não liberar essa leitura, o diagnóstico usa só as respostas, sem avisar a pessoa.')),
+    diagLookupBox(D),
     h('button', { class: 'btn primary sm', style: 'justify-self:start', onclick: async (e) => {
       e.target.disabled = true;
       try { S.diag = await api('/api/pasta?r=diagcfg', { method: 'PUT', body: { enabled: en.checked, whatsapp: wa.value, headline: hl.value, cta: cta.value, lookup_client_id: acc.value } }); toast('Diagnóstico salvo.'); render(); }

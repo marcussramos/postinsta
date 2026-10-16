@@ -4,7 +4,7 @@
 // 2) A IA monta a análise: nota geral, nota por área, pontos fortes e 3 ações prioritárias.
 import { db } from './db.js';
 import { IG_API_VERSION } from './env.js';
-import { getState } from './appstate.js';
+import { getState, setState } from './appstate.js';
 import { askClaude, jsonFrom } from './ai.js';
 import { HttpError } from './http.js';
 
@@ -14,18 +14,44 @@ export async function diagSettings() { return { ...DIAG_DEFAULTS, ...((await get
 export const cleanHandle = (v) => String(v || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[/?#].*$/, '').replace(/^@+/, '').toLowerCase();
 export const validHandle = (h) => /^[a-z0-9._]{1,30}$/.test(h);
 
+// Explica em português por que a Meta não devolveu os dados (aparece em Ajustes → Diagnóstico).
+export function lookupErrorText(e) {
+  const code = Number(e?.code);
+  const msg = String(e?.message || '');
+  if (code === 190 || code === 102) return 'A conexão do perfil escolhido expirou. Reconecte o Instagram dele na página Clientes.';
+  if (code === 10 || code === 200 || /permission/i.test(msg)) return 'A Meta não deu permissão para essa leitura. Ela só funciona com o app aprovado para "Business Discovery" (login pelo Facebook, com Página ligada ao Instagram).';
+  if (code === 100 && /business_discovery|nonexisting field|Unsupported/i.test(msg)) return 'A Meta não oferece a leitura de outros perfis para contas conectadas pelo login do Instagram. Para ler dados reais, o app precisaria conectar pelo login do Facebook.';
+  if (/cannot be found|does not exist|not.*business/i.test(msg) || code === 110) return 'Esse @ não foi encontrado ou não é perfil comercial/criador (a Meta só mostra dados desses).';
+  return msg ? `A Meta respondeu: ${msg.slice(0, 200)}` : 'A Meta não respondeu.';
+}
+
 // Dados públicos do perfil (seguidores, posts, últimas publicações). null = indisponível.
 export async function lookupProfile(handle) {
+  return (await probeProfile(handle)).profile;
+}
+
+// Igual ao lookupProfile, mas diz o motivo quando falha e guarda o último resultado para o painel.
+export async function probeProfile(handle, { remember = true } = {}) {
+  const out = await readProfile(handle);
+  if (remember && out.error !== 'off') await setState('diag_lookup_status', { ok: Boolean(out.profile), error: out.profile ? null : out.error, handle, at: new Date().toISOString() }).catch(() => {});
+  return out;
+}
+
+async function readProfile(handle) {
   const cfg = await diagSettings();
-  if (!cfg.lookup_client_id) return null;
+  if (!cfg.lookup_client_id) return { profile: null, error: 'off' };
   const c = await db.one('clients', { select: 'ig_user_id,ig_token', id: `eq.${cfg.lookup_client_id}` }).catch(() => null);
-  if (!c?.ig_token || !c.ig_user_id) return null;
+  if (!c?.ig_token || !c.ig_user_id) return { profile: null, error: 'O perfil escolhido não está conectado ao Instagram. Conecte-o na página Clientes.' };
   const fields = `business_discovery.username(${handle}){username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url,media.limit(18){caption,like_count,comments_count,timestamp,media_type,media_product_type,permalink}}`;
   try {
     const r = await fetch(`https://graph.instagram.com/${IG_API_VERSION()}/${c.ig_user_id}?${new URLSearchParams({ fields, access_token: c.ig_token })}`);
-    if (!r.ok) return null;
-    const d = (await r.json())?.business_discovery;
-    if (!d) return null;
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      console.warn('[diagnostico] business_discovery falhou', r.status, JSON.stringify(body?.error || body).slice(0, 300));
+      return { profile: null, error: lookupErrorText(body?.error) };
+    }
+    const d = body?.business_discovery;
+    if (!d) return { profile: null, error: 'A Meta respondeu sem os dados do perfil.' };
     const media = (d.media?.data || []).map((m) => ({
       type: m.media_product_type === 'REELS' ? 'Reels' : m.media_type === 'CAROUSEL_ALBUM' ? 'Carrossel' : m.media_type === 'VIDEO' ? 'Vídeo' : 'Foto',
       likes: m.like_count ?? null, comments: m.comments_count ?? null, at: m.timestamp, caption: (m.caption || '').slice(0, 220),
@@ -33,7 +59,7 @@ export async function lookupProfile(handle) {
     const days = media.length > 1 ? (new Date(media[0].at) - new Date(media.at(-1).at)) / 864e5 : null;
     const inter = media.filter((m) => m.likes != null).map((m) => (m.likes || 0) + (m.comments || 0));
     const avg = inter.length ? Math.round(inter.reduce((a, b) => a + b, 0) / inter.length) : null;
-    return {
+    return { error: null, profile: {
       username: d.username, name: d.name || null, biography: d.biography || '', website: d.website || null, picture: d.profile_picture_url || null,
       followers: d.followers_count ?? null, following: d.follows_count ?? null, posts: d.media_count ?? null,
       last_post_days: media[0] ? Math.round((Date.now() - new Date(media[0].at)) / 864e5) : null,
@@ -41,8 +67,11 @@ export async function lookupProfile(handle) {
       avg_interactions: avg, engagement_rate: avg != null && d.followers_count ? Math.round((avg / d.followers_count) * 1000) / 10 : null,
       formats: media.reduce((acc, m) => ({ ...acc, [m.type]: (acc[m.type] || 0) + 1 }), {}),
       recent: media.slice(0, 12),
-    };
-  } catch { return null; }
+    } };
+  } catch (e) {
+    console.warn('[diagnostico] business_discovery erro de rede', e?.message);
+    return { profile: null, error: 'Não foi possível falar com a Meta agora.' };
+  }
 }
 
 export const DIAG_QUESTIONS = {
@@ -64,7 +93,7 @@ ${prof ? `Dados públicos reais do perfil (use como fonte principal; não invent
 - Último post há ${prof.last_post_days ?? '?'} dias · ritmo: ${prof.posts_per_week ?? '?'} posts/semana
 - Média de interações por post: ${prof.avg_interactions ?? '?'} · taxa de engajamento aproximada: ${prof.engagement_rate ?? '?'}%
 - Formatos recentes: ${Object.entries(prof.formats || {}).map(([k, v]) => `${k} ${v}`).join(', ') || '?'}
-- Legendas recentes: ${(prof.recent || []).slice(0, 6).map((m) => `[${m.type}, ${(m.likes ?? 0) + (m.comments ?? 0)} interações] ${m.caption.replace(/\s+/g, ' ').slice(0, 120)}`).join(' | ')}` : 'Não há dados públicos do perfil: baseie-se nas respostas e deixe claro quando algo é estimativa.'}
+- Legendas recentes: ${(prof.recent || []).slice(0, 6).map((m) => `[${m.type}, ${(m.likes ?? 0) + (m.comments ?? 0)} interações] ${m.caption.replace(/\s+/g, ' ').slice(0, 120)}`).join(' | ')}` : 'Não há dados públicos do perfil: baseie-se só nas respostas. Nunca escreva que "não conseguiu ver", "não acessou" ou "não analisou" o perfil, nem fale em "estimativa"; escreva a partir do que a pessoa contou ("pelo que você contou…", "como você posta…").'}
 
 Regras:
 - Áreas: "Perfil e bio", "Constância", "Conteúdo", "Engajamento". Nota de 0 a 100 em cada uma e uma geral (média ponderada, seja realista: perfis medianos ficam entre 40 e 65).
