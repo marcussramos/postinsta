@@ -2477,23 +2477,6 @@ function viewHome() {
   const attention = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
     alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Tudo certo por aqui ✓'));
 
-  // entregas do mês
-  const rows = S.clients.map((c) => ({ c, d: S.deliv?.[c.id] })).filter(({ d }) => d && (d.posts.quota != null || d.reels.quota != null || d.posts.planned || d.reels.planned));
-  const [y, mo] = month.split('-').map(Number);
-  const frac = Number(today.slice(8)) / new Date(Date.UTC(y, mo, 0)).getUTCDate();
-  const pace = (x) => {
-    if (x.quota == null) return null;
-    if (x.planned >= x.quota) return h('span', { class: 'pace ok' }, 'completo ✓');
-    if (x.planned < Math.floor(x.quota * frac)) return h('span', { class: 'pace bad' }, `faltam ${x.quota - x.planned}`);
-    return h('span', { class: 'pace' }, `faltam ${x.quota - x.planned}`);
-  };
-  const delivCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, `Entregas de ${monthLabel(month).toLowerCase()}`), h('span', { class: 'muted', style: 'font-size:12.5px' }, 'programados / cota')),
-    rows.length ? h('div', { class: 'dtable' }, ...rows.map(({ c, d }) => h('div', { class: 'drow' },
-      h('b', {}, c.name),
-      h('div', {}, h('span', { class: 'mono' }, d.posts.quota != null ? `${d.posts.planned}/${d.posts.quota}` : d.posts.planned), ' posts ', pace(d.posts)),
-      h('div', {}, h('span', { class: 'mono' }, d.reels.quota != null ? `${d.reels.planned}/${d.reels.quota}` : d.reels.planned), ' Reels ', pace(d.reels)))))
-      : h('p', { class: 'muted', style: 'margin:0' }, S.role === 'admin' ? 'Defina a cota de cada cliente em Pasta → Contrato → Editar dados.' : 'Sem cotas definidas.'));
-
   // reajustes (aniversário do contrato)
   let reaj = null;
   if (can('financeiro')) {
@@ -2505,7 +2488,7 @@ function viewHome() {
 
   if (!S.clients.length) return [hero, noClients()];
   return [hero, pushPrompt(), h('div', { class: 'home-kpis' }, ...tiles),
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, delivCard, upcomingDatesCard(), reaj, approvalReminders(), requestsInbox()))].filter(Boolean);
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, upcomingDatesCard(), reaj, approvalReminders(), requestsInbox()))].filter(Boolean);
 }
 const kpi = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:12.5px' }, sub));
 function alertRow(tone, title, sub, onclick, href) {
