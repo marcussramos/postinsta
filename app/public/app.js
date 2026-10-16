@@ -620,7 +620,7 @@ function openPost(post = null, opts = {}) {
   const typeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Formato do post' });
   const drawSeg = () => typeSeg.replaceChildren(...Object.entries(MEDIA_LABEL).map(([k, l]) => h('button', {
     type: 'button', class: 'seg-btn', 'aria-pressed': String(mtype === k), disabled: locked,
-    onclick: () => { if (mtype === k) return; if (['REELS', 'STORY'].includes(mtype) || k === 'STORY') { img = null; video = null; } mtype = k; mediaDirty = true; syncCaption(); if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); },
+    onclick: () => { if (mtype === k) return; if (['REELS', 'STORY'].includes(mtype) || k === 'STORY') { img = null; video = null; } mtype = k; mediaDirty = true; syncCaption(); if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); drawScriptBox?.(); },
   }, { IMAGE: '🖼 ', CAROUSEL: '❐ ', REELS: '▶ ', STORY: '◷ ' }[k] + l)));
   const dropZone = (title, hint, onPick, onFiles) => {
     const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => !locked && onPick(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } },
@@ -822,6 +822,8 @@ function openPost(post = null, opts = {}) {
   function drawScriptBox() {
     const sc = post?.script;
     const file = sc?.file;
+    // só Reels e Story (vídeo); se já tiver roteiro anexado, continua aparecendo para dar para tirar
+    if (!['REELS', 'STORY'].includes(mtype) && !file && !pendingScript) return scriptBox.replaceChildren();
     if (pendingScript) return scriptBox.replaceChildren(h('div', { class: 'sf-file' }, h('span', { class: 'sf-ic' }, 'PDF'),
       h('span', { class: 'sf-main' }, h('b', {}, 'Roteiro'), h('small', {}, `${pendingScript.name} · sobe quando você salvar`)),
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { pendingScript = null; drawScriptBox(); } }, 'Tirar')));

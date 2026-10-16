@@ -57,6 +57,15 @@
   .cal .dots { display: flex; flex-wrap: wrap; gap: 3px; }
   .cal .dot { width: 8px; height: 8px; border-radius: 50%; }
   .g-producao { background: var(--off); } .g-roteiro { background: transparent; box-shadow: inset 0 0 0 2px var(--wait); } .g-ajuste { background: var(--bad); } .g-aprovar { background: var(--wait); } .g-programado { background: var(--accent, #7A6200); } .g-publicado { background: var(--ok); }
+  .cal .d { min-height: 96px; }
+  .cal .cv { position: relative; display: block; width: 100%; max-width: 76px; aspect-ratio: 4 / 5; border-radius: 7px; overflow: hidden; background: var(--off-bg); box-shadow: inset 0 0 0 2px var(--line); }
+  .cal .cv img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cal .cv::after { content: ''; position: absolute; inset: 0; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--cvc, transparent); pointer-events: none; }
+  .cal .cv.g-aprovar, .cal .cv.g-roteiro { --cvc: var(--wait); } .cal .cv.g-programado { --cvc: var(--accent, #7A6200); } .cal .cv.g-publicado { --cvc: var(--ok); } .cal .cv.g-ajuste { --cvc: var(--bad); }
+  .cal .cv-fmt { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 15px; }
+  .cal .cv-n { position: absolute; right: 3px; bottom: 3px; font-size: 10.5px; font-weight: 800; padding: 1px 5px; border-radius: 5px; background: rgba(10,12,16,.75); color: #fff; }
+  .cal .d[aria-pressed="true"] .cv { box-shadow: 0 0 0 2px var(--bg); }
+  .cal .d .dots { display: none; }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-day { font-weight: 700; margin-top: 6px; }
@@ -64,7 +73,7 @@
   .cpost .thumb { width: 56px; height: 70px; border-radius: 8px; object-fit: cover; background: var(--off-bg); display: grid; place-items: center; font-size: 11px; color: var(--muted); text-align: center; }
   .cpost .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cpost .s { font-size: 13px; color: var(--muted); }
-  @media (max-width: 520px) { .cal .d { min-height: 46px; padding: 4px; } .cal .dot { width: 6px; height: 6px; } }
+  @media (max-width: 520px) { .cal .d { min-height: 64px; padding: 3px; gap: 3px; } .cal .d .n { font-size: 11.5px; } .cal .cv { border-radius: 5px; } .cal .cv::after { border-radius: 5px; } .cal .cv-n { font-size: 9.5px; padding: 0 3px; } }
   .item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
   .item .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item .s { font-size: 13px; color: var(--muted); }
@@ -173,6 +182,10 @@ function calendarPanel(panel) {
       'aria-label': `${d} de ${monthName(CAL.month).toLowerCase()}: ${list.length ? `${list.length} post(s)` : 'sem posts'}`,
       onclick: () => { CAL.day = CAL.day === iso ? null : iso; render(); } },
       h('span', { class: 'n' }, String(d)),
+      // capa do 1º post do dia (quando a arte já foi mostrada ao cliente) + quantos posts tem
+      list.length ? (() => { const cv = list.find((p) => p.image_url); return h('span', { class: `cv g-${(cv || list[0]).group}` },
+        cv ? h('img', { src: cv.image_url, alt: '', loading: 'lazy' }) : h('span', { class: 'cv-fmt' }, { REELS: '▶', CAROUSEL: '❐', STORY: '◷' }[list[0].media_type] || '▢'),
+        list.length > 1 ? h('span', { class: 'cv-n' }, `+${list.length - 1}`) : null); })() : null,
       list.length ? h('span', { class: 'dots' }, ...list.map((p) => h('span', { class: `dot g-${p.group}`, title: `${p.time} · ${FMT[p.media_type] || 'Post'} · ${GROUP[p.group]}` }))) : null));
   }
   panel.append(grid,
