@@ -4,6 +4,8 @@ import { h, api, toast, fmtDate, fmtTime } from '/shared.js';
 const token = new URLSearchParams(location.search).get('t') || '';
 const root = document.getElementById('ap');
 let D = null;
+// Enquanto a Meta não libera o app, o cliente não vê "Conectar Instagram" nem a prévia do feed. Para ligar de novo: true.
+const IG_LIVE = false;
 
 const sp = new URLSearchParams(location.search);
 if (sp.get('ig')) {
@@ -13,7 +15,7 @@ if (sp.get('ig')) {
 load();
 
 async function load() {
-  try { D = await api(`/api/approval?t=${encodeURIComponent(token)}&feed=1`); render(); }
+  try { D = await api(`/api/approval?t=${encodeURIComponent(token)}${IG_LIVE ? '&feed=1' : ''}`); render(); }
   catch (e) {
     root.replaceChildren(h('div', { class: 'state' }, h('h1', { style: 'font-size:22px' }, 'Link indisponível'), h('p', { class: 'muted' }, e.message)));
   }
@@ -36,16 +38,16 @@ function render() {
       h('div', { class: 'eyebrow' }, `Aprovação · ${D.client.name}`),
       h('h1', {}, waiting ? (open.length ? 'Posts para você aprovar' : 'Roteiros para você aprovar') : 'Tudo em dia'),
       h('p', {}, !open.length && sOpen.length ? 'Leia o roteiro antes da gravação. Aprovado, a equipe já pode gravar.' : open.length
-        ? 'Veja cada post como vai aparecer no Instagram. Aprovado, ele publica sozinho no horário marcado.'
+        ? (IG_LIVE ? 'Veja cada post como vai aparecer no Instagram. Aprovado, ele publica sozinho no horário marcado.' : 'Veja cada post como vai aparecer no Instagram. Aprovado, a agência publica no horário marcado.')
         : 'Não há posts aguardando sua decisão. Quando a agência enviar novos, eles aparecem neste mesmo link.'),
       waiting ? h('div', { class: 'count' }, h('span', { class: 'pill st-pending_approval' }, `${waiting} aguardando sua decisão`)) : null),
-    D.client.ig_connected ? null : h('div', { class: 'card', style: 'gap:10px' },
+    D.client.ig_connected || !IG_LIVE ? null : h('div', { class: 'card', style: 'gap:10px' },
       h('b', {}, 'Conecte seu Instagram'),
       h('span', { class: 'muted' }, 'Para os posts aprovados saírem sozinhos no seu perfil, autorize a publicação uma vez. Você entra direto no Instagram; a agência não vê sua senha.'),
       h('a', { class: 'btn primary', href: `/api/ig/connect?t=${encodeURIComponent(token)}` }, 'Conectar Instagram')),
     sOpen.length ? h('div', { class: 'eyebrow section-title' }, `Roteiros para aprovar · antes de gravar`) : null,
     ...sOpen.map(scriptCard),
-    feedPreview(),
+    IG_LIVE ? feedPreview() : null,
     open.length && sOpen.length ? h('div', { class: 'eyebrow section-title' }, 'Posts para aprovar') : null,
     ...open.map((p) => card(p, handle)),
     decided.length ? h('div', { class: 'eyebrow section-title' }, 'Já decididos (ainda dá para mudar)') : null,
@@ -110,7 +112,7 @@ function decision(p) {
     return h('div', { class: 'decide' },
       h('div', { class: 'done' },
         h('b', { class: ok ? 'ok-txt' : 'ch-txt' }, ok ? '✓ Aprovado' : '✎ Ajuste pedido'),
-        h('span', { class: 'muted' }, ok ? `Vai ao ar sozinho ${when(p.scheduled_at)}.` : 'A agência vai ajustar e te mandar de novo.'),
+        h('span', { class: 'muted' }, ok ? (IG_LIVE ? `Vai ao ar sozinho ${when(p.scheduled_at)}.` : `Vai ao ar ${when(p.scheduled_at)}.`) : 'A agência vai ajustar e te mandar de novo.'),
         p.client_feedback && !(p.feedback_audio && p.client_feedback === '🎤 Pedido por áudio') ? h('span', {}, `Seu comentário: “${p.client_feedback}”`) : null,
         p.feedback_audio ? h('div', { class: 'rec-sent' }, h('span', { class: 'muted' }, '🎤 Seu áudio:'), h('audio', { controls: true, preload: 'none', src: `/api/approval?t=${encodeURIComponent(token)}&audio=${p.feedback_audio}` })) : null),
       h('button', { class: 'linkish', type: 'button', onclick: (e) => e.target.closest('.decide').replaceWith(form(p, true)) }, 'Mudar minha decisão'));
@@ -159,7 +161,7 @@ async function decide(p, decision, feedback, box, rec = null, kind = 'post') {
       return;
     }
     Object.assign(p, r);
-    toast(decision === 'approve' ? 'Aprovado! Ele publica sozinho no horário.' : 'Pedido de ajuste enviado para a agência.');
+    toast(decision === 'approve' ? (IG_LIVE ? 'Aprovado! Ele publica sozinho no horário.' : 'Aprovado! A agência publica no horário marcado.') : 'Pedido de ajuste enviado para a agência.');
     render();
     // leva para o próximo post pendente
     const next = D.posts.find((x) => x.status === 'pending_approval');
