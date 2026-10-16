@@ -285,9 +285,11 @@ function viewCalendar() {
   const raw = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-15T12:00:00Z`));
   const label = raw.charAt(0).toUpperCase() + raw.slice(1);
   const go = (delta) => { S.cal.day = null; loadMonth(delta === 0 ? today.slice(0, 7) : shiftMonth(m, delta)); };
-  const posts = S.cal.posts.filter((p) => p.scheduled_at && (!S.fClient || p.client_id === S.fClient));
+  const monthPosts = S.cal.posts.filter((p) => p.scheduled_at && dayKey(p.scheduled_at, S.tz).slice(0, 7) === m);
+  const posts = monthPosts.filter((p) => !S.fClient || p.client_id === S.fClient);
   const byDay = new Map();
   for (const p of posts) { const k = dayKey(p.scheduled_at, S.tz); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(p); }
+  for (const l of byDay.values()) l.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
 
   const head = h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, 'Planejamento'), h('h1', {}, label)),
@@ -302,55 +304,96 @@ function viewCalendar() {
       h('button', { class: 'btn sm', onclick: () => go(0) }, 'Hoje'),
       h('button', { class: 'btn sm', onclick: () => go(1), 'aria-label': 'Próximo mês' }, '›')));
 
-  const week = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  // chips de cliente: filtro de um toque, na cor do cliente, com quantos posts tem no mês
+  const count = (id) => monthPosts.filter((p) => p.client_id === id).length;
+  const chips = h('div', { class: 'cc-chips', role: 'group', 'aria-label': 'Filtrar por cliente' },
+    h('button', { class: 'cc-chip', type: 'button', 'aria-pressed': String(!S.fClient), onclick: () => { S.fClient = ''; render(); } }, `Todos · ${monthPosts.length}`),
+    ...S.clients.map((c) => h('button', { class: 'cc-chip', type: 'button', style: `--cc:${clientColor(c.id)}`, 'aria-pressed': String(S.fClient === c.id),
+      onclick: () => { S.fClient = S.fClient === c.id ? '' : c.id; render(); } },
+      h('span', { class: 'cc-dot', 'aria-hidden': 'true' }), `${c.name} · ${count(c.id)}`)),
+    can('conteudo') ? h('button', { class: 'cc-chip ghost', type: 'button', onclick: openColors }, '🎨 Cores') : null);
+
   // datas comemorativas: as principais + as dos nichos dos clientes (ou do cliente filtrado)
   const gridDays = monthGrid(m);
   const niches = new Set((S.fClient ? [clientById(S.fClient)] : S.clients).map((c) => c?.brand_kit?.niche).filter(Boolean));
   const dayDates = new Map();
   for (const x of datesBetween(gridDays[0], gridDays.at(-1)).filter((x) => x.major || x.tags.some((t) => niches.has(t)))) dayDates.set(x.date, [...(dayDates.get(x.date) || []), x]);
-  const grid = h('div', { class: `cal mode-${S.cal.mode}${S.cal.loading ? ' loading' : ''}`, role: 'grid', 'aria-label': `Calendário de ${label}` },
-    ...week.map((w) => h('div', { class: 'cal-wd', role: 'columnheader' }, w)),
-    ...monthGrid(m).map((d) => {
-      const list = (byDay.get(d) || []).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
-      const out = d.slice(0, 7) !== m;
-      const cell = h('div', { class: `cal-day${out ? ' out' : ''}${d === today ? ' today' : ''}${S.cal.day === d ? ' sel' : ''}`, role: 'gridcell', tabindex: 0,
-        onclick: (e) => {
-          if (e.target.closest('.cal-chip, .cal-tile, .cal-more')) return;
-          openDay(d, dayDates.get(d) || []);
-        },
-        onkeydown: (e) => { if (e.key === 'Enter') openDay(d, dayDates.get(d) || []); },
-        ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-over'); },
-        ondragleave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-over'); },
-        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drop-over'); const p = S.cal.posts.find((x) => x.id === e.dataTransfer.getData('text/plain')); if (p && dayKey(p.scheduled_at, S.tz) !== d) reschedule(p, d, fmtTime24(p.scheduled_at)); } },
-        h('div', { class: 'cal-num' }, String(Number(d.slice(8)))),
-        ...(dayDates.get(d) || []).slice(0, 2).map((x) => h('div', { class: `cal-date${x.major ? ' major' : ''}`, title: `${x.name} · clique para criar um post` }, x.name)),
-        h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: `dot st-${p.status}` }))),
-        // celular, modo miniaturas: a 1ª imagem do dia + quantos posts tem
-        list.length ? h('div', { class: 'cal-mini', 'aria-hidden': 'true' },
-          list[0].image_url ? h('img', { src: list[0].image_url, alt: '' }) : h('span', { class: 'thumb-empty' }),
-          list.length > 1 ? h('span', { class: 'cal-badge' }, String(list.length)) : null) : null,
-        S.cal.mode === 'thumbs'
-          ? h('div', { class: 'cal-thumbs' },
-              ...list.slice(0, 4).map((p, i) => h('button', { class: `cal-tile st-${p.status}`, title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${STATUS_LABEL[p.status]} · arraste para outro dia`,
-                draggable: movable(p) ? 'true' : null, ondragstart: (e) => e.dataTransfer.setData('text/plain', p.id),
-                onclick: () => (i === 3 && list.length > 4 ? openDay(d, dayDates.get(d) || []) : openPost(p)) },
-                p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
-                h('span', { class: 'cal-tile-time mono' }, `${{ REELS: '▶ ', CAROUSEL: '❐ ', STORY: '◷ ' }[p.media_type] || ''}${fmtTime(p.scheduled_at, S.tz)}`),
-                h('span', { class: 'cal-tile-dot', 'aria-hidden': 'true' }),
-                i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null)))
-          : h('div', { class: 'cal-list' },
-              ...list.slice(0, 4).map((p) => h('button', { class: `cal-chip st-${p.status}`, title: `${clientName(p.client_id)} · ${STATUS_LABEL[p.status]}`, onclick: () => openPost(p),
-                draggable: movable(p) ? 'true' : null, ondragstart: (e) => e.dataTransfer.setData('text/plain', p.id) },
-                h('span', { class: 'cal-chip-dot', 'aria-hidden': 'true' }),
-                h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
-                h('span', { class: 'cal-chip-t' }, S.fClient ? postLabel(p) : `${clientName(p.client_id)} · ${postLabel(p)}`))),
-              list.length > 4 ? h('button', { class: 'cal-more', onclick: () => openDay(d, dayDates.get(d) || []) }, `+${list.length - 4} mais`) : null));
-      return cell;
-    }));
+  const FMT_ICON = { REELS: '▶', CAROUSEL: '❐', STORY: '◷' };
+  const FMT_NAME = { IMAGE: 'Post', REELS: 'Reels', CAROUSEL: 'Carrossel', STORY: 'Story' };
+  const weekend = (d) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay());
+  const dropOn = (d) => ({
+    ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-over'); },
+    ondragleave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-over'); },
+    ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drop-over'); const p = S.cal.posts.find((x) => x.id === e.dataTransfer.getData('text/plain')); if (p && dayKey(p.scheduled_at, S.tz) !== d) reschedule(p, d, fmtTime24(p.scheduled_at)); },
+  });
+  const drag = (p) => ({ draggable: movable(p) ? 'true' : null, ondragstart: (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; } });
+  const addBtn = (d, big) => (can('conteudo') && d >= today ? h('button', { class: `cal-add${big ? ' big' : ''}`, type: 'button', 'aria-label': `Criar post em ${d.slice(8)}/${d.slice(5, 7)}`, title: 'Criar post neste dia',
+    onclick: (e) => { e.stopPropagation(); openPost(null, { date: d, client: S.fClient || undefined }); } }, big ? '+ Criar post neste dia' : '+') : null);
 
-  const out = [head, clientFilter(), grid,
-    h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, 'Clique num dia para ver os horários e programar. Arraste um post para outro dia para remarcar.')];
-  if (S.cal.day) {
+  let body;
+  if (S.cal.mode === 'list') {
+    // ── D: agenda por dia (faixa da cor do cliente, foto, horário, formato e status)
+    const days = gridDays.filter((d) => d.slice(0, 7) === m);
+    const wdName = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+    const items = [];
+    for (const d of days) {
+      const list = byDay.get(d) || [];
+      if (!list.length && d < today) continue; // dia passado sem post: não ocupa espaço
+      const dates = dayDates.get(d) || [];
+      const name = `${d === today ? 'Hoje, ' : ''}${wdName(d)} ${Number(d.slice(8))}`;
+      items.push(h('section', { class: `ag-day${d < today ? ' past' : ''}${weekend(d) ? ' wkend' : ''}${d === today ? ' today' : ''}`, ...dropOn(d) },
+        h('div', { class: 'ag-head' },
+          h('b', {}, name.charAt(0).toUpperCase() + name.slice(1)),
+          h('span', { class: 'muted' }, list.length ? `${list.length} post${list.length > 1 ? 's' : ''}` : 'dia livre'),
+          ...dates.map((x) => h('span', { class: `cal-date${x.major ? ' major' : ''}` }, x.name)),
+          h('span', { class: 'spacer' }), list.length ? addBtn(d) : null),
+        ...(list.length ? list.map((p) => h('button', { type: 'button', class: 'ag-row', style: `--cc:${clientColor(p.client_id)}`, onclick: () => openPost(p), ...drag(p),
+          title: movable(p) ? 'Abrir · arraste para outro dia para remarcar' : 'Abrir' },
+          h('span', { class: 'ag-bar', 'aria-hidden': 'true' }),
+          h('span', { class: 'ag-time mono' }, fmtTime(p.scheduled_at, S.tz)),
+          p.image_url ? h('img', { class: 'ag-ph', src: p.image_url, alt: '', loading: 'lazy' }) : h('span', { class: 'ag-ph empty' }, FMT_ICON[p.media_type] || '▢'),
+          h('span', { class: 'ag-main' },
+            h('span', { class: 'ag-title' }, postLabel(p)),
+            h('span', { class: 'ag-sub' }, h('span', { class: 'cc-tag' }, clientName(p.client_id)), ` ${FMT_ICON[p.media_type] ? `${FMT_ICON[p.media_type]} ` : ''}${FMT_NAME[p.media_type] || 'Post'}`, p.script ? ` · 🎬 ${SCRIPT_STATUS[p.script.status] || 'Roteiro'}` : '')),
+          h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status])))
+          : [addBtn(d, true) || h('div', { class: 'ag-free muted' }, 'Nenhum post')])));
+    }
+    body = h('div', { class: `agenda${S.cal.loading ? ' loading' : ''}` }, ...(items.length ? items : [h('p', { class: 'muted' }, 'Nenhum dia para mostrar neste mês.')]));
+  } else {
+    // ── A: mês em miniaturas com a moldura da cor do cliente
+    const week = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    body = h('div', { class: `cal mode-thumbs${S.cal.loading ? ' loading' : ''}`, role: 'grid', 'aria-label': `Calendário de ${label}` },
+      ...week.map((w, i) => h('div', { class: `cal-wd${i === 0 || i === 6 ? ' wkend' : ''}`, role: 'columnheader' }, w)),
+      ...gridDays.map((d) => {
+        const list = byDay.get(d) || [];
+        const out = d.slice(0, 7) !== m;
+        const dates = dayDates.get(d) || [];
+        return h('div', { class: `cal-day${out ? ' out' : ''}${d === today ? ' today' : ''}${d < today ? ' past' : ''}${weekend(d) ? ' wkend' : ''}${S.cal.day === d ? ' sel' : ''}`, role: 'gridcell', tabindex: 0,
+          onclick: (e) => { if (!e.target.closest('.cal-tile, .cal-add')) openDay(d, dates); },
+          onkeydown: (e) => { if (e.key === 'Enter') openDay(d, dates); }, ...dropOn(d) },
+          dates.length ? h('div', { class: `cal-strip${dates.some((x) => x.major) ? ' major' : ''}`, title: dates.map((x) => x.name).join(' · ') }, dates.map((x) => x.name).join(' · ')) : null,
+          h('div', { class: 'cal-top' }, h('span', { class: 'cal-num' }, String(Number(d.slice(8)))), out ? null : addBtn(d)),
+          h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: 'dot', style: `color:${clientColor(p.client_id)}` }))),
+          list.length ? h('div', { class: 'cal-mini', style: `--cc:${clientColor(list[0].client_id)}`, 'aria-hidden': 'true' },
+            list[0].image_url ? h('img', { src: list[0].image_url, alt: '' }) : h('span', { class: 'thumb-empty' }),
+            list.length > 1 ? h('span', { class: 'cal-badge' }, String(list.length)) : null) : null,
+          h('div', { class: 'cal-thumbs' },
+            ...list.slice(0, 4).map((p, i) => h('button', { class: 'cal-tile', type: 'button', style: `--cc:${clientColor(p.client_id)}`,
+              title: `${fmtTime(p.scheduled_at, S.tz)} · ${clientName(p.client_id)} · ${postLabel(p)} · ${STATUS_LABEL[p.status]}${movable(p) ? ' · arraste para outro dia' : ''}`, ...drag(p),
+              onclick: () => (i === 3 && list.length > 4 ? openDay(d, dates) : openPost(p)) },
+              p.image_url ? h('img', { src: p.image_url, alt: postLabel(p), loading: 'lazy' }) : h('span', { class: 'cal-tile-empty' }, postLabel(p)),
+              FMT_ICON[p.media_type] ? h('span', { class: 'cal-tile-fmt', title: FMT_NAME[p.media_type] }, FMT_ICON[p.media_type]) : null,
+              h('span', { class: 'cal-tile-time mono' }, fmtTime(p.scheduled_at, S.tz)),
+              h('span', { class: `cal-tile-st st-${p.status}`, 'aria-hidden': 'true' }),
+              i === 3 && list.length > 4 ? h('span', { class: 'cal-tile-more' }, `+${list.length - 3}`) : null))));
+      }));
+  }
+
+  const out = [head, chips, body,
+    h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, S.cal.mode === 'list'
+      ? 'Toque num post para abrir. Arraste um post para outro dia para remarcar. A barra colorida é a cor do cliente.'
+      : 'Clique num dia para ver os horários. Use o + para criar um post naquele dia e arraste um post para outro dia para remarcar. A moldura é a cor do cliente; a bolinha no canto, o status.')];
+  if (S.cal.day && S.cal.mode !== 'list') {
     const list = byDay.get(S.cal.day) || [];
     out.push(h('section', { class: 'day' },
       h('div', { class: 'day-head' }, h('h2', {}, fmtDate(zonedToISO(S.cal.day, '12:00', S.tz), S.tz, true)), h('span', { class: 'rule' }),
@@ -358,6 +401,29 @@ function viewCalendar() {
       ...(list.length ? list.map(rowPost) : [h('p', { class: 'muted', style: 'margin:0' }, 'Nenhum post neste dia.')])));
   }
   return out;
+}
+
+// Cores fixas dos clientes: aparecem no calendário, no Fluxo e nos filtros.
+function openColors() {
+  const rows = S.clients.map((c) => {
+    const cur = clientColor(c.id);
+    const row = h('div', { class: 'cc-pick' },
+      h('span', { class: 'cc-name' }, h('span', { class: 'cc-dot', style: `--cc:${cur}`, 'aria-hidden': 'true' }), c.name),
+      h('div', { class: 'cc-swatches', role: 'radiogroup', 'aria-label': `Cor de ${c.name}` },
+        ...CLIENT_COLORS.map(([hex, name]) => {
+          const usedBy = S.clients.find((o) => o.id !== c.id && clientColor(o.id) === hex);
+          return h('button', { type: 'button', class: 'cc-sw', role: 'radio', 'aria-checked': String(cur === hex), style: `--cc:${hex}`,
+            title: usedBy ? `${name} · já usada por ${usedBy.name}` : name, 'aria-label': name,
+            onclick: async () => {
+              try {
+                const r = await api('/api/pasta?r=brand', { method: 'PUT', body: { client_id: c.id, label_color: hex } });
+                c.brand_kit = r.brand_kit; colorCache = null; render(); close(); openColors(); toast(`${c.name}: ${name.toLowerCase()}.`);
+              } catch (e) { toast(e.message, true); }
+            } }, usedBy ? h('span', { class: 'cc-used', 'aria-hidden': 'true' }, '•') : null);
+        })));
+    return row;
+  });
+  const close = drawer('Cores dos clientes', [h('p', { class: 'muted', style: 'margin:0' }, 'Cada cliente com uma cor fixa no calendário, no Fluxo e nos filtros. As marcadas com • já estão com outro cliente.'), ...rows], []);
 }
 
 // ───────────────────────── fluxo (quadro do workflow)
@@ -372,10 +438,22 @@ const COLUMNS = [
 ];
 
 // cor fixa por cliente (etiqueta no estilo Trello)
-const LABEL_COLORS = ['#4BCE97', '#F5CD47', '#FEA362', '#F87168', '#9F8FEF', '#579DFF', '#6CC3E0', '#94C748', '#E774BB', '#8590A2'];
+// A cor escolhida fica na marca do cliente (brand_kit.label_color); quem não escolheu ganha a próxima livre.
+const CLIENT_COLORS = [['#D4537E', 'Rosa'], ['#1D9E75', 'Verde-água'], ['#C98A1E', 'Mostarda'], ['#7F77DD', 'Lilás'], ['#378ADD', 'Azul'],
+  ['#D85A30', 'Coral'], ['#639922', 'Verde'], ['#993556', 'Vinho'], ['#0F6E7A', 'Petróleo'], ['#8A6A4F', 'Caramelo'], ['#5F5E5A', 'Grafite'], ['#B04FB8', 'Magenta']];
+let colorCache = null;
 function clientColor(id) {
-  const i = S.clients.findIndex((c) => c.id === id);
-  return LABEL_COLORS[(i < 0 ? 0 : i) % LABEL_COLORS.length];
+  if (!colorCache || colorCache.src !== S.clients) {
+    const map = new Map();
+    const valid = new Set(CLIENT_COLORS.map(([c]) => c));
+    for (const c of S.clients) if (valid.has(c.brand_kit?.label_color)) map.set(c.id, c.brand_kit.label_color);
+    const used = new Set(map.values());
+    const free = CLIENT_COLORS.map(([c]) => c).filter((c) => !used.has(c));
+    let i = 0;
+    for (const c of S.clients) if (!map.has(c.id)) map.set(c.id, free.length ? free[i++ % free.length] : CLIENT_COLORS[i++ % CLIENT_COLORS.length][0]);
+    colorCache = { src: S.clients, map };
+  }
+  return colorCache.map.get(id) || CLIENT_COLORS[0][0];
 }
 const initials = (name) => (name || '?').split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w[0] || '')).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 

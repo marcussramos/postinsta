@@ -57,14 +57,21 @@ export const brandRoute = route({
     const files = await db.select('client_files', { select: 'id,name,mime,size,created_at', client_id: `eq.${client}`, category: 'eq.brand', order: 'created_at.desc' }).catch(() => []);
     send(res, 200, { brand_voice: c.brand_voice, brand_kit: c.brand_kit || {}, files });
   },
+  // Só a cor do cliente no calendário/Fluxo: { client_id, label_color } (quem edita conteúdo pode trocar)
   PUT: async (req, res) => {
-    const u = await requirePerm(req, 'marca');
     const b = await readJson(req);
+    const onlyColor = b.label_color !== undefined && b.brand_kit === undefined;
+    const u = await requirePerm(req, ...(onlyColor ? ['marca', 'conteudo'] : ['marca']));
     need(b.client_id, 400, 'Cliente não informado.');
     needClient(u, b.client_id);
     const cur = await db.one('clients', { select: 'brand_kit', id: `eq.${b.client_id}` });
     need(cur, 404, 'Cliente não encontrado.');
-    const patch = { brand_kit: { ...cleanBrandKit(b.brand_kit), onboarding: cur.brand_kit?.onboarding || undefined } }; // as respostas do questionário são do cliente: mantém
+    if (onlyColor) {
+      need(b.label_color === null || COLOR.test(String(b.label_color)), 400, 'Cor inválida.');
+      const [row] = await db.update('clients', { id: `eq.${b.client_id}` }, { brand_kit: { ...(cur.brand_kit || {}), label_color: b.label_color || null } });
+      return send(res, 200, { brand_voice: row.brand_voice, brand_kit: row.brand_kit });
+    }
+    const patch = { brand_kit: { ...cleanBrandKit(b.brand_kit), label_color: cur.brand_kit?.label_color || null, onboarding: cur.brand_kit?.onboarding || undefined } }; // questionário (do cliente) e cor: mantém
     if (b.brand_voice !== undefined) patch.brand_voice = String(b.brand_voice || '').trim().slice(0, 1500) || null;
     const [row] = await db.update('clients', { id: `eq.${b.client_id}` }, patch);
     need(row, 404, 'Cliente não encontrado.');
