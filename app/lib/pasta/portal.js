@@ -8,7 +8,8 @@ import { deliveries } from '../deliveries.js';
 import { currentMonth } from '../reports.js';
 import { asaasReady, ensureCharge } from '../asaas.js';
 import { db, docs } from '../db.js';
-import { appUrl } from '../env.js';
+import { appUrl, TIMEZONE } from '../env.js';
+import { zonedISO } from '../planner.js';
 import { billingMonths } from '../billing.js';
 import { summary } from '../reports.js';
 import { loadSettings } from './settings.js';
@@ -16,6 +17,26 @@ import { notify } from '../push.js';
 
 const VISIBLE = ['contract', 'receipt', 'report', 'briefing', 'invoice']; // "Outros" e "Marca" ficam só para a agência
 const UPLOAD_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime' };
+// Calendário do cliente: só datas, formato, título e situação. Prévia da arte só depois que vai para aprovação.
+const CAL_GROUP = { idea: 'producao', draft: 'producao', internal_review: 'producao', changes_requested: 'ajuste', failed: 'producao', pending_approval: 'aprovar', approved: 'programado', publishing: 'programado', published: 'publicado' };
+const SHOW_ART = ['pending_approval', 'approved', 'publishing', 'published'];
+async function calendar(c, month) {
+  need(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || ''), 400, 'Mês inválido.');
+  const [y, m] = month.split('-').map(Number);
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  const tz = TIMEZONE();
+  const rows = await db.select('posts', { select: 'id,title,media_type,status,scheduled_at,image_url,media,ig_permalink', client_id: `eq.${c.id}`,
+    and: `(scheduled_at.gte.${zonedISO(`${month}-01`, '00:00', tz)},scheduled_at.lt.${zonedISO(`${next}-01`, '00:00', tz)})`, order: 'scheduled_at.asc', limit: 200 });
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const hour = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return rows.filter((p) => CAL_GROUP[p.status]).map((p) => {
+    const at = new Date(p.scheduled_at);
+    const art = SHOW_ART.includes(p.status);
+    return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status],
+      image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null };
+  });
+}
+
 const okToken = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
 
 async function clientByToken(t) {
@@ -29,6 +50,7 @@ export default route({
   GET: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
+    if (q.cal) return send(res, 200, { month: q.cal, timezone: TIMEZONE(), posts: await calendar(c, q.cal) }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     if (q.file) {
       const f = await db.one('client_files', { select: 'path,name,category,client_id', id: `eq.${q.file}` });
       need(f && f.client_id === c.id && VISIBLE.includes(f.category), 404, 'Arquivo não encontrado.');

@@ -71,3 +71,33 @@ test('link do cliente mostra só a pasta dele e só as seções liberadas', asyn
   assert.equal((await call(`/api/pasta?r=portal&t=${nw.portal_url.split('t=')[1]}`, { auth: false })).status, 404);
   assert.equal((await call('/api/pasta?r=portal&t=xyz', { auth: false })).status, 404);
 });
+
+test('calendário do cliente: dias de post do mês, arte só quando já foi para aprovação', async () => {
+  const c = (await call('/api/clients', { method: 'POST', body: { name: 'Calendário Co' } })).data;
+  const o = (await call('/api/clients', { method: 'POST', body: { name: 'Outro Cal' } })).data;
+  const t = (await call(`/api/clients?id=${c.id}`, { method: 'PATCH', body: { portal: 'enable' } })).data.portal_url.split('t=')[1];
+  const P = S.fakes.tables.posts;
+  const mk = (client, title, status, at, extra = {}) => P.push({ id: `cal-${title}`, client_id: client.id, title, status, scheduled_at: at, media_type: 'IMAGE', image_url: `https://x/${title}.jpg`, caption: 'segredo interno', ...extra });
+  mk(c, 'rascunho', 'draft', '2026-11-03T13:00:00Z');
+  mk(c, 'aprovar', 'pending_approval', '2026-11-05T22:00:00Z', { media_type: 'REELS' });
+  mk(c, 'saiu', 'published', '2026-11-10T15:00:00Z', { ig_permalink: 'https://instagram.com/p/abc' });
+  mk(c, 'dezembro', 'approved', '2026-12-01T15:00:00Z');
+  mk(c, 'virada', 'approved', '2026-12-01T02:00:00Z'); // 30/11 22:00 em Cuiabá
+  mk(o, 'de-outro', 'approved', '2026-11-12T15:00:00Z');
+
+  const r = await call(`/api/pasta?r=portal&t=${t}&cal=2026-11`, { auth: false });
+  assert.equal(r.status, 200);
+  const titles = r.data.posts.map((p) => p.title);
+  assert.deepEqual(titles, ['rascunho', 'aprovar', 'saiu', 'virada']);
+  const by = Object.fromEntries(r.data.posts.map((p) => [p.title, p]));
+  assert.equal(by.rascunho.group, 'producao');
+  assert.equal(by.rascunho.image_url, null, 'arte em produção não aparece');
+  assert.equal(by.aprovar.group, 'aprovar');
+  assert.equal(by.aprovar.day, '2026-11-05');
+  assert.equal(by.aprovar.time, '18:00');
+  assert.equal(by.saiu.permalink, 'https://instagram.com/p/abc');
+  assert.equal(by.virada.day, '2026-11-30');
+  assert.ok(!JSON.stringify(r.data).includes('segredo interno'), 'legenda não vaza no calendário');
+  assert.equal((await call(`/api/pasta?r=portal&t=${t}&cal=xx`, { auth: false })).status, 400);
+  assert.equal((await call(`/api/pasta?r=portal&t=errado&cal=2026-11`, { auth: false })).status >= 400, true);
+});

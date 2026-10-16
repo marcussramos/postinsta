@@ -44,6 +44,27 @@
   .tab { flex: 1; border: 0; background: transparent; padding: 9px 8px; border-radius: 9px; font: inherit; font-weight: 700; font-size: 14px; color: var(--muted); cursor: pointer; }
   .tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06); }
   .panel { display: grid; gap: 10px; padding-bottom: 40px; }
+  .cal-head { display: flex; align-items: center; gap: 8px; }
+  .cal-head b { flex: 1; text-align: center; font-size: 17px; }
+  .cal-nav { width: 44px; height: 44px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; font: inherit; font-size: 18px; color: var(--ink); cursor: pointer; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .cal .wd { text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+  .cal .d { min-height: 64px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px; font: inherit; color: var(--ink); text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .cal .d.out { visibility: hidden; }
+  .cal .d.today { border-color: var(--ink); }
+  .cal .d[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .cal .d .n { font-size: 13px; font-weight: 700; }
+  .cal .dots { display: flex; flex-wrap: wrap; gap: 3px; }
+  .cal .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .g-producao { background: var(--off); } .g-ajuste { background: var(--bad); } .g-aprovar { background: var(--wait); } .g-programado { background: var(--accent, #7A6200); } .g-publicado { background: var(--ok); }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+  .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cal-day { font-weight: 700; margin-top: 6px; }
+  .cpost { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+  .cpost .thumb { width: 56px; height: 70px; border-radius: 8px; object-fit: cover; background: var(--off-bg); display: grid; place-items: center; font-size: 11px; color: var(--muted); text-align: center; }
+  .cpost .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cpost .s { font-size: 13px; color: var(--muted); }
+  @media (max-width: 520px) { .cal .d { min-height: 46px; padding: 4px; } .cal .dot { width: 6px; height: 6px; } }
   .item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
   .item .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item .s { font-size: 13px; color: var(--muted); }
@@ -113,8 +134,63 @@ function toast(msg) { document.querySelector('.toast')?.remove(); const el = h('
 const fileUrl = (id, dl) => `/api/pasta?r=portal&t=${encodeURIComponent(t)}&file=${id}${dl ? '&download=1' : ''}`;
 const LABEL = { paid: 'Pago', open: 'Em aberto', late: 'Atrasado', waived: 'Isento' };
 
-let D, tab = 'pedidos';
+let D, tab = 'calendario';
+const CAL = { month: null, data: null, day: null, loading: false };
 try { const s = sessionStorage.getItem('mc_cliente_tab'); if (s) tab = s; } catch { /* sem armazenamento */ }
+
+// ── Calendário: dias de post do mês (o que está em produção aparece sem a arte)
+const GROUP = { producao: 'Em produção', ajuste: 'Em ajuste', aprovar: 'Para você aprovar', programado: 'Programado', publicado: 'Publicado' };
+const FMT = { IMAGE: 'Post', CAROUSEL: 'Carrossel', REELS: 'Reels', STORY: 'Story' };
+const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba' }).format(new Date());
+const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+async function loadCal(month) {
+  CAL.month = month; CAL.loading = true; CAL.day = null;
+  try { const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}&cal=${month}`); CAL.data = r.ok ? await r.json() : { posts: [] }; }
+  catch { CAL.data = { posts: [] }; }
+  CAL.loading = false;
+  if (tab === 'calendario') render();
+}
+function calendarPanel(panel) {
+  if (!CAL.month) { loadCal(todayISO().slice(0, 7)); panel.append(h('div', { class: 'empty' }, 'Carregando o calendário…')); return; }
+  const posts = CAL.data?.posts || [];
+  const byDay = {}; for (const p of posts) (byDay[p.day] ||= []).push(p);
+  const [y, m] = CAL.month.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const today = todayISO();
+  panel.append(h('div', { class: 'cal-head' },
+    h('button', { class: 'cal-nav', type: 'button', 'aria-label': 'Mês anterior', onclick: () => loadCal(shiftMonth(CAL.month, -1)) }, '‹'),
+    h('b', {}, monthName(CAL.month)),
+    h('button', { class: 'cal-nav', type: 'button', 'aria-label': 'Próximo mês', onclick: () => loadCal(shiftMonth(CAL.month, 1)) }, '›')));
+  if (CAL.loading) { panel.append(h('div', { class: 'empty' }, 'Carregando…')); return; }
+  const grid = h('div', { class: 'cal' }, ...WD.map((w) => h('div', { class: 'wd' }, w)));
+  for (let i = 0; i < first; i++) grid.append(h('div', { class: 'd out', 'aria-hidden': 'true' }));
+  for (let d = 1; d <= days; d++) {
+    const iso = `${CAL.month}-${String(d).padStart(2, '0')}`;
+    const list = byDay[iso] || [];
+    grid.append(h('button', { type: 'button', class: `d${iso === today ? ' today' : ''}`, 'aria-pressed': String(CAL.day === iso),
+      'aria-label': `${d} de ${monthName(CAL.month).toLowerCase()}: ${list.length ? `${list.length} post(s)` : 'sem posts'}`,
+      onclick: () => { CAL.day = CAL.day === iso ? null : iso; render(); } },
+      h('span', { class: 'n' }, String(d)),
+      list.length ? h('span', { class: 'dots' }, ...list.map((p) => h('span', { class: `dot g-${p.group}`, title: `${p.time} · ${FMT[p.media_type] || 'Post'} · ${GROUP[p.group]}` }))) : null));
+  }
+  panel.append(grid,
+    h('div', { class: 'cal-legend' }, ...Object.entries(GROUP).map(([k, l]) => h('span', {}, h('span', { class: `dot g-${k}`, style: 'width:8px;height:8px;border-radius:50%;display:inline-block' }), l))));
+  const shown = CAL.day ? (byDay[CAL.day] || []) : posts;
+  if (CAL.day) panel.append(h('div', { class: 'cal-day' }, `${dmy(CAL.day)} · ${shown.length ? `${shown.length} post(s)` : 'nenhum post neste dia'}`));
+  else if (!posts.length) panel.append(h('div', { class: 'empty' }, 'Nenhum post programado neste mês ainda.'));
+  let lastDay = null;
+  for (const p of shown) {
+    if (!CAL.day && p.day !== lastDay) { panel.append(h('div', { class: 'cal-day' }, `${WD[new Date(`${p.day}T12:00:00Z`).getUTCDay()]}, ${dmy(p.day).slice(0, 5)}`)); lastDay = p.day; }
+    panel.append(h('div', { class: 'cpost' },
+      p.image_url ? h('img', { class: 'thumb', src: p.image_url, alt: '', loading: 'lazy' }) : h('div', { class: 'thumb' }, FMT[p.media_type] || 'Post'),
+      h('div', {}, h('div', { class: 't' }, p.title || FMT[p.media_type] || 'Post'), h('div', { class: 's' }, `${p.time} · ${FMT[p.media_type] || 'Post'}`)),
+      p.group === 'aprovar' ? h('a', { class: 'btn primary sm', href: D.approval.url }, 'Aprovar')
+        : p.permalink ? h('a', { class: 'btn sm', href: p.permalink, target: '_blank', rel: 'noopener' }, 'Ver post')
+        : h('span', { class: `pill ${p.group === 'publicado' || p.group === 'programado' ? 'paid' : p.group === 'ajuste' ? 'late' : 'waived'}` }, GROUP[p.group])));
+  }
+}
 
 function render() {
   const brand = document.getElementById('brand');
@@ -141,7 +217,7 @@ function render() {
     h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Posts para aprovar'),
       h('div', { class: 'big' }, D.approval.pending ? `${D.approval.pending} aguardando você` : 'Nenhum pendente'),
       h('a', { class: `btn${D.approval.pending ? ' primary' : ''} sm`, href: D.approval.url }, D.approval.pending ? 'Aprovar agora' : 'Ver aprovações')));
-  const TABS = [['pedidos', 'Pedidos'], ['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['aprovacoes', 'Aprovações'], ['contrato', 'Contrato']];
+  const TABS = [['calendario', 'Calendário'], ['pedidos', 'Pedidos'], ['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['aprovacoes', 'Aprovações'], ['contrato', 'Contrato']];
   const tabs = h('div', { class: 'tabs', role: 'tablist' }, ...TABS.map(([k, l]) => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(tab === k),
     onclick: () => { tab = k; try { sessionStorage.setItem('mc_cliente_tab', k); } catch { /* ok */ } render(); } }, l)));
   const fileItem = (f, sub) => h('div', { class: 'item' },
@@ -149,7 +225,9 @@ function render() {
     h('div', { class: 'act' }, h('a', { class: 'btn sm', href: fileUrl(f.id), target: '_blank', rel: 'noopener' }, 'Abrir'), h('a', { class: 'btn sm', href: fileUrl(f.id, true) }, 'Baixar')),
     h('div', { class: 's' }, sub || `${size(f.size)} · enviado em ${dmy(f.created_at)}`));
   const panel = h('section', { class: 'panel', role: 'tabpanel' });
-  if (tab === 'financeiro') {
+  if (tab === 'calendario') {
+    calendarPanel(panel);
+  } else if (tab === 'financeiro') {
     if (!D.billing) panel.append(h('div', { class: 'empty' }, 'Nenhuma mensalidade cadastrada ainda.'));
     else {
       if (D.agency.pix) panel.append(h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Pagamento por PIX'),
