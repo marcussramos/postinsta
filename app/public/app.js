@@ -526,6 +526,64 @@ function quickAdd(col) {
   return wrap;
 }
 
+// Mídias do post na ordem de exibição (carrossel, vídeo do Reels ou a imagem única).
+function mediaItems(p) {
+  const list = (p.media || []).filter((m) => m?.url).map((m) => ({ kind: m.kind === 'video' ? 'video' : 'image', url: m.url }));
+  if (!list.length && p.image_url) list.push({ kind: 'image', url: p.image_url });
+  return list;
+}
+// Capa do cartão: clicar abre a mídia em tela cheia (o resto do cartão continua abrindo o editor).
+function coverButton(p) {
+  const items = mediaItems(p);
+  if (!items.length) return null;
+  const video = items.find((m) => m.kind === 'video');
+  const thumb = p.image_url
+    ? h('img', { src: p.image_url, alt: '', loading: 'lazy', draggable: 'false' })
+    : h('video', { src: `${video.url}#t=0.5`, muted: true, preload: 'metadata', playsinline: true, 'aria-hidden': 'true' });
+  const badge = video ? '▶' : items.length > 1 ? `❐ ${items.length}` : null;
+  return h('button', { type: 'button', class: `tcover${p.media_type === 'STORY' || p.media_type === 'REELS' ? ' tall' : ''}`,
+    'aria-label': `Ver ${video ? 'vídeo' : items.length > 1 ? `as ${items.length} imagens` : 'imagem'} de ${postLabel(p)} em tela cheia`,
+    onclick: (e) => { e.stopPropagation(); openViewer(p); } },
+    thumb, badge ? h('span', { class: 'tcover-badge', 'aria-hidden': 'true' }, badge) : null, h('span', { class: 'tcover-zoom', 'aria-hidden': 'true' }, '⤢'));
+}
+// Visualizador em tela cheia: setas, teclado (← → Esc), deslizar no celular, vídeo com controles.
+function openViewer(p, start = 0) {
+  const items = mediaItems(p);
+  if (!items.length) return;
+  let i = Math.min(start, items.length - 1);
+  const prevFocus = document.activeElement;
+  const stage = h('div', { class: 'vw-stage' });
+  const count = h('span', { class: 'vw-count', 'aria-live': 'polite' });
+  const dots = h('div', { class: 'vw-dots', 'aria-hidden': 'true' });
+  const prev = h('button', { type: 'button', class: 'vw-nav prev', 'aria-label': 'Anterior', onclick: (e) => { e.stopPropagation(); go(-1); } }, '‹');
+  const next = h('button', { type: 'button', class: 'vw-nav next', 'aria-label': 'Próxima', onclick: (e) => { e.stopPropagation(); go(1); } }, '›');
+  const close = h('button', { type: 'button', class: 'vw-close', 'aria-label': 'Fechar', onclick: () => done() }, '×');
+  const edit = can('conteudo') ? h('button', { type: 'button', class: 'btn sm', onclick: () => { done(); openPost(p); } }, 'Abrir post') : null;
+  const box = h('div', { class: 'viewer', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Mídia de ${postLabel(p)}`, tabindex: '-1',
+    onclick: (e) => { if (e.target === box || e.target === stage) done(); } },
+    h('div', { class: 'vw-top' }, h('div', { class: 'vw-title' }, h('b', {}, clientName(p.client_id)), h('span', {}, postLabel(p))), h('div', { class: 'vw-actions' }, count, edit, close)),
+    stage, items.length > 1 ? [prev, next, dots] : null);
+  function draw() {
+    stage.querySelector('video')?.pause();
+    const m = items[i];
+    stage.replaceChildren(m.kind === 'video'
+      ? h('video', { src: m.url, controls: true, autoplay: true, playsinline: true, class: 'vw-media' })
+      : h('img', { src: m.url, alt: `${postLabel(p)} — ${i + 1} de ${items.length}`, class: 'vw-media' }));
+    count.textContent = items.length > 1 ? `${i + 1} / ${items.length}` : '';
+    dots.replaceChildren(...items.map((_, k) => h('span', { class: k === i ? 'on' : '' })));
+    prev.disabled = i === 0; next.disabled = i === items.length - 1;
+  }
+  function go(d) { const n = i + d; if (n < 0 || n >= items.length) return; i = n; draw(); }
+  function key(e) { if (e.key === 'Escape') done(); else if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); }
+  let x0 = null;
+  box.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  box.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; });
+  function done() { stage.querySelector('video')?.pause(); document.removeEventListener('keydown', key); box.remove(); document.body.classList.remove('vw-open'); prevFocus?.focus?.(); }
+  document.addEventListener('keydown', key);
+  document.body.append(box); document.body.classList.add('vw-open');
+  draw(); box.focus();
+}
+
 function boardCard(p, col) {
   const late = isLate(p);
   const t = p.scheduled_at ? new Date(p.scheduled_at) : null;
@@ -534,7 +592,7 @@ function boardCard(p, col) {
   const fmt = { REELS: 'Reels', CAROUSEL: `Carrossel${(p.media || []).length ? ` · ${(p.media || []).length}` : ''}`, STORY: 'Story' }[p.media_type] || (p.image_url ? 'Foto' : null);
   const card = h('article', { class: `tcard${p.status === 'failed' ? ' failed' : ''}`, draggable: 'true', tabindex: 0, onclick: (e) => { if (!e.target.closest('button')) openPost(p); },
     onkeydown: (e) => { if (e.key === 'Enter') openPost(p); } },
-    p.image_url ? h('div', { class: `tcover${p.media_type === 'STORY' || p.media_type === 'REELS' ? ' tall' : ''}` }, h('img', { src: p.image_url, alt: '', loading: 'lazy', draggable: 'false' })) : null,
+    coverButton(p),
     h('div', { class: 'tcard-in' },
       h('div', { class: 'tlabels' },
         h('span', { class: 'tlabel', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, clientName(p.client_id)),
