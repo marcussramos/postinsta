@@ -4,6 +4,7 @@ import { currentUser, checkPassword, checkUserPassword, sessionCookie, clearCook
 import { TIMEZONE, missingEnv, igReady, appUrl, cronSecret, supabaseKeyProblem } from '../lib/env.js';
 import { redirectUri } from '../lib/ig.js';
 import { db } from '../lib/db.js';
+import { setState } from '../lib/appstate.js';
 import { asaasEnv } from '../lib/asaas.js';
 import { activeSecret, verifyTotp, twoFactorOff } from '../lib/totp.js';
 import { MIGRATION_WORKFLOW, MIGRATION_FOLDERS, MIGRATION_REPORTS, MIGRATION_PORTAL, MIGRATION_PRO, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, MIGRATION_V11, MIGRATION_V12, MIGRATION_V13 } from '../lib/migrations.js';
@@ -51,12 +52,18 @@ async function setupInfo() {
       [MIGRATION_V12, [['users', 'perms,client_ids']]],
       [MIGRATION_V13, [['posts', 'script']]],
     ];
-    const [last, results] = await Promise.all([
-      db.one('app_state', { select: 'value', key: 'eq.publisher' }).then((r) => ({ ok: r?.value?.at || null }), (e) => ({ err: e.message })),
-      Promise.all(CHECKS.map(([sql, probes]) => Promise.all(probes.map(([t, c]) => sel(t, c))).then(() => null, () => sql))),
-    ]);
-    if ('err' in last) info.publisher_state_error = last.err; else info.publisher_last_run = last.ok;
-    const parts = results.filter(Boolean);
+    // Uma consulta só no caso comum: o último "tudo em dia" fica salvo em app_state (schema_ok).
+    // Quando entra uma atualização nova (CHECKS cresce), testa de novo.
+    let rows = null;
+    try { rows = await db.select('app_state', { select: 'key,value', key: 'in.(publisher,schema_ok)' }); }
+    catch (e) { info.publisher_state_error = e.message; }
+    const st = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+    if (rows) info.publisher_last_run = st.publisher?.at || null;
+    let parts = [];
+    if (st.schema_ok?.v !== CHECKS.length) {
+      parts = (await Promise.all(CHECKS.map(([sql, probes]) => Promise.all(probes.map(([t, c]) => sel(t, c))).then(() => null, () => sql)))).filter(Boolean);
+      if (!parts.length && rows) await setState('schema_ok', { v: CHECKS.length, at: new Date().toISOString() }).catch(() => {});
+    }
     info.legal_missing = [];
     if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');
