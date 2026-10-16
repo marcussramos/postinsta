@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail = null } = {}) {
   const tables = { clients: [], posts: [], app_state: [], client_files: [], payments: [], reports: [], ig_daily: [], post_events: [], users: [], requests: [], proposals: [], push_subs: [], snippets: [], media_bank: [], mail_log: [], leads: [] };
   const files = new Map();
+  const fakesState = { bucketPublic: true };
   const ig = { containers: new Map(), published: [], calls: [], failNext: igFail,
     // métricas simuladas: feed extra, métricas por post e totais da conta
     feed: [], followers: 250, insightsDenied: false,
@@ -75,6 +76,11 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/upload/sign/', ''));
       return json(200, { url: `/object/upload/sign/${key}?token=up-${encodeURIComponent(key)}` });
     }
+    if (u.pathname === '/storage/v1/object/sign/posts' && method === 'POST') { // vários links de uma vez
+      const { paths = [] } = JSON.parse(init.body || '{}');
+      return json(200, paths.map((p) => (files.has(p) ? { path: p, signedURL: `/object/sign/posts/${p}?token=tok-${encodeURIComponent(p)}`, error: null } : { path: p, signedURL: null, error: 'Object not found' })));
+    }
+    if (u.pathname === '/storage/v1/bucket/posts' && method === 'PUT') { fakesState.bucketPublic = JSON.parse(init.body).public; return json(200, { message: 'Successfully updated' }); }
     if (u.pathname.startsWith('/storage/v1/object/sign/')) {
       const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/sign/', ''));
       if (!files.has(key)) return json(400, { message: 'Object not found' });
@@ -237,7 +243,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     }
     return realFetch(input, init);
   };
-  return { tables, files, ig, asaas: asaasDb, push, mail, restore: () => { globalThis.fetch = realFetch; } };
+  return { tables, files, ig, asaas: asaasDb, push, mail, state: fakesState, restore: () => { globalThis.fetch = realFetch; } };
 }
 
 function json(status, data) {

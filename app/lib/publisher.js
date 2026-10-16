@@ -6,6 +6,7 @@ import { db } from './db.js';
 import * as ig from './ig.js';
 import { logEvent } from './events.js';
 import { notify } from './push.js';
+import { signMedia } from './media.js';
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -59,7 +60,8 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
       continue;
     }
     try {
-      const containerId = await ig.createPostContainer(c.ig_user_id, c.ig_token, claimed, { wait });
+      // com "Fotos privadas" ligado, a Meta recebe links assinados (válidos por 7 dias) para baixar a mídia
+      const containerId = await ig.createPostContainer(c.ig_user_id, c.ig_token, await signMedia(claimed), { wait });
       await db.update('posts', { id: `eq.${claimed.id}` }, { ig_container_id: containerId });
       claimed.ig_container_id = containerId;
       const isVideo = claimed.media_type === 'REELS' || (claimed.media || []).some((m) => m.kind === 'video');

@@ -1,16 +1,26 @@
 // Utilitários HTTP para as funções da Vercel (sem dependências).
+import { signMedia, unsignMedia, hasPublicMedia } from './media.js';
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-export function send(res, status, data, headers = {}) {
+function write(res, status, data, headers) {
   res.statusCode = status;
   for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
   if (data === undefined) return res.end();
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(data));
+}
+
+// Respostas com fotos dos posts passam por signMedia (links assinados quando as fotos estão privadas).
+// A promessa fica em res para o route() esperar antes de encerrar a função.
+export function send(res, status, data, headers = {}) {
+  if (!hasPublicMedia(data)) return write(res, status, data, headers);
+  res.__pending = signMedia(data).catch((e) => { console.warn('Não foi possível assinar as fotos', e.message); return data; })
+    .then((d) => { if (!res.writableEnded) write(res, status, d, headers); });
+  return res.__pending;
 }
 
 export function redirect(res, location, headers = {}) {
@@ -38,6 +48,9 @@ export async function readRaw(req) {
 }
 
 export async function readJson(req) {
+  return unsignMedia(await readJsonRaw(req));
+}
+async function readJsonRaw(req) {
   const parsed = 'body' in req ? req.body : undefined;
   if (parsed && typeof parsed === 'object' && !Buffer.isBuffer(parsed)) return parsed;
   const raw = typeof parsed === 'string' ? parsed : Buffer.isBuffer(parsed) ? parsed.toString('utf8') : (await readStream(req)).toString('utf8');
@@ -56,6 +69,7 @@ export function route(methods) {
     if (!fn) return send(res, 405, { error: 'Método não permitido.' }, { Allow: Object.keys(methods).join(', ') });
     try {
       await fn(req, res);
+      if (res.__pending) await res.__pending;
     } catch (err) {
       const status = err.status || 500;
       if (status >= 500) console.error(err);

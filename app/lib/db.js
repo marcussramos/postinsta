@@ -116,4 +116,19 @@ export const storage = {
     try { await call(`/storage/v1/object/${BUCKET}/${path}`, { method: 'DELETE' }); }
     catch (e) { console.warn('Não foi possível apagar a imagem', path, e.message); }
   },
+  // Links temporários para vários arquivos de uma vez (usado quando o bucket "posts" está privado).
+  async signMany(paths, expiresIn) {
+    if (!paths.length) return {};
+    const r = await call(`/storage/v1/object/sign/${BUCKET}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn, paths }) });
+    const out = {};
+    for (const it of Array.isArray(r) ? r : []) {
+      const rel = it?.signedURL || it?.signedUrl;
+      if (it?.path && rel && !it.error) out[it.path] = `${env('SUPABASE_URL')}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`;
+    }
+    return out;
+  },
+  // Liga/desliga o acesso público ao bucket das fotos dos posts.
+  async setPublic(isPublic) {
+    await call(`/storage/v1/bucket/${BUCKET}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: BUCKET, name: BUCKET, public: Boolean(isPublic) }) });
+  },
 };

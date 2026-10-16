@@ -52,6 +52,11 @@ export default route({
       return send(res, 200, { reminded: pend.length });
     }
     const data = cleanPostInput(body);
+    // pauta criada só com o título ("REELS - …", "Carrossel - …"): já nasce com o formato certo, para a cota de entregas contar direito
+    if (!data.media_type && !data.media && !data.image_url && data.title) {
+      if (/^\s*reels?\b/i.test(data.title)) data.media_type = 'REELS';
+      else if (/^\s*carross?el\b/i.test(data.title)) data.media_type = 'CAROUSEL';
+    }
     const ids = [...new Set((Array.isArray(body.client_ids) ? body.client_ids : [body.client_id]).filter(Boolean))];
     need(ids.length, 400, 'Escolha pelo menos um cliente.');
     need(ids.length <= 20, 400, 'No máximo 20 clientes por vez.');
