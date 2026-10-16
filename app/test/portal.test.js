@@ -72,7 +72,7 @@ test('link do cliente mostra só a pasta dele e só as seções liberadas', asyn
   assert.equal((await call('/api/pasta?r=portal&t=xyz', { auth: false })).status, 404);
 });
 
-test('calendário do cliente: dias de post do mês, arte só quando já foi para aprovação', async () => {
+test('calendário do cliente: dias de post do mês com capa', async () => {
   const c = (await call('/api/clients', { method: 'POST', body: { name: 'Calendário Co' } })).data;
   const o = (await call('/api/clients', { method: 'POST', body: { name: 'Outro Cal' } })).data;
   const t = (await call(`/api/clients?id=${c.id}`, { method: 'PATCH', body: { portal: 'enable' } })).data.portal_url.split('t=')[1];
@@ -91,7 +91,7 @@ test('calendário do cliente: dias de post do mês, arte só quando já foi para
   assert.deepEqual(titles, ['rascunho', 'aprovar', 'saiu', 'virada']);
   const by = Object.fromEntries(r.data.posts.map((p) => [p.title, p]));
   assert.equal(by.rascunho.group, 'producao');
-  assert.equal(by.rascunho.image_url, null, 'arte em produção não aparece');
+  assert.equal(by.rascunho.image_url, 'https://x/rascunho.jpg', 'capa aparece também em produção');
   assert.equal(by.aprovar.group, 'aprovar');
   assert.equal(by.aprovar.day, '2026-11-05');
   assert.equal(by.aprovar.time, '18:00');

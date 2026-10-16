@@ -19,7 +19,6 @@ const VISIBLE = ['contract', 'receipt', 'report', 'briefing', 'invoice']; // "Ou
 const UPLOAD_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime' };
 // Calendário do cliente: só datas, formato, título e situação. Prévia da arte só depois que vai para aprovação.
 const CAL_GROUP = { idea: 'producao', draft: 'producao', internal_review: 'producao', changes_requested: 'ajuste', failed: 'producao', pending_approval: 'aprovar', approved: 'programado', publishing: 'programado', published: 'publicado' };
-const SHOW_ART = ['pending_approval', 'approved', 'publishing', 'published'];
 async function calendar(c, month) {
   need(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || ''), 400, 'Mês inválido.');
   const [y, m] = month.split('-').map(Number);
@@ -31,7 +30,7 @@ async function calendar(c, month) {
   const hour = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   return rows.filter((p) => CAL_GROUP[p.status]).map((p) => {
     const at = new Date(p.scheduled_at);
-    const art = SHOW_ART.includes(p.status);
+    const art = true; // a capa aparece em qualquer etapa (inclusive em produção)
     return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status] === 'producao' && p.script?.status === 'sent' ? 'roteiro' : CAL_GROUP[p.status],
       image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null };
   });
