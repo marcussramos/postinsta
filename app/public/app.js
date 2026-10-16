@@ -463,9 +463,10 @@ function boardCard(p, col) {
         p.caption ? h('span', { class: 'tbadge', title: 'Tem legenda' }, '≡') : null,
         p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
         h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
-      col.next || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
+      col.next || p.status === 'changes_requested' || wantsScript(p) ? h('div', { class: 'tcard-act' },
         col.next && (col.next[0] !== 'send' || can('enviar')) && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
-        p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null) : null));
+        p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null,
+        wantsScript(p) && can('conteudo') ? h('button', { class: 'tnext tscript', type: 'button', onclick: () => openScript(p) }, p.script ? '🎬 Roteiro' : '🎬 Escrever roteiro') : null) : null));
   card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; card.classList.add('dragging'); });
   card.addEventListener('dragend', () => card.classList.remove('dragging'));
   return card;
@@ -737,8 +738,7 @@ function openPost(post = null, opts = {}) {
     if (locked && !post?.script) return null;
     const sc = post?.script;
     const video = ['REELS', 'STORY'].includes(mtype);
-    if (!sc && !video && !isNew) return h('div', { class: 'field' }, h('button', { class: 'linkish', type: 'button', style: 'justify-self:start', onclick: () => { close(); openScript(post); } }, '🎬 Escrever roteiro de vídeo para este post'));
-    if (!sc && !video) return null;
+    if (isNew && !video) return null;
     return h('div', { class: 'field sc-field' }, h('span', { class: 'label' }, 'Roteiro do vídeo'),
       isNew ? h('span', { class: 'hint' }, 'Salve o post (pode ser como ideia) para escrever o roteiro e mandar o cliente aprovar antes de gravar.')
         : h('div', { class: 'sc-row' },
@@ -928,6 +928,9 @@ function openPost(post = null, opts = {}) {
 // ───────────────────────── roteiro de vídeo (Reels / Story): IA + regras do nicho + aprovação do cliente
 const scriptMessage = (c, p) => `Olá! O roteiro do vídeo "${p.title || 'novo vídeo'}" de ${c.name} está pronto para você ler antes da gravação:\n${c.approval_url}\n\nÉ só abrir e tocar em Aprovar roteiro ou Pedir ajuste (pode mandar áudio). 🎬`;
 const SCRIPT_PILL = { draft: 'st-draft', sent: 'st-pending_approval', changes: 'st-changes_requested', approved: 'st-approved' };
+
+// vídeo (Reels/Story), pauta que fala de vídeo, ou já tem roteiro: mostra o atalho do roteiro no cartão
+const wantsScript = (p) => Boolean(p.script) || (['idea', 'draft', 'internal_review', 'changes_requested'].includes(p.status) && (['REELS', 'STORY'].includes(p.media_type) || /\b(reels?|story|stories|v[íi]deo)\b/i.test(p.title || '')));
 
 function scriptBadge(p) {
   const s = p.script;

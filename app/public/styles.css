@@ -588,7 +588,8 @@ input.otp { width: 140px; letter-spacing: .25em; font-size: 18px; text-align: ce
 .tlist-head h2 { font-size: 14px; font-weight: 700; margin: 0; flex: 1; color: #172B4D; }
 .tlist-dot { width: 10px; height: 10px; border-radius: 3px; background: currentColor; flex: none; }
 .tlist-n { font-size: 12px; font-weight: 700; color: #44546F; background: rgba(9,30,66,.08); border-radius: 99px; padding: 1px 8px; }
-.tlist-cards { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 4px; overflow-y: auto; min-height: 8px; }
+.tlist-cards { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 4px; overflow-y: auto; min-height: 8px; flex: 1 1 auto; overscroll-behavior: contain; }
+.tlist-cards > * { flex-shrink: 0; } /* com muitos cartões a lista rola; os cartões nunca achatam */
 .tlist-foot { font-size: 12.5px; padding: 8px 14px 12px; color: #626F86; }
 .tcard { background: #fff; color: #172B4D; border-radius: 8px; box-shadow: 0 1px 1px rgba(9,30,66,.25), 0 0 1px rgba(9,30,66,.31); cursor: pointer; overflow: hidden; outline: none; transition: box-shadow .12s, transform .12s; }
 .tcard:hover, .tcard:focus-visible { box-shadow: 0 0 0 2px #7A6200, 0 4px 8px rgba(9,30,66,.15); }
