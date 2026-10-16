@@ -190,6 +190,32 @@ export function videoFrame(url, t = 0) {
   });
 }
 
+// Vídeos acima do limite do armazenamento (50 MB) são comprimidos no próprio navegador antes de subir:
+// 1080 de largura, H.264, taxa calculada para caber. O áudio é copiado sem perda quando possível.
+export const VIDEO_MAX = 50 * 1024 * 1024;
+const VIDEO_TARGET = 46 * 1024 * 1024;
+export async function compressVideo(file, onProgress = () => {}) {
+  if (typeof VideoEncoder === 'undefined') throw new Error('Este navegador não consegue comprimir vídeo. Use o Chrome ou Safari atualizado, ou exporte o vídeo menor (até 50 MB).');
+  const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.60.0/+esm');
+  const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
+  const dur = await input.computeDuration();
+  const vt = await input.getPrimaryVideoTrack();
+  if (!vt) throw new Error('Não encontrei a imagem do vídeo neste arquivo.');
+  const at = await input.getPrimaryAudioTrack();
+  const audioBits = at ? 192e3 : 0; // reserva para o áudio (copiado ou recodificado)
+  const videoBitrate = Math.round(Math.max(1.2e6, Math.min(10e6, (VIDEO_TARGET * 8 * 0.93) / dur - audioBits)));
+  const out = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new mb.BufferTarget() });
+  const width = Math.min(vt.displayWidth > vt.displayHeight ? 1920 : 1080, vt.displayWidth);
+  const conv = await mb.Conversion.init({ input, output: out, video: { width: width - (width % 2), codec: 'avc', bitrate: videoBitrate } });
+  if (at && conv.discardedTracks?.some((d) => d.track?.type === 'audio' || d.track?.isAudioTrack?.())) throw new Error('Este navegador não conseguiu manter o áudio do vídeo. Tente pelo Google Chrome ou exporte o vídeo menor (até 50 MB).');
+  if (!conv.isValid) throw new Error('Não consegui comprimir este vídeo aqui. Exporte em 1080p (até 50 MB) e tente de novo.');
+  conv.onProgress = (p) => onProgress(p);
+  await conv.execute();
+  const blob = new Blob([out.target.buffer], { type: 'video/mp4' });
+  if (blob.size > VIDEO_MAX) throw new Error(`Mesmo comprimido o vídeo ficou com ${fileSize(blob.size)}. Corte um pouco ou exporte em 1080p e tente de novo.`);
+  return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.mp4', { type: 'video/mp4' });
+}
+
 // Envia o vídeo direto ao Supabase com um link assinado (não passa pelo limite de 4,5 MB da Vercel).
 export async function uploadVideo(file, clientId, onProgress = () => {}) {
   const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();

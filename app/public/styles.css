@@ -856,3 +856,8 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .sf-ic { width: 40px; height: 48px; border-radius: 7px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
 .sf-main { display: grid; gap: 3px; min-width: 0; }
 @media (max-width: 520px) { .sf-file { grid-template-columns: 40px minmax(0, 1fr); } .sf-file > a, .sf-file > button { grid-column: auto; } }
+
+/* compressão de vídeo grande no navegador */
+.vz { display: grid; gap: 8px; padding: 18px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 14px; background: var(--accent-soft); font-size: 14px; }
+.vz-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 18%, var(--surface)); overflow: hidden; }
+.vz-fill { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .2s; }

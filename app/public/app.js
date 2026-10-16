@@ -5,7 +5,7 @@ import { reviewPost, applyFix } from '/revisor.js';
 import { PERMS, TEAM_DEFAULT } from '/permissoes.js';
 import { TEMPLATES, DURATIONS, NICHE_RULES, SCRIPT_STATUS, checkScript } from '/roteiro.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
-import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL } from '/shared.js';
+import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
 
 const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
 const S = {
@@ -661,7 +661,7 @@ function openPost(post = null, opts = {}) {
     multiIn.value = ''; drawImage();
   };
   const drawReels = () => {
-    if (!video) return imgBox.replaceChildren(dropZone('Escolha o vídeo do Reels', 'MP4 ou MOV, vertical 9:16, de 3 s a 15 min, até 50 MB.', () => videoIn.click(), (fs) => takeVideo(fs[0])), videoIn);
+    if (!video) return imgBox.replaceChildren(dropZone('Escolha o vídeo do Reels', 'MP4 ou MOV, vertical 9:16, de 3 s a 15 min. Acima de 50 MB o app comprime sozinho.', () => videoIn.click(), (fs) => takeVideo(fs[0])), videoIn);
     const v = h('video', { src: video.url, controls: true, playsinline: true, muted: true, preload: 'metadata', class: 'reel-video', poster: img?.url || null });
     const coverImg = img ? h('img', { src: img.url, alt: 'Capa do Reels', class: 'reel-cover' }) : h('div', { class: 'reel-cover thumb-empty' }, 'sem capa');
     const slider = video.duration ? h('input', { type: 'range', min: 0, max: Math.max(0, Math.floor(video.duration * 10) / 10), step: 0.1, value: coverT, 'aria-label': 'Momento da capa',
@@ -677,18 +677,32 @@ function openPost(post = null, opts = {}) {
   // Story: foto ou vídeo vertical (9:16), sem legenda
   const storyIn = h('input', { type: 'file', accept: 'image/*,video/mp4,video/quicktime,.mp4,.mov', hidden: true, onchange: () => storyIn.files[0] && takeStory(storyIn.files[0]) });
   const drawStory = () => {
-    if (!img && !video) return imgBox.replaceChildren(dropZone('Escolha a foto ou o vídeo do Story', 'Vertical 9:16 (1080×1920). Vídeo de até 60 s e 50 MB. O texto vai na própria arte: Story não tem legenda.', () => storyIn.click(), (fs) => takeStory(fs[0])), storyIn);
+    if (!img && !video) return imgBox.replaceChildren(dropZone('Escolha a foto ou o vídeo do Story', 'Vertical 9:16 (1080×1920). Vídeo de até 60 s (acima de 50 MB o app comprime sozinho). O texto vai na própria arte: Story não tem legenda.', () => storyIn.click(), (fs) => takeStory(fs[0])), storyIn);
     const view = video ? h('video', { src: video.url, controls: true, playsinline: true, muted: true, class: 'reel-video', poster: img?.url || null }) : h('img', { src: img.url, alt: 'Story', class: 'story-img' });
     imgBox.replaceChildren(h('div', { class: 'reel-wrap' }, view,
       h('div', { class: 'reel-side' },
         h('span', { class: 'hint muted' }, video ? `Vídeo de ${Math.round(video.duration || 0)} s.` : 'Foto em tela cheia.', ' Fica 24 h no ar a partir do horário marcado.'),
         locked ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => storyIn.click() }, 'Trocar'))), storyIn);
   };
+  // vídeo acima de 50 MB: comprime aqui no navegador antes (mostra o andamento no lugar da mídia)
+  const shrink = async (f) => {
+    if (f.size <= VIDEO_MAX) return f;
+    if (f.size > 4 * 1024 ** 3) throw new Error(`Vídeo com ${fileSize(f.size)} é grande demais até para comprimir. Exporte em 1080p e tente de novo.`);
+    const bar = h('span', { class: 'vz-bar' }, h('span', { class: 'vz-fill', style: 'width:0%' }));
+    const pct = h('b', {}, '0%');
+    imgBox.replaceChildren(h('div', { class: 'vz' }, h('span', {}, `Comprimindo o vídeo (${fileSize(f.size)}) para caber no limite de 50 MB…`), bar, pct,
+      h('span', { class: 'muted', style: 'font-size:12.5px' }, 'Pode levar alguns minutos em vídeos longos. Não feche esta janela.')));
+    const t0 = Date.now();
+    const out = await compressVideo(f, (p) => { bar.firstChild.style.width = `${Math.round(p * 100)}%`; pct.textContent = `${Math.round(p * 100)}%`; });
+    toast(`Vídeo comprimido: ${fileSize(f.size)} → ${fileSize(out.size)} em ${Math.max(1, Math.round((Date.now() - t0) / 1000))} s.`);
+    return out;
+  };
   const takeStory = async (f) => {
     try {
       if (f.type.startsWith('image/')) { img = await videoFrameFromImage(f); video = null; }
       else {
-        if (f.size > 50 * 1024 * 1024) throw new Error(`Vídeo com ${fileSize(f.size)}: o máximo é 50 MB.`);
+        { const info0 = await videoInfo(f); if (info0.duration > 60) throw new Error('Story em vídeo pode ter no máximo 60 segundos.'); }
+        f = await shrink(f);
         const info = await videoInfo(f);
         if (info.duration > 60) throw new Error('Story em vídeo pode ter no máximo 60 segundos.');
         video = { file: f, url: info.url, duration: info.duration };
@@ -700,10 +714,10 @@ function openPost(post = null, opts = {}) {
   };
   const takeVideo = async (f) => {
     try {
-      if (f.size > 50 * 1024 * 1024) throw new Error(`Vídeo com ${fileSize(f.size)}: o máximo é 50 MB. Exporte em 1080p no CapCut/celular e tente de novo.`);
-      const info = await videoInfo(f);
+      let info = await videoInfo(f);
       if (info.duration < 3) throw new Error('O Reels precisa ter pelo menos 3 segundos.');
       if (info.duration > 900) throw new Error('O Reels pode ter no máximo 15 minutos.');
+      if (f.size > VIDEO_MAX) { URL.revokeObjectURL(info.url); f = await shrink(f); info = await videoInfo(f); }
       video = { file: f, url: info.url, duration: info.duration };
       coverT = Math.min(1, info.duration / 2);
       img = await videoFrame(info.url, coverT);
