@@ -31,6 +31,12 @@ export default route({
   GET: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
+    if (q.script_file) { // o cliente abre o roteiro anexado (PDF, Word…) de um post dele
+      const p = /^[0-9a-f-]{36}$/i.test(q.script_file) ? await db.one('posts', { select: '*', id: `eq.${q.script_file}`, client_id: `eq.${c.id}` }) : null;
+      const f = p?.script?.file ? await db.one('client_files', { select: 'id,path,client_id', id: `eq.${p.script.file.id}` }) : null;
+      need(f && f.client_id === c.id, 404, 'Roteiro não encontrado.');
+      return redirect(res, await docs.signedUrl(f.path, { expiresIn: 1800 }), { 'Cache-Control': 'no-store' });
+    }
     if (q.audio) { // o cliente ouve o próprio áudio
       const f = await ownAudio(c, q.audio);
       need(f, 404, 'Áudio não encontrado.');

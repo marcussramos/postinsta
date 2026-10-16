@@ -843,3 +843,16 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 /* Fluxo: etiquetas do cliente em tom claro da cor dele (legível com qualquer cor) */
 .tlabel:not(.fmt):not(.ia):not([class*="sc-"]) { background: color-mix(in srgb, var(--lc) 20%, #fff); color: color-mix(in srgb, var(--lc) 70%, #172B4D); }
 .tavatar { color: #fff; }
+
+/* roteiro anexado ao post (fica logo acima do Canva) */
+.sf-wrap { display: grid; }
+.sf-add { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 12px; background: var(--accent-soft); color: var(--ink); font: inherit; cursor: pointer; }
+.sf-add:hover { border-style: solid; }
+.sf-add > span:first-child { font-size: 20px; }
+.sf-add b { display: block; color: var(--accent); }
+.sf-add small, .sf-main small { display: block; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.sf-file { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.sf-file > .feedback, .sf-file > .btn[style] { grid-column: 1 / -1; }
+.sf-ic { width: 40px; height: 48px; border-radius: 7px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.sf-main { display: grid; gap: 3px; min-width: 0; }
+@media (max-width: 520px) { .sf-file { grid-template-columns: 40px minmax(0, 1fr); } .sf-file > a, .sf-file > button { grid-column: auto; } }

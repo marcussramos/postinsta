@@ -84,9 +84,12 @@ function scriptCard(x) {
     h('button', { class: 'linkish', type: 'button', onclick: (e) => e.target.closest('.decide').replaceWith(form(x, true, 'script')) }, 'Mudar minha decisão'));
   return h('article', { class: 'post sc', id: `s-${x.id}` },
     h('div', { class: 'sc-head' },
-      h('span', { class: 'sc-tag' }, `🎬 Roteiro de ${FMT[x.media_type] || 'vídeo'} · ~${total}s`),
+      h('span', { class: 'sc-tag' }, s.file && !(s.scenes || []).length ? `🎬 Roteiro de ${FMT[x.media_type] || 'vídeo'}` : `🎬 Roteiro de ${FMT[x.media_type] || 'vídeo'} · ~${total}s`),
       h('h2', {}, x.title || s.topic || 'Vídeo'),
       x.scheduled_at ? h('span', { class: 'muted' }, `Previsto para ${fmtDate(x.scheduled_at, D.timezone)}`) : null),
+    s.file ? h('a', { class: 'sc-file', href: `/api/approval?t=${encodeURIComponent(token)}&script_file=${x.id}`, target: '_blank', rel: 'noopener' },
+      h('span', { class: 'sc-file-ic', 'aria-hidden': 'true' }, /pdf/i.test(s.file.mime || s.file.name) ? 'PDF' : 'DOC'),
+      h('span', {}, h('b', {}, 'Abrir o roteiro'), h('small', {}, s.file.name))) : null,
     s.hook ? h('div', { class: 'sc-hook' }, h('span', { class: 'eyebrow' }, 'Começa assim (primeiros 3 segundos)'), h('p', {}, `“${s.hook}”`)) : null,
     h('ol', { class: 'sc-scenes' }, ...(s.scenes || []).map((c, i) => h('li', {},
       h('div', { class: 'sc-n' }, h('b', {}, `Cena ${i + 1}`), c.secs ? h('span', { class: 'muted' }, `${c.secs}s`) : null),

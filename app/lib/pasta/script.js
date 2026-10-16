@@ -120,7 +120,12 @@ export const scriptRoute = route({
     const p = await postFor(u, b.post_id);
     const old = p.script || null;
     const next = cleanScript(b.script || {});
-    need(next.hooks.length || next.scenes.length, 400, 'O roteiro está vazio.');
+    need(next.hooks.length || next.scenes.length || next.file, 400, 'O roteiro está vazio.');
+    if (next.file) { // o arquivo anexado precisa ser da pasta deste cliente
+      const f = await db.one('client_files', { select: 'id,client_id,name,mime,size', id: `eq.${next.file.id}` });
+      need(f && f.client_id === p.client_id, 400, 'Arquivo do roteiro não encontrado. Anexe de novo.');
+      next.file = { id: f.id, name: f.name, mime: f.mime || '', size: f.size || 0 };
+    }
     const sameContent = old && JSON.stringify(cleanScript({ ...old, notes: '' })) === JSON.stringify({ ...next, notes: '' });
     let status = old?.status || 'draft';
     const now = new Date().toISOString();

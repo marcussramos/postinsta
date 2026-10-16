@@ -100,7 +100,7 @@ export function checkScript(script, niche) {
   if (script?.duration && secs && Math.abs(secs - script.duration) > Math.max(8, script.duration * 0.35)) {
     out.push({ level: 'dica', title: 'Duração', detail: `As cenas somam ${secs}s, mas o alvo é ${script.duration}s.`, quote: '' });
   }
-  if (!(script?.hooks || []).some((x) => String(x).trim())) out.push({ level: 'atencao', title: 'Sem gancho', detail: 'Os 3 primeiros segundos decidem se a pessoa fica. Escreva o gancho.', quote: '' });
+  if (!script?.file && !(script?.hooks || []).some((x) => String(x).trim())) out.push({ level: 'atencao', title: 'Sem gancho', detail: 'Os 3 primeiros segundos decidem se a pessoa fica. Escreva o gancho.', quote: '' });
   return out;
 }
 
@@ -123,6 +123,8 @@ export function cleanScript(s = {}) {
     cover: str(s.cover, 200),
     caption: str(s.caption, 2200),
     notes: str(s.notes, 1000), // só a equipe vê
+    // roteiro escrito fora e anexado ao post (PDF, Word…): fica na pasta do cliente
+    file: s.file && /^[0-9a-f-]{36}$/i.test(String(s.file.id || '')) ? { id: String(s.file.id), name: str(s.file.name, 200) || 'Roteiro', mime: str(s.file.mime, 120), size: Math.max(0, Number(s.file.size) || 0) } : null,
   };
 }
 
@@ -132,6 +134,7 @@ export function publicScript(s) {
   return {
     status: s.status, template: s.template, duration: s.duration, topic: s.topic,
     hook: (s.hooks || [])[s.hook || 0] || '', scenes: s.scenes || [], cta: s.cta, audio: s.audio, cover: s.cover,
+    file: s.file ? { name: s.file.name, mime: s.file.mime } : null,
     feedback: s.feedback || null, feedback_audio: s.feedback_audio || null, decided_at: s.decided_at || null, sent_at: s.sent_at || null,
   };
 }

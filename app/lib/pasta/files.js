@@ -19,7 +19,7 @@ const TYPES = {
   pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  csv: 'text/csv', txt: 'text/plain',
+  csv: 'text/csv', txt: 'text/plain', md: 'text/markdown',
 };
 const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '');
 

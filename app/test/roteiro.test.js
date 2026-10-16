@@ -111,3 +111,30 @@ test('banco de ganchos: ordena pelo resultado dos relatórios e inclui Reels de 
   assert.deepEqual(r.data.hooks.map((x) => x.hook), ['Gancho forte', 'Ninguém te conta isso', 'Gancho fraco']);
   assert.equal(r.data.hooks[0].views, 5000);
 });
+
+test('roteiro anexado (PDF): fica no post, cliente abre pelo link e aprova', async () => {
+  const c = (await call('/api/clients', { method: 'POST', body: { name: 'Anexo Co' } })).data;
+  const p = [].concat((await call('/api/posts', { method: 'POST', body: { client_id: c.id, title: 'Reels anexo', stage: 'draft' } })).data)[0];
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(30)]);
+  const up = await fetch(`${base}/api/pasta?r=files&client=${c.id}&category=other`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/octet-stream', 'x-file-name': encodeURIComponent('Roteiro - Reels anexo.pdf') }, body: pdf }).then((r) => r.json());
+  const o = (await call('/api/clients', { method: 'POST', body: { name: 'Alheio' } })).data;
+  const alien = await fetch(`${base}/api/pasta?r=files&client=${o.id}&category=other`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/octet-stream', 'x-file-name': 'x.pdf' }, body: pdf }).then((r) => r.json());
+  assert.equal((await call('/api/pasta?r=script', { method: 'PUT', body: { post_id: p.id, script: { file: { id: alien.id } } } })).status, 400, 'arquivo de outro cliente não');
+  const att = await call('/api/pasta?r=script', { method: 'PUT', body: { post_id: p.id, script: { file: { id: up.id } } } });
+  assert.equal(att.status, 200, JSON.stringify(att.data));
+  assert.equal(att.data.script.file.name, 'Roteiro - Reels anexo.pdf');
+  assert.equal(att.data.script.status, 'draft');
+  const token = await apToken(c.id);
+  assert.equal((await call(`/api/approval?t=${token}`, { auth: false })).data.scripts.length, 0, 'rascunho não aparece para o cliente');
+  const sent = await call('/api/pasta?r=script', { method: 'PUT', body: { post_id: p.id, script: att.data.script, send: true } });
+  assert.equal(sent.data.script.status, 'sent');
+  const view = (await call(`/api/approval?t=${token}`, { auth: false })).data.scripts[0];
+  assert.equal(view.script.file.name, 'Roteiro - Reels anexo.pdf');
+  assert.ok(!('id' in view.script.file));
+  const open = await fetch(`${base}/api/approval?t=${token}&script_file=${p.id}`, { redirect: 'manual' });
+  assert.equal(open.status, 302);
+  const ot = await apToken(o.id);
+  assert.equal((await fetch(`${base}/api/approval?t=${ot}&script_file=${p.id}`, { redirect: 'manual' })).status, 404, 'outro cliente não abre');
+  const ok = await call('/api/approval', { method: 'POST', auth: false, body: { t: token, kind: 'script', post_id: p.id, decision: 'approve' } });
+  assert.equal(ok.data.script.status, 'approved');
+});

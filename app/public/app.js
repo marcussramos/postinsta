@@ -544,10 +544,10 @@ function boardCard(p, col) {
         p.caption ? h('span', { class: 'tbadge', title: 'Tem legenda' }, '≡') : null,
         p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
         h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
-      col.next || p.status === 'changes_requested' || wantsScript(p) ? h('div', { class: 'tcard-act' },
+      col.next || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
         col.next && (col.next[0] !== 'send' || can('enviar')) && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
         p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null,
-        wantsScript(p) && can('conteudo') ? h('button', { class: 'tnext tscript', type: 'button', onclick: () => openScript(p) }, p.script ? '🎬 Roteiro' : '🎬 Escrever roteiro') : null) : null));
+        null) : null));
   card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; card.classList.add('dragging'); });
   card.addEventListener('dragend', () => card.classList.remove('dragging'));
   return card;
@@ -781,6 +781,9 @@ function openPost(post = null, opts = {}) {
   if (!locked) loadBest();
 
   const body = [];
+  let pendingScript = null; // post novo: o arquivo sobe depois de salvar
+  const scriptBox = h('div', { class: 'sf-box' });
+  const scriptIn = h('input', { type: 'file', hidden: true, accept: '.pdf,.doc,.docx,.txt,.md,application/pdf', onchange: () => { const f = scriptIn.files[0]; scriptIn.value = ''; if (f) attachScript(f); } });
   if (post) {
     body.push(h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
       h('span', { class: `pill st-${post.status}` }, STATUS_LABEL[post.status]),
@@ -797,9 +800,9 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('span', { class: 'label' }, isNew ? 'Cliente(s)' : 'Cliente'), clientBox,
       isNew ? h('span', { class: 'hint' }, 'Escolha mais de um para criar o mesmo post em vários perfis.') : null),
     h('div', { class: 'field' }, h('label', { for: 'f-title' }, 'Pauta (uso interno)'), title),
-    scriptField(),
     h('div', { class: 'field' }, h('span', { class: 'label' }, 'Formato e mídia'), typeSeg, imgBox,
       h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? items[0]?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
+      scriptFileBox(),
       locked ? null : h('div', { class: 'canva-row' },
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
         h('button', { type: 'button', class: 'btn sm', onclick: () => openBankPicker([...picked][0], takeFromBank) }, '🗂 Banco de mídia'),
@@ -813,6 +816,56 @@ function openPost(post = null, opts = {}) {
     h('div', { class: 'field' }, h('label', { for: 'f-notes' }, 'Notas da equipe'), notes),
     h('div', { class: 'field' }, h('label', { for: 'f-alt' }, 'Texto alternativo (opcional)'), alt, h('span', { class: 'hint' }, 'Descrição da imagem para pessoas com deficiência visual.')),
   );
+
+  // ── roteiro: arquivo feito fora (PDF, Word…) anexado ao post; dá para mandar o cliente aprovar antes de gravar
+  function scriptFileBox() { drawScriptBox(); return h('div', { class: 'sf-wrap' }, scriptIn, scriptBox); }
+  function drawScriptBox() {
+    const sc = post?.script;
+    const file = sc?.file;
+    if (pendingScript) return scriptBox.replaceChildren(h('div', { class: 'sf-file' }, h('span', { class: 'sf-ic' }, 'PDF'),
+      h('span', { class: 'sf-main' }, h('b', {}, 'Roteiro'), h('small', {}, `${pendingScript.name} · sobe quando você salvar`)),
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { pendingScript = null; drawScriptBox(); } }, 'Tirar')));
+    if (!file) {
+      if (locked) return scriptBox.replaceChildren();
+      return scriptBox.replaceChildren(h('button', { class: 'sf-add', type: 'button', onclick: () => scriptIn.click() },
+        h('span', { 'aria-hidden': 'true' }, '📎'), h('span', {}, h('b', {}, 'Anexar roteiro'), h('small', {}, 'PDF, Word ou texto · o cliente pode aprovar antes da gravação'))));
+    }
+    const isPdf = /pdf/i.test(file.mime || file.name);
+    scriptBox.replaceChildren(h('div', { class: 'sf-file' },
+      h('span', { class: 'sf-ic' }, isPdf ? 'PDF' : 'DOC'),
+      h('span', { class: 'sf-main' }, h('b', {}, 'Roteiro'), h('small', {}, file.name),
+        h('span', { class: `pill ${SCRIPT_PILL[sc.status] || 'st-draft'}`, style: 'justify-self:start;font-size:11px' }, { draft: 'Só a equipe vê', sent: 'Com o cliente', changes: 'Cliente pediu ajuste', approved: 'Aprovado pelo cliente' }[sc.status] || 'Anexado')),
+      h('a', { class: 'btn sm', href: `/api/pasta?r=files&id=${file.id}&open=1`, target: '_blank', rel: 'noopener' }, 'Abrir'),
+      locked ? null : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => scriptIn.click() }, 'Trocar'),
+      locked || !can('conteudo') ? null : confirmButton('Remover', 'Confirmar', async () => {
+        try { const saved = await api(`/api/pasta?r=script&post_id=${post.id}`, { method: 'DELETE' }); Object.assign(post, { script: saved.script }); upsert(saved, false); drawScriptBox(); toast('Roteiro removido do post.'); } catch (e) { toast(e.message, true); }
+      }, 'btn ghost sm')),
+      sc.status === 'changes' && (sc.feedback || sc.feedback_audio) ? h('div', { class: 'feedback' }, h('b', {}, 'O cliente pediu no roteiro:'),
+        sc.feedback && sc.feedback !== '🎤 Pedido por áudio' ? h('span', {}, sc.feedback) : null,
+        sc.feedback_audio ? h('div', { class: 'fb-audio' }, h('span', {}, '🎤 Áudio do cliente'), h('audio', { controls: true, preload: 'metadata', src: `/api/pasta?r=files&id=${sc.feedback_audio}&open=1` })) : null) : null,
+      !locked && can('enviar') && sc.status !== 'approved' ? h('button', { class: `btn sm${sc.status === 'sent' ? ' ghost' : ' primary'}`, type: 'button', style: 'justify-self:start', onclick: () => sendScriptFile(file) },
+        sc.status === 'sent' ? 'Reenviar roteiro ao cliente' : sc.status === 'changes' ? 'Mandar roteiro de novo para aprovar' : 'Enviar roteiro para o cliente aprovar') : null);
+  }
+  async function uploadScriptFor(p, f) {
+    const up = await api(`/api/pasta?r=files&client=${p.client_id}&category=other`, { method: 'POST', raw: f, headers: { 'x-file-name': encodeURIComponent(f.name) } });
+    return api('/api/pasta?r=script', { method: 'PUT', body: { post_id: p.id, script: { file: { id: up.id } } } });
+  }
+  async function attachScript(f) {
+    if (f.size > 4 * 1024 * 1024) return toast('Arquivo grande demais (máx. 4 MB). Exporte o PDF menor e tente de novo.', true);
+    if (isNew) { pendingScript = f; drawScriptBox(); return; }
+    toast('Enviando o roteiro…');
+    try { const saved = await uploadScriptFor(post, f); Object.assign(post, { script: saved.script }); upsert(saved, false); drawScriptBox(); toast(post.script.status === 'draft' ? 'Roteiro anexado. Só a equipe vê até você enviar ao cliente.' : 'Roteiro anexado.'); }
+    catch (e) { toast(e.message, true); }
+  }
+  async function sendScriptFile(file) {
+    try {
+      const saved = await api('/api/pasta?r=script', { method: 'PUT', body: { post_id: post.id, script: { ...post.script, file }, send: true } });
+      Object.assign(post, { script: saved.script }); upsert(saved, false); drawScriptBox();
+      toast('Roteiro enviado. O cliente vê no link de aprovação.');
+      const c = clientById(post.client_id);
+      if (c?.approval_url) copyText(scriptMessage(c, post), 'Mensagem com o link copiada: cole no WhatsApp do cliente.');
+    } catch (e) { toast(e.message, true); }
+  }
 
   // ── roteiro do vídeo (abre o editor; post novo precisa ser salvo antes)
   function scriptField() {
@@ -963,6 +1016,10 @@ function openPost(post = null, opts = {}) {
         if (mode === 'save' && saved === post) { close(); return toast('Nada mudou.'); }
       }
       const list = Array.isArray(saved) ? saved : [saved];
+      if (pendingScript) for (const [i, p] of list.entries()) {
+        try { toast(`Anexando o roteiro${list.length > 1 ? ` (${i + 1} de ${list.length})` : ''}…`); list[i] = await uploadScriptFor(p, pendingScript); }
+        catch (e) { toast(`Post salvo, mas o roteiro não subiu: ${e.message}`, true); }
+      }
       list.forEach((p) => upsert(p, false)); render(); close();
       const n = list.length > 1 ? ` (${list.length} clientes)` : '';
       toast({ send: `Enviado para aprovação${n}. O cliente já vê no link dele.`, approve: `Aprovado${n}. Publica sozinho no horário.`, idea: `Ideia salva${n}.`, review: `Na revisão interna${n}.`, production: `Em produção${n}.` }[mode] || `Salvo${n}.`);
@@ -1016,7 +1073,7 @@ const wantsScript = (p) => Boolean(p.script) || (['idea', 'draft', 'internal_rev
 function scriptBadge(p) {
   const s = p.script;
   if (!s) return null;
-  return h('span', { class: `tlabel sc-${s.status}`, title: SCRIPT_STATUS[s.status] }, `🎬 ${{ draft: 'Roteiro', sent: 'Roteiro com o cliente', changes: 'Ajustar roteiro', approved: 'Roteiro ok' }[s.status] || 'Roteiro'}`);
+  return h('span', { class: `tlabel sc-${s.status}`, title: SCRIPT_STATUS[s.status] }, `${s.file ? '📄' : '🎬'} ${{ draft: 'Roteiro', sent: 'Roteiro com o cliente', changes: 'Ajustar roteiro', approved: 'Roteiro ok' }[s.status] || 'Roteiro'}`);
 }
 
 function openScript(post) {
