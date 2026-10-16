@@ -7,19 +7,21 @@
 <meta name="theme-color" content="#EBEBE6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Poppins:wght@400;500;600;700&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   :root { --bg: #EBEBE6; --ink: #2B2B2B; --muted: #5E5D57; --gold: #7A6200; --line: #D3D1C6; --card: #F6F6F2;
-    --head: "Helvetica Neue", Helvetica, Arial, sans-serif; --body: "Poppins", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
+    --head: "Cormorant Garamond", Georgia, serif; --body: "Poppins", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16.5px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
-  h1, h2, h3 { font-family: var(--head); font-weight: 800; margin: 0; line-height: 1.05; letter-spacing: -.01em; text-wrap: balance; }
+  h1, h2, h3 { font-family: var(--head); font-weight: 600; margin: 0; line-height: 1.02; letter-spacing: -.01em; text-wrap: balance; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 70px; display: grid; gap: 26px; }
   .top { display: flex; align-items: center; justify-content: space-between; }
   .top img { width: 76px; }
   .eyebrow { color: var(--gold); text-transform: uppercase; letter-spacing: .14em; font-size: 13px; font-weight: 600; }
-  .hero h1 { font-size: clamp(34px, 6.4vw, 58px); text-transform: uppercase; text-shadow: 0 5px 12px rgba(43,43,43,.16); margin: 8px 0 14px; }
+  .hero h1 { font-size: clamp(40px, 7.4vw, 66px); margin: 8px 0 14px; }
+  .hero h1 em { font-style: italic; color: var(--gold); }
+  .card h3 { font-size: 27px; }
   .hero p { font-size: clamp(16px, 2.2vw, 19px); color: #45443f; margin: 0; max-width: 56ch; }
   .perks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; font-size: 14.5px; color: var(--muted); }
   .perks span::before { content: "✓ "; color: var(--gold); font-weight: 700; }
@@ -41,17 +43,28 @@
   .btn.ghost { background: transparent; color: var(--ink); }
   .btn:disabled { opacity: .55; cursor: wait; }
   .hp { position: absolute; left: -5000px; }
+  .steps { display: grid; gap: 8px; }
+  .steps-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .prog { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .prog span { display: block; height: 100%; background: var(--gold); border-radius: 99px; transition: width .3s; }
+  .step-title { font-size: clamp(28px, 5vw, 38px); }
+  .nav { display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+  .nav .btn { flex: 1 1 auto; }
+  .back { background: none; border: none; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 10px 4px; }
+  details.more summary { cursor: pointer; color: var(--muted); font-size: 14.5px; font-weight: 600; }
+  details.more[open] { display: grid; gap: 16px; }
+  details.more[open] summary { margin-bottom: 4px; }
   .wait { text-align: center; padding: 50px 10px; display: grid; gap: 16px; justify-items: center; }
   .spin { width: 48px; height: 48px; border-radius: 50%; border: 4px solid var(--line); border-top-color: var(--gold); animation: s .9s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
   .res-head { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; }
   .ring { width: 132px; height: 132px; }
-  .ring text { font-family: var(--head); font-weight: 800; }
+  .ring text { font-family: var(--head); font-weight: 600; }
   .res-head h2 { font-size: clamp(22px, 3.6vw, 30px); }
   .badge { display: inline-block; font-size: 12.5px; font-weight: 600; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; margin-top: 8px; color: var(--muted); }
   .nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
   .num { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
-  .num b { display: block; font-family: var(--head); font-size: 22px; }
+  .num b { display: block; font-family: var(--head); font-size: 28px; font-weight: 600; }
   .num span { font-size: 12.5px; color: var(--muted); }
   .area { display: grid; gap: 6px; }
   .area-top { display: flex; justify-content: space-between; font-weight: 600; }
@@ -101,48 +114,66 @@ function chips(key, multi = false) {
     onclick: () => { if (multi) A[key] = A[key].includes(o) ? A[key].filter((x) => x !== o) : [...A[key], o]; else A[key] = o; draw(); } }, o)));
   draw(); return box;
 }
+// Formulário em 3 passos: o @ primeiro (compromisso pequeno), depois as perguntas em toque, e o contato por último.
+const V = { handle: '', nicho: '', name: '', wa: '', company: '', email: '', dif: '', hp: '', consent: false };
+let step = 1;
+const QS = [['objetivo', 'Qual o seu principal objetivo com o Instagram?'], ['seguidores', 'Quantos seguidores, mais ou menos?'], ['frequencia', 'Com que frequência você posta?'], ['quem_faz', 'Quem cuida do Instagram hoje?']];
 function form() {
   const f = (label, el, opt) => h('div', { class: 'f' }, h('label', { for: el.id }, label, opt ? h('span', { class: 'opt-l' }, ' (opcional)') : null), el);
-  const fc = (label, el) => h('div', { class: 'f' }, h('div', { class: 'l' }, label), el);
-  const handle = h('input', { id: 'd-ig', placeholder: 'seuperfil', autocapitalize: 'none', autocomplete: 'off', inputmode: 'text', maxlength: 60 });
-  const name = h('input', { id: 'd-name', autocomplete: 'name', maxlength: 120 });
-  const wa = h('input', { id: 'd-wa', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: '(65) 99999-9999' });
-  const company = h('input', { id: 'd-co', maxlength: 120 });
-  const email = h('input', { id: 'd-em', type: 'email', autocomplete: 'email' });
-  const nicho = h('select', { id: 'd-ni' }, h('option', { value: '' }, 'Escolha…'), ...NICHOS.map((n) => h('option', { value: n }, n)));
-  const dif = h('textarea', { id: 'd-dif', placeholder: 'Ex.: não sei o que postar, posto e ninguém interage, não tenho tempo…', maxlength: 400 });
-  const hp = h('input', { class: 'hp', name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' });
-  const consent = h('input', { type: 'checkbox', id: 'd-ok' });
-  const go = h('button', { class: 'btn', type: 'submit' }, 'Ver meu diagnóstico →');
-  $.replaceChildren(header(),
-    h('section', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Diagnóstico gratuito'), h('h1', {}, C.headline),
-      h('p', {}, 'Responda algumas perguntas rápidas e receba na hora uma análise do seu perfil: nota geral, o que está funcionando e as 3 ações que mais vão fazer diferença agora.'),
-      h('div', { class: 'perks' }, h('span', {}, 'Na hora'), h('span', {}, 'Sem custo'), h('span', {}, 'Feito para o seu negócio'))),
+  const fc = (label, el, opt) => h('div', { class: 'f' }, h('div', { class: 'l' }, label, opt ? h('span', { class: 'opt-l' }, ' (opcional)') : null), el);
+  const bind = (el, k) => { el.value = V[k]; el.addEventListener('input', () => { V[k] = el.value; }); el.addEventListener('change', () => { V[k] = el.value; }); return el; };
+  const progress = h('div', { class: 'steps' }, h('div', { class: 'steps-top' }, h('span', {}, `Passo ${step} de 3`), h('span', {}, ['Seu perfil', 'Seu Instagram hoje', 'Seu resultado'][step - 1])),
+    h('div', { class: 'prog' }, h('span', { style: `width:${Math.round((step / 3) * 100)}%` })));
+  const back = step > 1 ? h('button', { type: 'button', class: 'back', onclick: () => { step -= 1; form(); } }, '← Voltar') : h('span');
+  let body, next, label;
+  if (step === 1) {
+    const handle = bind(h('input', { id: 'd-ig', placeholder: 'seuperfil', autocapitalize: 'none', autocomplete: 'off', inputmode: 'text', maxlength: 60 }), 'handle');
+    const nicho = bind(h('select', { id: 'd-ni' }, h('option', { value: '' }, 'Escolha…'), ...NICHOS.map((n) => h('option', { value: n, selected: V.nicho === n }, n))), 'nicho');
+    body = [h('div', { class: 'f' }, h('label', { for: 'd-ig' }, 'Qual é o @ do seu Instagram?'), h('div', { class: 'at' }, h('span', {}, '@'), handle)), f('Qual o segmento do seu negócio?', nicho)];
+    label = 'Continuar →';
+    next = () => { if (!V.handle.trim()) return toast('Digite o @ do seu Instagram.'); if (!V.nicho) return toast('Escolha o segmento do seu negócio.'); return true; };
+    setTimeout(() => handle.focus(), 50);
+  } else if (step === 2) {
+    body = [...QS.map(([k, q]) => fc(q, chips(k))), fc('Quais formatos você mais usa?', chips('formatos', true), true)];
+    label = 'Continuar →';
+    next = () => { const miss = QS.find(([k]) => !A[k]); return miss ? toast(`Responda: ${miss[1]}`) : true; };
+  } else {
+    const name = bind(h('input', { id: 'd-name', autocomplete: 'name', maxlength: 120 }), 'name');
+    const wa = bind(h('input', { id: 'd-wa', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: '(65) 99999-9999' }), 'wa');
+    const company = bind(h('input', { id: 'd-co', maxlength: 120 }), 'company');
+    const email = bind(h('input', { id: 'd-em', type: 'email', autocomplete: 'email' }), 'email');
+    const dif = bind(h('textarea', { id: 'd-dif', placeholder: 'Ex.: não sei o que postar, posto e ninguém interage, não tenho tempo…', maxlength: 400 }), 'dif');
+    const hp = bind(h('input', { class: 'hp', name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' }), 'hp');
+    const consent = h('input', { type: 'checkbox', id: 'd-ok', checked: V.consent, onchange: () => { V.consent = consent.checked; } });
+    body = [h('div', { class: 'row2' }, f('Seu nome', name), f('WhatsApp', wa)),
+      h('details', { class: 'more' }, h('summary', {}, 'Quer contar mais? (opcional)'), h('div', { class: 'row2' }, f('Nome da empresa', company, true), f('E-mail', email, true)), f('Qual a sua maior dificuldade com o Instagram?', dif, true)),
+      hp, h('label', { class: 'consent', for: 'd-ok' }, consent, h('span', {}, 'Aceito receber o resultado e o contato da MC Digital pelo WhatsApp. Seus dados não são compartilhados.'))];
+    label = 'Ver meu diagnóstico →';
+    next = () => {
+      if (!V.name.trim()) return toast('Digite o seu nome.');
+      if (V.wa.replace(/\D/g, '').length < 10) return toast('Digite o seu WhatsApp com DDD.');
+      if (!V.consent) return toast('Marque que aceita receber o resultado e o contato pelo WhatsApp.');
+      return true;
+    };
+    setTimeout(() => name.focus(), 50);
+  }
+  const go = h('button', { class: 'btn', type: 'submit' }, label);
+  const hero = step === 1 ? h('section', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Diagnóstico gratuito'), h('h1', {}, C.headline),
+    h('p', {}, 'Três passos rápidos e você recebe, na hora, a nota do seu perfil, o que já está funcionando e as 3 ações que mais vão fazer diferença agora.'),
+    h('div', { class: 'perks' }, h('span', {}, 'Na hora'), h('span', {}, 'Sem custo'), h('span', {}, 'Feito para o seu negócio'))) : null;
+  $.replaceChildren(header(), hero,
     h('form', { class: 'card', onsubmit: async (e) => {
       e.preventDefault();
-      if (!handle.value.trim()) return toast('Digite o @ do seu Instagram.');
-      if (!name.value.trim()) return toast('Digite o seu nome.');
-      if (wa.value.replace(/\D/g, '').length < 10) return toast('Digite o seu WhatsApp com DDD.');
-      if (!consent.checked) return toast('Marque que aceita receber o resultado e o contato pelo WhatsApp.');
+      if (next() !== true) return;
+      if (step < 3) { step += 1; form(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
       go.disabled = true;
       waiting();
       try {
-        const r = await api('/api/pasta?r=diagnostico', { method: 'POST', body: { handle: handle.value, name: name.value, whatsapp: wa.value, company: company.value, email: email.value, website: hp.value,
-          answers: { nicho: nicho.value, objetivo: A.objetivo, seguidores: A.seguidores, frequencia: A.frequencia, formatos: A.formatos, quem_faz: A.quem_faz, dificuldade: dif.value } } });
-        result(r, handle.value.replace(/^@/, ''), name.value);
+        const r = await api('/api/pasta?r=diagnostico', { method: 'POST', body: { handle: V.handle, name: V.name, whatsapp: V.wa, company: V.company, email: V.email, website: V.hp,
+          answers: { nicho: V.nicho, objetivo: A.objetivo, seguidores: A.seguidores, frequencia: A.frequencia, formatos: A.formatos, quem_faz: A.quem_faz, dificuldade: V.dif } } });
+        result(r, V.handle.replace(/^@/, ''), V.name);
       } catch (err) { form(); toast(err.message); }
-    } },
-      h('div', { class: 'row2' }, h('div', { class: 'f' }, h('label', { for: 'd-ig' }, 'Seu Instagram'), h('div', { class: 'at' }, h('span', {}, '@'), handle)), f('Seu nome', name)),
-      h('div', { class: 'row2' }, f('WhatsApp', wa), f('Nome da empresa', company, true)),
-      h('div', { class: 'row2' }, f('Segmento', nicho), f('E-mail', email, true)),
-      fc('Qual o seu principal objetivo com o Instagram?', chips('objetivo')),
-      fc('Quantos seguidores, mais ou menos?', chips('seguidores')),
-      fc('Com que frequência você posta?', chips('frequencia')),
-      fc('Quais formatos você mais usa?', chips('formatos', true)),
-      fc('Quem cuida do Instagram hoje?', chips('quem_faz')),
-      f('Qual a sua maior dificuldade com o Instagram?', dif, true), hp,
-      h('label', { class: 'consent', for: 'd-ok' }, consent, h('span', {}, 'Aceito receber o resultado e o contato da MC Digital pelo WhatsApp. Seus dados não são compartilhados.')),
-      go),
+    } }, progress, step > 1 ? h('h2', { class: 'step-title' }, step === 2 ? `Como está o @${V.handle.replace(/^@/, '')} hoje?` : 'Para onde mandamos o seu resultado?') : null, ...body, h('div', { class: 'nav' }, back, go)),
     h('p', { class: 'foot' }, 'Usamos só informações públicas do perfil e as suas respostas.'));
 }
 function waiting() {

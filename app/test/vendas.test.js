@@ -55,6 +55,23 @@ test('diagnóstico com dados públicos reais e limite por pessoa', async () => {
   assert.equal((await diag({ ip: '9.9.9.9', handle: 'perfil9' })).status, 429);
 });
 
+test('diagnóstico: teste de leitura no painel explica o motivo quando a Meta nega', async () => {
+  assert.equal((await call('/api/pasta?r=diagcfg', { method: 'POST', body: { handle: 'x' }, cookie: '' })).status, 401);
+  assert.equal((await call('/api/pasta?r=diagcfg', { method: 'POST', body: { handle: 'com espaço' } })).status, 400);
+  const ok = (await call('/api/pasta?r=diagcfg', { method: 'POST', body: { handle: '@padariadobairro' } })).data;
+  assert.equal(ok.ok, true); assert.equal(ok.followers, 2000);
+  assert.equal((await call('/api/pasta?r=diagcfg')).data.lookup_status.ok, true);
+  S.fakes.ig.discoveryDenied = true;
+  const bad = (await call('/api/pasta?r=diagcfg', { method: 'POST', body: { handle: 'outro' } })).data;
+  assert.equal(bad.ok, false); assert.match(bad.error, /permissão/);
+  const st = (await call('/api/pasta?r=diagcfg')).data.lookup_status;
+  assert.equal(st.ok, false); assert.equal(st.handle, 'outro');
+  // sem dados reais, a IA é orientada a não dizer que "não conseguiu ver" o perfil
+  await diag({ ip: '4.4.4.4', handle: 'semdados' });
+  assert.match(S.fakes.ig.aiCalls.at(-1).messages[0].content[0].text, /Nunca escreva que "não conseguiu ver"/);
+  S.fakes.ig.discoveryDenied = false;
+});
+
 test('funil: lead manual, proposta ligada ao lead e fechamento automático no aceite', async () => {
   const l = (await call('/api/pasta?r=leads', { method: 'POST', body: { name: 'Ana', instagram: 'https://instagram.com/ana.doces/', whatsapp: '65988887777', value: '1.200,00' } })).data;
   assert.equal(l.instagram, 'ana.doces'); assert.equal(l.value_cents, 120000);
