@@ -204,6 +204,7 @@ function viewAgenda() {
     [['pending_approval'], 'Aguardando cliente', '--s-wait'],
     [['changes_requested'], 'Ajuste pedido', '--s-change'],
     [['approved'], 'Aprovados na fila', '--s-ok'],
+    [['planned'], 'Planejados', '--line'],
     [['idea', 'draft', 'internal_review'], 'Em produção', '--s-draft'],
     [['failed'], 'Falharam', '--s-fail'],
   ];
@@ -211,9 +212,9 @@ function viewAgenda() {
   const summary = h('div', { class: 'summary' }, ...cards.map(([sts, label, color]) =>
     h('button', { class: 'sum', 'aria-pressed': String(S.fStatus === key(sts)), onclick: () => { S.fStatus = S.fStatus === key(sts) ? '' : key(sts); render(); } },
       h('span', { class: 'eyebrow' }, h('span', { class: 'dot', style: `background:var(${color})` }), label),
-      h('b', {}, String(relevant.filter((p) => sts.includes(p.status)).length)))));
+      h('b', {}, String(relevant.filter((p) => sts.includes(stageOf(p))).length)))));
 
-  let list = relevant.filter((p) => !S.fStatus || S.fStatus.split(',').includes(p.status));
+  let list = relevant.filter((p) => !S.fStatus || S.fStatus.split(',').includes(stageOf(p)));
   list = list.filter((p) => p.status !== 'published' || now - new Date(p.published_at || p.scheduled_at) < 86400e3 || S.fStatus === 'published');
 
   const out = [h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Próximas publicações'), h('h1', {}, 'Agenda')))];
@@ -427,9 +428,14 @@ function openColors() {
 }
 
 // ───────────────────────── fluxo (quadro do workflow)
+// "Planejado" = em produção mas ainda sem arte (só pauta/data). Não é um status novo: é o rascunho sem mídia.
+const hasMedia = (p) => Boolean(p.image_url || (p.media || []).length);
+const isPlanned = (p) => p.status === 'draft' && !hasMedia(p);
+function stageOf(p) { return isPlanned(p) ? 'planned' : p.status; }
 const COLUMNS = [
   { id: 'idea', label: 'Ideia', drop: 'to_idea', next: ['to_production', 'Produzir'] },
-  { id: 'draft', label: 'Em produção', drop: 'to_production', next: ['to_review', 'Revisar'] },
+  { id: 'planned', status: 'draft', match: isPlanned, label: 'Planejado', drop: 'to_production', open: 'Criar arte' },
+  { id: 'draft', match: (p) => p.status === 'draft' && hasMedia(p), label: 'Em produção', drop: 'to_production', next: ['to_review', 'Revisar'] },
   { id: 'internal_review', label: 'Revisão interna', drop: 'to_review', next: ['send', 'Enviar ao cliente'] },
   { id: 'pending_approval', label: 'Aguardando cliente', drop: 'send' },
   { id: 'changes_requested', label: 'Ajuste pedido' },
@@ -465,12 +471,12 @@ function viewBoard() {
     .filter((p) => !q || `${p.title || ''} ${p.caption || ''} ${clientName(p.client_id)}`.toLowerCase().includes(q));
   const sortKey = (p) => (p.scheduled_at ? new Date(p.scheduled_at).getTime() : Infinity);
   const board = h('div', { class: 'tboard' }, ...COLUMNS.map((col) => {
-    const items = posts.filter((p) => p.status === col.id || col.also?.includes(p.status)).sort((a, b) => sortKey(a) - sortKey(b));
+    const items = posts.filter((p) => (col.match ? col.match(p) : p.status === col.id) || col.also?.includes(p.status)).sort((a, b) => sortKey(a) - sortKey(b));
     const body = h('div', { class: 'tlist-cards' }, ...items.map((p) => boardCard(p, col)));
     const colEl = h('section', { class: `tlist${col.drop ? ' droppable' : ''}`, 'data-col': col.id, 'aria-label': col.label },
       h('header', { class: 'tlist-head' }, h('span', { class: `tlist-dot st-${col.id}`, 'aria-hidden': 'true' }), h('h2', {}, col.label), h('span', { class: 'tlist-n' }, String(items.length))),
       body,
-      ['idea', 'draft', 'internal_review'].includes(col.id) && can('conteudo') ? quickAdd(col) : h('div', { class: 'tlist-foot muted' }, col.id === 'pending_approval' ? 'Envie pelo cartão ou arraste para cá' : col.id === 'approved' ? 'Sai sozinho no horário' : col.id === 'published' ? 'Últimos 7 dias' : 'Volta para produção ao ajustar'));
+      ['idea', 'planned', 'internal_review'].includes(col.id) && can('conteudo') ? quickAdd(col) : h('div', { class: 'tlist-foot muted' }, col.id === 'draft' ? 'Chega aqui quando a arte é anexada' : col.id === 'pending_approval' ? 'Envie pelo cartão ou arraste para cá' : col.id === 'approved' ? 'Sai sozinho no horário' : col.id === 'published' ? 'Últimos 7 dias' : 'Volta para produção ao ajustar'));
     if (col.drop) {
       colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.classList.add('over'); });
       colEl.addEventListener('dragleave', (e) => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove('over'); });
@@ -478,7 +484,7 @@ function viewBoard() {
         e.preventDefault(); colEl.classList.remove('over');
         const id = e.dataTransfer.getData('text/plain');
         const p = S.posts.find((x) => x.id === id);
-        if (!p || p.status === col.id) return;
+        if (!p || p.status === (col.status || col.id)) return;
         await movePost(p, col.drop, `Movido para ${col.label}.`);
       });
     }
@@ -497,7 +503,7 @@ function viewBoard() {
 
 // "+ Adicionar um cartão" no fim da lista (cria ideia / post em produção / revisão só com a pauta)
 function quickAdd(col) {
-  const stage = { idea: 'idea', draft: 'production', internal_review: 'internal_review' }[col.id];
+  const stage = { idea: 'idea', planned: 'production', draft: 'production', internal_review: 'internal_review' }[col.id];
   const wrap = h('div', { class: 'tadd' });
   const closed = () => wrap.replaceChildren(h('button', { class: 'tadd-btn', type: 'button', onclick: opened }, '+ Adicionar um cartão'));
   function opened() {
@@ -544,7 +550,8 @@ function boardCard(p, col) {
         p.caption ? h('span', { class: 'tbadge', title: 'Tem legenda' }, '≡') : null,
         p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
         h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
-      col.next || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
+      col.next || col.open || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
+        col.open && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, `${col.open} →`) : null,
         col.next && (col.next[0] !== 'send' || can('enviar')) && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => movePost(p, col.next[0], col.next[0] === 'send' ? 'Enviado ao cliente.' : 'Avançou de etapa.') }, `${col.next[1]} →`) : null,
         p.status === 'changes_requested' ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, 'Ajustar →') : null,
         null) : null));
@@ -1404,8 +1411,9 @@ function viewSettings() {
   const st = S.setup || {};
   const ago = st.publisher_last_run ? Math.round((Date.now() - new Date(st.publisher_last_run)) / 60000) : null;
   const ok = (cond, yes, no) => h('span', { class: cond ? 'ig-ok' : 'ig-warn' }, cond ? `✓ ${yes}` : `• ${no}`);
-  const codeBox = (text, label) => h('div', { style: 'display:grid;gap:8px' },
-    h('pre', { class: 'mono notranslate', translate: 'no', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, text),
+  // shown = o que aparece na tela (pode esconder segredos); o botão copia o texto completo
+  const codeBox = (text, label, shown = text) => h('div', { style: 'display:grid;gap:8px' },
+    h('pre', { class: 'mono notranslate', translate: 'no', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, shown),
     h('button', { class: 'btn sm', style: 'justify-self:start', onclick: () => copyText(text, `${label} copiado.`) }, `Copiar ${label}`));
   return [
     h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Instalação'), h('h1', {}, 'Ajustes'))),
@@ -1454,11 +1462,16 @@ function viewSettings() {
           : ok(false, '', 'Ainda não configurado'),
         st.publisher_state_error ? h('div', { class: 'errorbox', translate: 'no' }, h('b', {}, 'Detalhe técnico: '), st.publisher_state_error) : null,
         st.cron_sql
-          ? [h('span', { class: 'muted', style: 'font-size:14px' }, 'No Supabase, abra SQL Editor → New query, cole o comando abaixo e clique em Run. Ele já vem com o seu endereço e o código secreto; não precisa mudar nada.'),
-             codeBox(st.cron_sql, 'comando')]
+          ? (() => {
+              // o código secreto nunca aparece na tela; "Copiar comando" leva o texto completo
+              const box = [h('span', { class: 'muted', style: 'font-size:14px' }, 'No Supabase, abra SQL Editor → New query, cole o comando abaixo e clique em Run. Ele já vem com o seu endereço e o código secreto (escondido na tela); não precisa mudar nada.'),
+                codeBox(st.cron_sql, 'comando', st.cron_sql.replace(/Bearer [^']+/, 'Bearer ••••••••••••'))];
+              return ago != null && ago <= 15 ? h('details', {}, h('summary', { class: 'muted', style: 'cursor:pointer;font-size:14px' }, 'Ver o comando do agendador'), ...box) : box;
+            })()
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
+    ...settingsPrivacy(),
     ...settingsDiag(),
     ...settingsOnboarding(),
     ...settingsDevice(),
@@ -3344,6 +3357,27 @@ function openLead(l = null, { lose = false } = {}) {
   const close = drawer(isNew ? 'Novo lead' : l.name, body, foot);
   if (lose) lost.focus(); else if (isNew) name.focus();
 }
+// "Fotos privadas": fecha o acesso público às fotos dos posts (links assinados que vencem em 7 dias).
+function settingsPrivacy() {
+  if (S.role !== 'admin') return [];
+  if (S.priv === undefined) { S.priv = null; api('/api/pasta?r=privacy').then((v) => { S.priv = v; }).catch(() => { S.priv = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Segurança e LGPD'), h('h2', { style: 'font-size:22px' }, 'Fotos privadas')));
+  if (!S.priv) return [head, h('p', { class: 'muted' }, S.priv === false ? 'Indisponível agora.' : 'Carregando…')];
+  const on = S.priv.media_private;
+  const go = h('button', { class: on ? 'btn sm' : 'btn primary sm', style: 'justify-self:start', onclick: async () => {
+    if (on && !confirmDanger()) return;
+    go.disabled = true;
+    try { S.priv = await api('/api/pasta?r=privacy', { method: 'PUT', body: { media_private: !on } }); toast(S.priv.media_private ? 'Fotos privadas ligado. As imagens agora só abrem pelo app.' : 'Fotos privadas desligado.'); render(); }
+    catch (err) { toast(err.message, true); go.disabled = false; }
+  } }, on ? 'Desligar fotos privadas' : 'Ligar fotos privadas');
+  function confirmDanger() { return window.confirm('Desligar deixa as fotos dos posts (inclusive de pacientes) abertas para quem tiver o link. Continuar?'); }
+  return [head, h('article', { class: 'card' },
+    on ? h('div', { class: 'okbox' }, '✓ Ligado. As fotos e vídeos dos posts só abrem por links temporários gerados pelo app (painel, aprovação, área do cliente e publicação na Meta).')
+      : h('div', { class: 'errorbox' }, h('b', {}, 'Desligado. '), 'Qualquer pessoa com o link de uma foto consegue abrir a imagem, inclusive fotos de pacientes (antes e depois). Recomendado ligar.'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Os links gerados valem 7 dias e se renovam sozinhos sempre que o app é aberto. Nada muda no seu dia a dia.'),
+    go)];
+}
+
 // Mostra se a leitura de dados reais está funcionando e permite testar com um @.
 function diagLookupBox(D) {
   if (!D.lookup_client_id) return null;

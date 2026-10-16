@@ -4,9 +4,11 @@
 //   security  (a própria conta) GET | POST {start:1} gera segredo | POST {code} ativa | DELETE {code} desativa   (2 etapas)
 //   mailcfg   (admin) GET | PUT {approval, reminder, charge, report} | POST {to} e-mail de teste
 //   nf        (admin) GET | PUT configuração da nota fiscal | POST {client_id, month, n} emite a nota de uma parcela paga
+//   privacy   (admin) GET {media_private} | PUT {media_private} liga/desliga "Fotos privadas" (bucket posts)
 import { route, send, readJson, query, need, redirect } from '../http.js';
 import { requireAdmin, requireStaff } from '../auth.js';
-import { db, docs } from '../db.js';
+import { db, docs, storage } from '../db.js';
+import { setMediaPrivateCache } from '../media.js';
 import { listBackups, runBackup } from '../backup.js';
 import { vapidKeys, notify } from '../push.js';
 import { newSecret, otpauthUrl, verifyTotp, activeSecret, saveSecret, twoFactorOff } from '../totp.js';
@@ -138,5 +140,22 @@ export const nfRoute = route({
     const pay = await db.one('payments', { select: 'status', client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` });
     need(pay?.status === 'paid', 409, 'A nota só sai para parcela paga.');
     send(res, 200, await issueInvoice(ref, null, { force: true }));
+  },
+});
+
+// "Fotos privadas": tira o acesso público do bucket das fotos dos posts. A partir daí, painel, página de
+// aprovação, área do cliente e a Meta recebem links assinados que vencem em 7 dias.
+export const privacyRoute = route({
+  GET: async (req, res) => {
+    await requireAdmin(req);
+    send(res, 200, { media_private: Boolean(await getState('media_private', false)) });
+  },
+  PUT: async (req, res) => {
+    await requireAdmin(req);
+    const on = Boolean((await readJson(req)).media_private);
+    // ordem segura: ao ligar, primeiro passa a assinar e só depois fecha o bucket; ao desligar, abre antes
+    if (on) { await setState('media_private', true); setMediaPrivateCache(true); await storage.setPublic(false); }
+    else { await storage.setPublic(true); await setState('media_private', false); setMediaPrivateCache(false); }
+    send(res, 200, { media_private: on });
   },
 });

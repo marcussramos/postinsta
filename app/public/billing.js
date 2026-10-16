@@ -30,7 +30,9 @@ export function billingMonths(client, payments, today) {
     const [y, mo] = m.split('-').map(Number);
     const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
     const parcels = plan.map((pl) => {
-      const due = `${m}-${String(Math.min(pl.day || lastDay, lastDay)).padStart(2, '0')}`;
+      // parcela que cairia antes do início do contrato (ex.: início 16/10, vencimento dia 15) vence no próprio dia do início
+      let due = `${m}-${String(Math.min(pl.day || lastDay, lastDay)).padStart(2, '0')}`;
+      if (due < client.billing_start.slice(0, 10)) due = client.billing_start.slice(0, 10);
       const pay = pays.get(`${m}#${pl.n}`) || null;
       const status = pay?.status === 'paid' ? 'paid' : pay?.status === 'waived' ? 'waived' : today > due ? 'late' : 'open';
       return { n: pl.n, of: plan.length, due, cents: pay?.amount_cents ?? pl.cents, status, payment: pay };

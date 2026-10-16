@@ -13,8 +13,11 @@ export async function deliveries(month = currentMonth(), { clientId, tz = TIMEZO
     db.select('clients', clientId ? { select: 'id,contract_data', id: `eq.${clientId}` } : { select: 'id,contract_data' }),
   ]);
   const out = {};
+  // cota vazia ou 0 = não definida no contrato (antes aparecia "1/0 completo ✓")
+  const quota = (v) => { const n = Number(v); return v === '' || v == null || !Number.isFinite(n) || n <= 0 ? null : Math.round(n); };
   for (const c of clients) {
-    out[c.id] = { month, posts: { published: 0, planned: 0, quota: c.contract_data?.quota_posts ?? null }, reels: { published: 0, planned: 0, quota: c.contract_data?.quota_reels ?? null }, stories: { published: 0, planned: 0, quota: c.contract_data?.quota_stories ?? null } };
+    const k = c.contract_data || {};
+    out[c.id] = { month, posts: { published: 0, planned: 0, quota: quota(k.quota_posts) }, reels: { published: 0, planned: 0, quota: quota(k.quota_reels) }, stories: { published: 0, planned: 0, quota: quota(k.quota_stories) } };
   }
   for (const p of posts) {
     const o = out[p.client_id]; if (!o) continue;

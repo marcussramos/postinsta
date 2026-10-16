@@ -155,3 +155,23 @@ test('lote: marcar parcelas antigas como pagas de uma vez', async () => {
   assert.equal(r.length, 2);
   assert.equal((await call(`/api/pasta?r=payments&client=${x.id}`)).data.length, 2);
 });
+
+test('cobrança: parcela que venceria antes do início do contrato vence no dia do início', async () => {
+  const { billingMonths } = await import('../public/billing.js');
+  const c = { id: 'x', billing_start: '2026-10-16', due_day: 15, monthly_fee_cents: 150000 };
+  const [oct] = billingMonths(c, [], '2026-10-16');
+  assert.equal(oct.due, '2026-10-16'); assert.equal(oct.status, 'open', 'não está atrasada no dia do início');
+  assert.equal(billingMonths(c, [], '2026-10-17')[0].status, 'late', 'no dia seguinte, sim');
+  const nov = billingMonths(c, [], '2026-11-10')[0];
+  assert.equal(nov.due, '2026-11-15', 'meses seguintes no dia normal');
+});
+
+test('pauta com título "REELS - …" ou "Carrossel - …" já nasce no formato certo', async () => {
+  const c = (await call('/api/clients', { method: 'POST', body: { name: 'Formato' } })).data;
+  const r = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, title: 'REELS - bate e bola', stage: 'draft' } })).data;
+  assert.equal(r.media_type, 'REELS');
+  const k = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, title: 'Carrossel - primeira consulta', stage: 'draft' } })).data;
+  assert.equal(k.media_type, 'CAROUSEL');
+  const f = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, title: 'Antes e depois', stage: 'draft' } })).data;
+  assert.equal(f.media_type, 'IMAGE');
+});
