@@ -45,10 +45,10 @@ async function boot() {
 
 async function loadAll() {
   try {
-    const [clients, posts] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`)]);
-    S.clients = clients; S.posts = posts;
-    if (can('financeiro')) S.payments = await api('/api/pasta?r=payments').catch(() => []); // vazio até a atualização do banco
-    await loadExtras();
+    // tudo de uma vez (antes era em fila e o painel demorava para abrir)
+    const [clients, posts, payments] = await Promise.all([api('/api/clients'), api(`/api/posts?from=${encodeURIComponent(sinceISO())}`),
+      can('financeiro') ? api('/api/pasta?r=payments').catch(() => []) : null, loadExtras()]); // pagamentos: vazio até a atualização do banco
+    S.clients = clients; S.posts = posts; if (payments) S.payments = payments;
   } catch (e) {
     if (e.status === 401) { S.admin = false; S.staff = false; return renderLogin(); }
     toast(e.message, true);
@@ -75,12 +75,15 @@ setInterval(refresh, 60_000);
 
 // Contador de entregas do mês e pedidos abertos dos clientes (falham em silêncio antes da atualização do banco).
 async function loadExtras() {
-  const [deliv, reqs] = await Promise.all([
+  const sales = can('vendas');
+  const [deliv, reqs, proposals, leads] = await Promise.all([
     api(`/api/pasta?r=deliveries&month=${todayLocal().slice(0, 7)}`).catch(() => null),
     api('/api/pasta?r=requests&open=1').catch(() => null),
+    sales ? api('/api/pasta?r=proposals').catch(() => null) : null,
+    sales ? api('/api/pasta?r=leads').catch(() => null) : null,
   ]);
   S.deliv = deliv || {}; S.requests = reqs || [];
-  if (can('vendas')) [S.proposals, S.leads] = await Promise.all([api('/api/pasta?r=proposals').catch(() => null), api('/api/pasta?r=leads').catch(() => null)]);
+  if (sales) Object.assign(S, { proposals, leads });
 }
 
 // ───────────────────────── tema: Automático (segue o aparelho) → Claro → Escuro, salvo neste aparelho

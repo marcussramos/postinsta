@@ -34,37 +34,30 @@ async function setupInfo() {
   try { info.app_url = appUrl(); info.redirect_uri = redirectUri(); } catch { /* sem endereço ainda */ }
   if (!missing.length && !info.key_problem && info.app_url) {
     info.cron_sql = cronSql(info.app_url, cronSecret());
-    try { info.publisher_last_run = (await db.one('app_state', { select: 'value', key: 'eq.publisher' }))?.value?.at || null; }
-    catch (e) { info.publisher_state_error = e.message; /* tabela app_state ainda não existe ou não visível */ }
-    // banco desatualizado? os comandos são seguros de rodar de novo, então junta o que faltar
-    const parts = [];
-    try { await db.select('posts', { select: 'title', limit: 1 }); await db.select('clients', { select: 'brand_voice', limit: 1 }); }
-    catch { parts.push(MIGRATION_WORKFLOW); }
-    try { await db.select('client_files', { select: 'id', limit: 1 }); await db.select('payments', { select: 'ref_month', limit: 1 }); await db.select('clients', { select: 'monthly_fee_cents', limit: 1 }); }
-    catch { parts.push(MIGRATION_FOLDERS); }
-    try { await db.select('reports', { select: 'id', limit: 1 }); await db.select('ig_daily', { select: 'day', limit: 1 }); }
-    catch { parts.push(MIGRATION_REPORTS); }
-    try { await db.select('clients', { select: 'portal_token', limit: 1 }); }
-    catch { parts.push(MIGRATION_PORTAL); }
-    try {
-      await db.select('posts', { select: 'media_type', limit: 1 }); await db.select('payments', { select: 'installment', limit: 1 });
-      await db.select('post_events', { select: 'id', limit: 1 }); await db.select('users', { select: 'id', limit: 1 }); await db.select('requests', { select: 'id', limit: 1 });
-      await db.select('clients', { select: 'brand_kit,installments', limit: 1 });
-    } catch { parts.push(MIGRATION_PRO); }
-    try { await db.select('proposals', { select: 'id', limit: 1 }); } catch { parts.push(MIGRATION_V7); }
-    try { await db.select('payments', { select: 'asaas_id', limit: 1 }); await db.select('clients', { select: 'asaas_customer_id', limit: 1 }); } catch { parts.push(MIGRATION_V8); }
-    try {
-      for (const t of ['push_subs', 'snippets', 'media_bank']) await db.select(t, { select: 'id', limit: 1 });
-      await db.select('mail_log', { select: 'key', limit: 1 }); await db.select('users', { select: 'totp_secret', limit: 1 }); await db.select('payments', { select: 'nf_id,nf_url', limit: 1 });
-    } catch { parts.push(MIGRATION_V9); }
-    try { await db.select('posts', { select: 'feedback_audio', limit: 1 }); } catch { parts.push(MIGRATION_V10); }
-    try { await db.select('leads', { select: 'id', limit: 1 }); } catch { parts.push(MIGRATION_V11); }
-    try { await db.select('users', { select: 'perms,client_ids', limit: 1 }); } catch { parts.push(MIGRATION_V12); }
-    try { await db.select('posts', { select: 'script', limit: 1 }); } catch { parts.push(MIGRATION_V13); }
-    try {
-      const a = (await db.one('app_state', { select: 'value', key: 'eq.agency' }))?.value || {};
-      info.legal_missing = [].filter(([k]) => !String(a[k] || '').trim()).map(([, l]) => l);
-    } catch { /* sem tabela */ }
+    // banco desatualizado? Cada atualização tem suas colunas de teste; tudo consultado AO MESMO TEMPO
+    // (em sequência eram ~25 idas ao banco e o painel demorava ~3 s para abrir).
+    const sel = (t, cols) => db.select(t, { select: cols, limit: 1 });
+    const CHECKS = [
+      [MIGRATION_WORKFLOW, [['posts', 'title'], ['clients', 'brand_voice']]],
+      [MIGRATION_FOLDERS, [['client_files', 'id'], ['payments', 'ref_month'], ['clients', 'monthly_fee_cents']]],
+      [MIGRATION_REPORTS, [['reports', 'id'], ['ig_daily', 'day']]],
+      [MIGRATION_PORTAL, [['clients', 'portal_token']]],
+      [MIGRATION_PRO, [['posts', 'media_type'], ['payments', 'installment'], ['post_events', 'id'], ['users', 'id'], ['requests', 'id'], ['clients', 'brand_kit,installments']]],
+      [MIGRATION_V7, [['proposals', 'id']]],
+      [MIGRATION_V8, [['payments', 'asaas_id'], ['clients', 'asaas_customer_id']]],
+      [MIGRATION_V9, [['push_subs', 'id'], ['snippets', 'id'], ['media_bank', 'id'], ['mail_log', 'key'], ['users', 'totp_secret'], ['payments', 'nf_id,nf_url']]],
+      [MIGRATION_V10, [['posts', 'feedback_audio']]],
+      [MIGRATION_V11, [['leads', 'id']]],
+      [MIGRATION_V12, [['users', 'perms,client_ids']]],
+      [MIGRATION_V13, [['posts', 'script']]],
+    ];
+    const [last, results] = await Promise.all([
+      db.one('app_state', { select: 'value', key: 'eq.publisher' }).then((r) => ({ ok: r?.value?.at || null }), (e) => ({ err: e.message })),
+      Promise.all(CHECKS.map(([sql, probes]) => Promise.all(probes.map(([t, c]) => sel(t, c))).then(() => null, () => sql))),
+    ]);
+    if ('err' in last) info.publisher_state_error = last.err; else info.publisher_last_run = last.ok;
+    const parts = results.filter(Boolean);
+    info.legal_missing = [];
     if (process.env.ASAAS_API_KEY) info.asaas = { env: asaasEnv(), webhook_url: `${info.app_url}/api/pasta?r=asaas` };
     if (parts.length) info.migration_sql = parts.join('\n\n');
   }
