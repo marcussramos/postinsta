@@ -141,12 +141,20 @@ function viewHome() {
   const team = teamSection(today, month, newReqs);
   return [hero, pushPrompt(),
     homeHead('Resolva agora', 'O que trava publicação, cliente esperando e cobrança'),
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, nowCard, todayCard), h('div', { class: 'home-col' }, approvalReminders(), requestsInbox(), chargesCard())),
+    homeRow([nowCard, todayCard], [approvalReminders(), requestsInbox(), chargesCard()]),
     homeHead('Semana', 'O que sai e o que falta planejar'),
     h('div', { class: 'home-kpis' }, ...opsTiles),
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, weekCard), h('div', { class: 'home-col' }, planCard, upcomingDatesCard())),
+    homeRow([weekCard], [planCard, upcomingDatesCard()]),
     team,
     ...(monthBlock || [])].filter(Boolean);
+}
+// Duas colunas que terminam na mesma altura (o último quadro de cada coluna estica);
+// se um lado não tiver nada, o outro ocupa a largura toda.
+function homeRow(left, right) {
+  const l = left.filter(Boolean), r = right.filter(Boolean);
+  if (!l.length && !r.length) return null;
+  if (!l.length || !r.length) return h('div', { class: 'home-grid single' }, h('div', { class: 'home-col' }, ...(l.length ? l : r)));
+  return h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, ...l), h('div', { class: 'home-col' }, ...r));
 }
 const homeHead = (title, sub) => h('div', { class: 'home-head' }, h('h2', {}, title), sub ? h('span', { class: 'muted' }, sub) : null);
 // ───────────────────────── equipe de IA: escritório ao vivo + missões da semana
@@ -336,4 +344,4 @@ function settingsDevice() {
         h('span', { class: 'hint muted' }, 'Abre em tela cheia, com ícone próprio, como um aplicativo.')))];
 }
 
-export { viewHome, homeHead, weekRange, teamSection, kpi, alertRow, shiftDay, postDaysOf, dismissedDates, commemorativeAlerts, upcomingDatesCard, pushSupported, isStandalone, isIOS, b64ToBytes, deviceName, loadPushState, enablePush, disablePush, pushControls, pushPrompt, settingsDevice };
+export { homeRow, viewHome, homeHead, weekRange, teamSection, kpi, alertRow, shiftDay, postDaysOf, dismissedDates, commemorativeAlerts, upcomingDatesCard, pushSupported, isStandalone, isIOS, b64ToBytes, deviceName, loadPushState, enablePush, disablePush, pushControls, pushPrompt, settingsDevice };
