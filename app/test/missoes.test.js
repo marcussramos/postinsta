@@ -30,11 +30,11 @@ test('entregas do contrato, mensalidades e follow-ups', () => {
     leads: [{ stage: 'novo', wants_contact: true }, { stage: 'contato', next_action_at: '2026-10-20' }, { stage: 'fechado' }, { stage: 'proposta', next_action_at: '2026-10-10' }],
   });
   const by = Object.fromEntries(list.map((x) => [x.id, x]));
-  assert.equal(by['entregas:Annielly'].t, 'Entregas de outubro · Annielly');
-  assert.deepEqual([by['entregas:Annielly'].n, by['entregas:Annielly'].total], [5, 12]);
-  assert.equal(by['entregas:Sem cota'], undefined);
-  assert.deepEqual([by['entregas:Passou'].n, by['entregas:Passou'].total], [12, 12]);
-  assert.ok(isDone(by['entregas:Passou']));
+  // uma missão só para as entregas, com o detalhe por cliente (quem não tem cota fica de fora; quem passou conta até a cota)
+  assert.equal(by.entregas.t, 'Entregas de outubro');
+  assert.deepEqual([by.entregas.n, by.entregas.total, by.entregas.s], [17, 24, 'plan']);
+  assert.deepEqual(by.entregas.parts.map((x) => [x.client, x.n, x.total]), [['Annielly', 5, 12], ['Passou', 12, 12]]);
+  assert.ok(!isDone(by.entregas));
   assert.deepEqual([by.fin.n, by.fin.total, by.fin.s], [2, 3, 'fin']);
   assert.deepEqual([by.followups.n, by.followups.total, by.followups.s], [1, 3, 'ven']);
 });

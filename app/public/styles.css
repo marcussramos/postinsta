@@ -923,3 +923,13 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .ms-t { font-size: 14px; min-width: 0; }
 .ms-who { font-size: 12px; }
 .ms.done .ms-t { color: var(--muted); text-decoration: line-through; }
+.ms-parts summary, .ms-done summary { cursor: pointer; font-size: 12.5px; color: var(--gold); width: fit-content; }
+.ms-parts { display: grid; gap: 6px; }
+.ms-parts[open] { padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.ms-part { display: grid; grid-template-columns: minmax(0, 1fr) 70px auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.ms-part-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-done { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ms-done summary { font-size: 13px; }
+.home-team { align-items: stretch; }
+.missions-card { align-content: start; }
+.missions-card > p:last-child { margin-top: auto !important; }

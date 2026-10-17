@@ -2609,18 +2609,23 @@ function teamSection(today, month, newReqs) {
   const office = officeCard({ load, missions, describe });
 
   const lv = weekLevel(missions);
-  const sorted = [...missions].sort((a, b) => isDone(a) - isDone(b));
+  const open = missions.filter((m) => !isDone(m)), done = missions.filter(isDone);
+  const pct = (m) => Math.round((Math.min(m.n, m.total) / m.total) * 100);
+  const row = (m) => h('div', { class: `ms${isDone(m) ? ' done' : ''}` },
+    h('div', { class: 'ms-row' }, h('span', { class: 'ms-t' }, m.t), h('span', { class: 'mono muted' }, `${m.n}/${m.total}`)),
+    h('div', { class: 'dl-bar' }, h('span', { style: `width:${pct(m)}%` })),
+    h('span', { class: 'muted ms-who' }, `${AGENTS[m.s]?.pessoa || ''} · ${isDone(m) ? 'concluída' : `vale ${missionXp({ n: 1, total: 1 })} XP`}`),
+    m.parts?.length > 1 ? h('details', { class: 'ms-parts' }, h('summary', {}, `Ver os ${m.parts.length} clientes`),
+      ...[...m.parts].sort((a, b) => a.n / a.total - b.n / b.total).map((x) => h('div', { class: 'ms-part' },
+        h('span', { class: 'ms-part-n' }, x.client), h('div', { class: 'dl-bar' }, h('span', { style: `width:${pct(x)}%` })), h('span', { class: 'mono muted' }, `${x.n}/${x.total}`)))) : null);
   const missionsCard = h('section', { class: 'card missions-card' },
     h('div', { class: 'home-card-head' }, h('h3', {}, 'Missões da semana'), h('span', { class: 'muted', style: 'font-size:13px' }, `${lv.done} de ${missions.length} concluídas`)),
     h('div', { class: 'ms-level' },
       h('div', { class: 'ms-row' }, h('span', { class: 'eyebrow' }, `Nível ${lv.level} · ${lv.title}`), h('span', { class: 'muted mono', style: 'font-size:12px' }, `${lv.xp} XP`)),
       h('div', { class: 'dl-bar ms-xp' }, h('span', { style: `width:${Math.round((lv.into / lv.next) * 100)}%` }))),
-    missions.length ? h('div', { class: 'ms-list' }, ...sorted.map((m) => h('div', { class: `ms${isDone(m) ? ' done' : ''}` },
-      h('div', { class: 'ms-row' }, h('span', { class: 'ms-t' }, m.t), h('span', { class: 'mono muted' }, `${m.n}/${m.total}`)),
-      h('div', { class: 'dl-bar' }, h('span', { style: `width:${Math.round((Math.min(m.n, m.total) / m.total) * 100)}%` })),
-      h('span', { class: 'muted ms-who' }, `${AGENTS[m.s]?.pessoa || ''} · ${isDone(m) ? 'concluída' : `vale ${missionXp({ n: m.total, total: m.total })} XP`}`))))
-      : h('p', { class: 'muted', style: 'margin:0' }, 'As missões aparecem quando houver posts marcados nesta semana.'),
-    h('p', { class: 'muted', style: 'margin:0;font-size:12.5px' }, 'Nada é marcado à mão: cada post produzido, aprovado e publicado, cada mensalidade paga e cada follow-up em dia avança a missão de quem cuida dele.'));
+    missions.length ? h('div', { class: 'ms-list' }, ...open.map(row)) : h('p', { class: 'muted', style: 'margin:0' }, 'As missões aparecem quando houver posts marcados nesta semana.'),
+    done.length ? h('details', { class: 'ms-done' }, h('summary', {}, `${done.length} ${done.length > 1 ? 'missões concluídas' : 'missão concluída'}`), h('div', { class: 'ms-list' }, ...done.map(row))) : null,
+    h('p', { class: 'muted', style: 'margin:0;font-size:12px' }, 'Avançam sozinhas com o trabalho no app.'));
   return h('div', { class: 'home-team' }, office, missionsCard);
 }
 const kpi = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:12.5px' }, sub));

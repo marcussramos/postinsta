@@ -23,10 +23,9 @@ export function weekMissions({ weekPosts = [], deliveries = [], billing = [], le
     const sent = weekPosts.filter((p) => SENT.includes(p.status));
     if (sent.length) list.push({ id: 'aprov', s: 'atd', t: 'Aprovações da semana', n: count(sent, (p) => APPROVED.includes(p.status)), total: sent.length });
   }
-  for (const d of deliveries) {
-    if (!d.quota) continue;
-    list.push({ id: `entregas:${d.client}`, s: 'plan', t: `Entregas de ${monthName} · ${d.client}`, n: Math.min(d.planned || 0, d.quota), total: d.quota });
-  }
+  // entregas do contrato: uma missão só, somando os clientes (o detalhe por cliente vai em parts)
+  const parts = deliveries.filter((d) => d.quota).map((d) => ({ client: d.client, n: Math.min(d.planned || 0, d.quota), total: d.quota }));
+  if (parts.length) list.push({ id: 'entregas', s: 'plan', t: `Entregas de ${monthName}`, n: parts.reduce((x, d) => x + d.n, 0), total: parts.reduce((x, d) => x + d.total, 0), parts });
   if (billing.length) list.push({ id: 'fin', s: 'fin', t: `Receber as mensalidades de ${monthName}`, n: count(billing, (b) => b.status === 'paid' || b.status === 'waived'), total: billing.length });
   const active = leads.filter((l) => !['fechado', 'perdido'].includes(l.stage));
   if (active.length) {
