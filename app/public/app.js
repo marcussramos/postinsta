@@ -598,6 +598,7 @@ function boardCard(p, col) {
         h('span', { class: 'tlabel', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, clientName(p.client_id)),
         fmt ? h('span', { class: 'tlabel fmt' }, fmt) : null,
         (p.notes || '').startsWith('✨') ? h('span', { class: 'tlabel ia', title: 'Planejado com IA' }, '✨ IA') : null,
+        (p.notes || '').startsWith('💡 Ideia sugerida pelo cliente') ? h('span', { class: 'tlabel ia', title: 'Sugerida pelo cliente na área do cliente' }, '💡 Do cliente') : null,
         scriptBadge(p)),
       h('div', { class: 'ttitle' }, postLabel(p)),
       p.status === 'changes_requested' && (p.client_feedback || p.feedback_audio) ? h('div', { class: 'tnote' }, p.feedback_audio ? '🎤 ' : '', p.client_feedback && p.client_feedback !== '🎤 Pedido por áudio' ? `“${p.client_feedback}”` : 'Ajuste pedido por áudio') : null,
@@ -606,7 +607,7 @@ function boardCard(p, col) {
         dateBadge,
         p.status === 'publishing' ? h('span', { class: 'tbadge soon' }, 'Publicando…') : null,
         p.caption ? h('span', { class: 'tbadge', title: 'Tem legenda' }, '≡') : null,
-        p.notes && !(p.notes || '').startsWith('✨') ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
+        p.notes && !/^(✨|💡 Ideia sugerida pelo cliente)/.test(p.notes) ? h('span', { class: 'tbadge', title: 'Tem notas da equipe' }, '✎') : null,
         h('span', { class: 'tavatar', style: `--lc:${clientColor(p.client_id)}`, title: clientName(p.client_id) }, initials(clientName(p.client_id)))),
       col.next || col.open || p.status === 'changes_requested' ? h('div', { class: 'tcard-act' },
         col.open && can('conteudo') ? h('button', { class: 'tnext', type: 'button', onclick: () => openPost(p) }, `${col.open} →`) : null,
@@ -2132,6 +2133,7 @@ function openPortal(c) {
         c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, portalMessage(c)), target: '_blank', rel: 'noopener' }, 'Enviar por WhatsApp') : null,
         c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, `Sua área do cliente · ${c.name}`, portalMessage(c)) }, 'Enviar por e-mail') : null),
       onboardingBox(c),
+      portalEditBox(c),
       h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Segurança'),
         h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Se o link vazou ou o contrato terminou, gere um novo (o antigo para de abrir) ou desative.'),
         h('div', { class: 'actions' },
@@ -2141,8 +2143,26 @@ function openPortal(c) {
   const close = drawer(`Link do cliente · ${c.name}`, body, foot);
 }
 
+// Liga/desliga, por cliente, a edição do calendário pela área do cliente
+function portalEditBox(c) {
+  const box = h('label', { class: 'card', style: 'gap:8px;padding:14px;cursor:pointer' });
+  const input = h('input', { type: 'checkbox', disabled: true });
+  const draw = () => box.replaceChildren(
+    h('div', { style: 'display:flex;gap:10px;align-items:center' }, input, h('b', {}, 'Cliente pode reorganizar o calendário')),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Ele arrasta os posts para outro dia (até 48h antes) e sugere ideias em dias livres. As ideias entram como "Ideia" no Fluxo, não contam na cota, e só ele pode apagar as que sugeriu. Cada mudança avisa você e fica no histórico.'));
+  draw();
+  api('/api/pasta?r=portaledit').then((r) => { input.checked = r.clients.includes(c.id); input.disabled = false; }).catch(() => {});
+  input.addEventListener('change', async () => {
+    input.disabled = true;
+    try { await api('/api/pasta?r=portaledit', { method: 'PUT', body: { client_id: c.id, enabled: input.checked } }); toast(input.checked ? 'Calendário liberado para o cliente.' : 'Calendário só para leitura.'); }
+    catch (e) { input.checked = !input.checked; toast(e.message, true); }
+    input.disabled = false;
+  });
+  return box;
+}
+
 // ───────────────────────── histórico de aprovações (prova)
-const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };
+const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia' };
 const EVENT_TONE = { approved: 'st-approved', changes_requested: 'st-changes_requested', published: 'st-published', failed: 'st-failed', approved_by_agency: 'st-internal_review', sent: 'st-pending_approval', reminded: 'st-draft' };
 function folderHistory(c) {
   const F = S.folder;

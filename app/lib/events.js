@@ -13,6 +13,9 @@ export const EVENT_LABEL = {
   script_sent: 'Roteiro enviado para aprovação',
   script_approved: 'Roteiro aprovado pelo cliente',
   script_changes: 'Cliente pediu ajuste no roteiro',
+  client_moved: 'Cliente mudou a data',
+  client_idea: 'Cliente sugeriu uma ideia',
+  client_idea_removed: 'Cliente retirou a ideia',
 };
 
 export function snapshot(p) {

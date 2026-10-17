@@ -5,7 +5,7 @@ import payments from '../lib/pasta/payments.js';
 import settings from '../lib/pasta/settings.js';
 import contract from '../lib/pasta/contract.js';
 import reports, { publicReport } from '../lib/pasta/reports.js';
-import portal from '../lib/pasta/portal.js';
+import portal, { portalEditRoute } from '../lib/pasta/portal.js';
 import users from '../lib/pasta/users.js';
 import proposals, { publicProposal } from '../lib/pasta/proposals.js';
 import pix, { asaasWebhook } from '../lib/pasta/pix.js';
@@ -24,7 +24,7 @@ const ROUTES = {
   files, payments, settings, contract, reports, report: publicReport, portal, users, proposals, proposal: publicProposal, pix, asaas: asaasWebhook,
   deliveries: deliveriesRoute, history: historyRoute, brand: brandRoute, requests: requestsRoute, feed: feedRoute, besttime: besttimeRoute,
   plan: planRoute, snippets: snippetsRoute, media: mediaRoute, duplicate: duplicateRoute,
-  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute,
+  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute, portaledit: portalEditRoute,
 };
 
 export default function handler(req, res) {
