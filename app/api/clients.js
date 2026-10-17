@@ -4,6 +4,10 @@ import { requireAdmin, requireStaff, requirePerm, can, seesClient, needClient, r
 import { db, storage, docs } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
+import { getState, setState } from '../lib/appstate.js';
+
+// Conta própria da agência (ex.: o perfil da MC DIGITAL): continua com posts, mas fica fora de receita, cobranças e contagem de clientes
+const ownList = async () => { const v = await getState('own_accounts', []); return Array.isArray(v) ? v : []; };
 
 function cleanClient(input) {
   const out = {};
@@ -95,7 +99,8 @@ export default route({
   GET: async (req, res) => {
     const u = await requireStaff(req);
     const rows = (await db.select('clients', { select: '*', order: 'name.asc' })).filter((c) => seesClient(u, c.id));
-    send(res, 200, rows.map((c) => (can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl()))));
+    const own = new Set(await ownList());
+    send(res, 200, rows.map((c) => ({ ...(can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl())), own: own.has(c.id) })));
   },
 
   POST: async (req, res) => {
@@ -124,9 +129,15 @@ export default route({
       if (body.portal === 'regenerate' || !cur?.portal_token) patch.portal_token = randomToken();
     } else if (body.portal === 'disable') patch.portal_token = null;
     if (body.disconnect_instagram) Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null });
-    const [row] = await db.update('clients', { id: `eq.${id}` }, patch);
+    const [row] = Object.keys(patch).length ? await db.update('clients', { id: `eq.${id}` }, patch) : await db.select('clients', { select: '*', id: `eq.${id}` });
     need(row, 404, 'Cliente não encontrado.');
-    send(res, 200, can(u, 'financeiro') ? publicClient(row, appUrl()) : teamClient(row, appUrl()));
+    let own = new Set(await ownList());
+    if (body.own_account !== undefined) {
+      need(can(u, 'clientes'), 403, 'Sem permissão para editar o cadastro do cliente.');
+      if (body.own_account) own.add(row.id); else own.delete(row.id);
+      await setState('own_accounts', [...own]);
+    }
+    send(res, 200, { ...(can(u, 'financeiro') ? publicClient(row, appUrl()) : teamClient(row, appUrl())), own: own.has(row.id) });
   },
 
   DELETE: async (req, res) => {

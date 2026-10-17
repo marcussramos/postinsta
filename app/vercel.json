@@ -18,6 +18,12 @@
       "includeFiles": "pages/*.html"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 12 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

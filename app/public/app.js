@@ -960,11 +960,11 @@ function openPost(post = null, opts = {}) {
         sc.status === 'sent' ? 'Reenviar roteiro ao cliente' : sc.status === 'changes' ? 'Mandar roteiro de novo para aprovar' : 'Enviar roteiro para o cliente aprovar') : null);
   }
   async function uploadScriptFor(p, f) {
-    const up = await api(`/api/pasta?r=files&client=${p.client_id}&category=other`, { method: 'POST', raw: f, headers: { 'x-file-name': encodeURIComponent(f.name) } });
+    const up = await uploadDoc({ id: p.client_id }, f, 'other');
     return api('/api/pasta?r=script', { method: 'PUT', body: { post_id: p.id, script: { file: { id: up.id } } } });
   }
   async function attachScript(f) {
-    if (f.size > 4 * 1024 * 1024) return toast('Arquivo grande demais (máx. 4 MB). Exporte o PDF menor e tente de novo.', true);
+    if (f.size > 50 * 1024 * 1024) return toast('Arquivo grande demais (máx. 50 MB). Exporte o PDF menor e tente de novo.', true);
     if (isNew) { pendingScript = f; drawScriptBox(); return; }
     toast('Enviando o roteiro…');
     try { const saved = await uploadScriptFor(post, f); Object.assign(post, { script: saved.script }); upsert(saved, false); drawScriptBox(); toast(post.script.status === 'draft' ? 'Roteiro anexado. Só a equipe vê até você enviar ao cliente.' : 'Roteiro anexado.'); }
@@ -1453,12 +1453,14 @@ function openClient(c = null) {
   const name = h('input', { type: 'text', id: 'c-name', value: c?.name || '', placeholder: 'Ex.: Padaria Pão Quente', required: true });
   const wa = h('input', { type: 'tel', id: 'c-wa', value: c?.contact_whatsapp ? c.contact_whatsapp.replace(/^55/, '') : '', placeholder: '65 99999-9999', inputmode: 'tel' });
   const email = h('input', { type: 'email', id: 'c-email', value: c?.contact_email || '', placeholder: 'cliente@empresa.com.br' });
+  const own = h('input', { type: 'checkbox', id: 'c-own', checked: Boolean(c?.own) });
   const voice = h('textarea', { id: 'c-voice', style: 'min-height:90px', placeholder: 'Ex.: Linguagem jovem e de rua, gírias de funk, frases curtas de atitude. Nada de palavrão. Público 18–30.' }, c?.brand_voice || '');
   const body = [
     h('div', { class: 'field' }, h('label', { for: 'c-name' }, 'Nome do cliente'), name),
     h('div', { class: 'field' }, h('label', { for: 'c-wa' }, 'WhatsApp de quem aprova'), wa, h('span', { class: 'hint' }, 'Com DDD. Usado no botão de WhatsApp.')),
     h('div', { class: 'field' }, h('label', { for: 'c-email' }, 'E-mail de quem aprova'), email, h('span', { class: 'hint' }, 'Usado no botão de e-mail.')),
     h('div', { class: 'field' }, h('label', { for: 'c-voice' }, 'Tom de voz da marca'), voice, h('span', { class: 'hint' }, 'A IA usa isto para escrever legendas no jeito da marca.')),
+    h('label', { class: 'check-row' }, own, h('span', {}, h('b', {}, 'Conta própria da agência'), h('span', { class: 'hint', style: 'display:block' }, 'Ex.: o perfil da própria agência. Continua com posts e calendário, mas fica fora da receita, das cobranças e da contagem de clientes.'))),
   ];
   if (c) {
     body.push(h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Instagram'),
@@ -1471,7 +1473,7 @@ function openClient(c = null) {
       h('div', { class: 'actions' }, confirmButton('Gerar link novo', 'Confirmar: o antigo deixa de abrir', async () => { await saveClient({ new_approval_link: true }); toast('Link novo gerado.'); }, 'btn sm'))));
   }
   async function saveClient(extra = {}) {
-    const payload = { name: name.value, contact_whatsapp: wa.value, contact_email: email.value, brand_voice: voice.value, ...extra };
+    const payload = { name: name.value, contact_whatsapp: wa.value, contact_email: email.value, brand_voice: voice.value, own_account: own.checked, ...extra };
     try {
       const saved = c ? await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: payload }) : await api('/api/clients', { method: 'POST', body: payload });
       const i = S.clients.findIndex((x) => x.id === saved.id);
@@ -1921,7 +1923,7 @@ function chargesCard() {
   if (!can('financeiro')) return null;
   ensureSettings();
   const rows = [];
-  for (const c of S.clients) {
+  for (const c of S.clients.filter((x) => !x.own)) {
     if (!c.billing_start) continue;
     const list = dueSoon(billingMonths(c), todayLocal());
     const late = list.filter((p) => p.status === 'late'), soon = list.filter((p) => p.status !== 'late');
@@ -1968,7 +1970,7 @@ function openPayment(c, m, parcel) {
       h('div', { class: 'field' }, h('label', { for: 'p-date' }, 'Data do pagamento'), paidAt),
       h('div', { class: 'field' }, h('label', { for: 'p-amount' }, 'Valor recebido (R$)'), amount)),
     h('div', { class: 'field' }, h('label', { for: 'p-file' }, p?.file_id ? 'Trocar comprovante (opcional)' : 'Comprovante (opcional)'), file,
-      h('span', { class: 'hint' }, 'PDF ou print do PIX/boleto, até 4 MB. Fica guardado na pasta do cliente.')));
+      h('span', { class: 'hint' }, 'PDF ou print do PIX/boleto, até 50 MB. Fica guardado na pasta do cliente.')));
   const waiveFields = h('div', {}, allWaive);
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Situação' },
     ...[['paid', 'Pago'], ['waived', 'Isento / cortesia']].map(([k, l]) => h('button', { class: 'seg-btn', type: 'button', 'aria-pressed': String(status === k),
@@ -2090,10 +2092,23 @@ function folderOther(c) {
 }
 
 async function uploadDoc(c, file, category, refMonth) {
-  if (file.size > 4 * 1024 * 1024) throw new Error(`"${file.name}" tem mais de 4 MB. Comprima e tente de novo.`);
   const qs = new URLSearchParams({ client: c.id, category });
   if (refMonth) qs.set('ref_month', refMonth);
-  return api(`/api/pasta?r=files&${qs}`, { method: 'POST', raw: file, headers: { 'x-file-name': encodeURIComponent(file.name) } });
+  if (file.size <= 4 * 1024 * 1024) return api(`/api/pasta?r=files&${qs}`, { method: 'POST', raw: file, headers: { 'x-file-name': encodeURIComponent(file.name) } });
+  // acima de 4 MB (até 50 MB): o navegador envia direto ao armazenamento e depois registra na pasta
+  if (file.size > 50 * 1024 * 1024) throw new Error(`"${file.name}" tem mais de 50 MB. Comprima e tente de novo.`);
+  const sig = await api(`/api/pasta?r=files&${qs}&big=1`, { method: 'POST', body: { name: file.name, size: file.size } });
+  await new Promise((ok, bad) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', sig.upload_url);
+    x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    x.setRequestHeader('x-upsert', 'false');
+    x.upload.onprogress = (e) => { if (e.lengthComputable) toast(`Enviando "${file.name}"… ${Math.round((e.loaded / e.total) * 100)}%`); };
+    x.onload = () => (x.status < 300 ? ok() : bad(new Error(x.status === 413 ? 'Arquivo grande demais para o armazenamento (máx. 50 MB).' : `Falha ao enviar o arquivo (${x.status}).`)));
+    x.onerror = () => bad(new Error('Sem conexão ao enviar o arquivo.'));
+    x.send(file);
+  });
+  return api(`/api/pasta?r=files&${qs}&confirm=1`, { method: 'POST', body: { path: sig.path, name: file.name, size: file.size } });
 }
 
 const FILE_ICON = (f) => (f.mime === 'application/pdf' ? 'PDF' : f.mime.startsWith('image/') ? 'IMG' : /sheet|excel|csv/.test(f.mime) ? 'XLS' : /word/.test(f.mime) ? 'DOC' : 'TXT');
@@ -2469,52 +2484,20 @@ function viewHome() {
       h('a', { class: 'btn', href: '#fluxo' }, 'Fluxo'),
       can('vendas') ? h('button', { class: 'btn', onclick: () => openProposal() }, '+ Proposta') : null));
 
-  // números
-  const tiles = [];
-  if (can('financeiro')) {
-    let mrr = 0, received = 0, toReceive = 0, late = 0, active = 0;
-    const parts = [], missing = [], future = [];
-    for (const c of S.clients) {
-      if (!c.billing_start || !c.monthly_fee_cents) { if (c.monthly_fee_cents || c.billing_start || c.contract_data) missing.push(c.name); continue; }
-      if (c.billing_start.slice(0, 10) <= today) { mrr += c.monthly_fee_cents; active++; parts.push(`${c.name} ${brl(c.monthly_fee_cents)}`); }
-      else future.push(`${c.name} começa ${fmtDay(c.billing_start.slice(0, 10))}`);
-      for (const m of billingMonths(c)) {
-        late += m.late_cents;
-        if (m.month === month) { received += m.parcels.filter((p) => p.status === 'paid').reduce((x, p) => x + (p.cents || 0), 0); toReceive += m.open_cents - m.late_cents; }
-      }
-    }
-    tiles.push(
-      kpi('Receita mensal', brl(mrr), [
-        active <= 4 && parts.length ? parts.join(' · ') : `${active} contrato${active === 1 ? '' : 's'} ativo${active === 1 ? '' : 's'}`,
-        future.length ? ` · fora da conta: ${future.join(', ')}` : '',
-        missing.length ? ` · sem valor ou início: ${missing.join(', ')}` : '',
-      ].join(''), missing.length ? 'warn' : ''),
-      kpi(`Recebido em ${monthLabel(month, true)}`, brl(received), 'parcelas marcadas como pagas', 'good'),
-      kpi('A receber no mês', brl(toReceive), 'ainda no prazo'),
-      kpi('Em atraso', late ? brl(late) : 'Nada', late ? 'veja Cobranças abaixo' : 'tudo em dia', late ? 'bad' : 'good'));
-  }
-  tiles.push(
-    kpi('Publicações hoje', String(todays.length), `${week.length} nos próximos 7 dias`),
-    kpi('Aguardando clientes', String(waiting), 'posts para aprovar', waiting ? 'warn' : ''),
-    kpi('Pedidos novos', String(newReqs), 'vindos da área do cliente', newReqs ? 'warn' : ''),
-    kpi('Clientes', `${S.clients.length}`, `${S.clients.filter((c) => c.ig_connected).length} com Instagram conectado`));
+  const clients = S.clients.filter((c) => !c.own); // conta própria da agência fica fora de números e cobranças
 
-  // hoje
-  const todayCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Hoje'), h('a', { href: '#agenda', class: 'muted' }, 'Agenda completa →')),
-    todays.length ? h('div', { class: 'home-today' }, ...todays.map((p) => h('button', { class: 'ht', onclick: () => openPost(p) },
-      thumb(p, 'ht-img'), h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
-      h('span', { class: 'ht-main' }, h('b', {}, clientName(p.client_id)), ' ', typeBadge(p), h('span', { class: 'muted ht-cap' }, p.title || p.caption || '')),
-      h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]))))
-      : h('p', { class: 'muted', style: 'margin:0' }, 'Nada programado para hoje. Que tal adiantar a semana?'));
-
-  // atenção
+  // ── 1. RESOLVA AGORA: o que trava publicação, cliente esperando, dinheiro atrasado
   const alerts = [];
   const failed = S.posts.filter((p) => p.status === 'failed');
   if (failed.length) alerts.push(alertRow('bad', `${failed.length} post${failed.length > 1 ? 's' : ''} não publicou`, 'Abra e tente de novo', () => openPost(failed[0])));
+  const lastRun = S.setup?.publisher_last_run ? Date.now() - new Date(S.setup.publisher_last_run).getTime() : null;
+  if (S.role === 'admin' && lastRun != null && lastRun > 30 * 60e3) alerts.push(alertRow('bad', `Agendador automático parado há ${lastRun > 2 * 3600e3 ? `${Math.round(lastRun / 3600e3)} h` : `${Math.round(lastRun / 60e3)} min`}`, 'Posts aprovados não estão saindo. Confira em Ajustes', null, '#ajustes'));
+  const noIg = S.clients.filter((c) => !c.ig_connected);
+  if (noIg.length) alerts.push(alertRow('bad', noIg.length === S.clients.length ? 'Nenhum cliente com Instagram conectado' : `${noIg.length} cliente${noIg.length > 1 ? 's' : ''} sem Instagram conectado`,
+    `Nada deles é publicado sozinho: ${noIg.map((c) => c.name).join(', ')}`, null, '#clientes'));
   for (const c of S.clients) {
-    const exp = c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 864e5) : null;
-    if (!c.ig_connected) alerts.push(alertRow('warn', `${c.name}: Instagram não conectado`, 'Sem conexão, nada publica', null, `#clientes`));
-    else if (exp !== null && exp <= 5) alerts.push(alertRow('warn', `${c.name}: conexão do Instagram vence em ${Math.max(0, exp)} dia(s)`, 'Reconecte', null, '#clientes'));
+    const exp = c.ig_connected && c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 864e5) : null;
+    if (exp !== null && exp <= 5) alerts.push(alertRow('warn', `${c.name}: conexão do Instagram vence em ${Math.max(0, exp)} dia(s)`, 'Reconecte', null, '#clientes'));
   }
   if (can('vendas') && Array.isArray(S.proposals)) {
     for (const p of S.proposals.filter((x) => x.status === 'accepted' && x.accepted_at && Date.now() - new Date(x.accepted_at) < 10 * 864e5)) {
@@ -2529,26 +2512,83 @@ function viewHome() {
     for (const l of due.slice(0, 4)) alerts.push(alertRow(l.wants_contact ? 'bad' : 'warn', `${l.wants_contact ? '🔥 ' : ''}Follow-up: ${l.name}${l.instagram ? ` (@${l.instagram})` : ''}`, l.next_action || 'Retomar o contato', () => openLead(l)));
     if (due.length > 4) alerts.push(alertRow('', `+${due.length - 4} follow-ups para hoje`, 'Veja em Vendas', null, '#vendas'));
   }
-  const dAlerts = commemorativeAlerts();
-  for (const a of dAlerts.slice(0, 6)) alerts.push(alertRow(a.in_days <= 5 ? 'warn' : '', `${a.name} em ${a.in_days} dia${a.in_days > 1 ? 's' : ''} — sem post planejado para ${a.client}`, `${fmtDay(a.date)} · clique para criar a ideia`, () => openPost(null, { client: a.client_id, date: shiftDay(a.date, a.in_days > 1 ? -1 : 0), title: a.name, stage: 'idea' })));
-  if (dAlerts.length > 6) alerts.push(alertRow('', `+${dAlerts.length - 6} datas comemorativas sem post`, 'Veja no calendário', null, '#calendario'));
-  const attention = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
-    alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Tudo certo por aqui ✓'));
+  const nowCard = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
+    alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Nada travado por aqui ✓'));
+  const todayCard = todays.length ? h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Sai hoje'), h('a', { href: '#agenda', class: 'muted' }, 'Agenda →')),
+    h('div', { class: 'home-today' }, ...todays.map((p) => h('button', { class: 'ht', onclick: () => openPost(p) },
+      thumb(p, 'ht-img'), h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
+      h('span', { class: 'ht-main' }, h('b', {}, clientName(p.client_id)), ' ', typeBadge(p), h('span', { class: 'muted ht-cap' }, p.title || p.caption || '')),
+      h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]))))) : null;
 
-  // reajustes (aniversário do contrato)
-  let reaj = null;
+  // ── 2. SEMANA: o que sai nos próximos 7 dias e o que falta planejar
+  const opsTiles = [
+    kpi('Próximos 7 dias', String(week.length), week.length ? `${week.filter((p) => p.status === 'approved').length} já aprovado(s)` : 'nada marcado ainda', week.length ? '' : 'warn'),
+    kpi('Aguardando clientes', String(waiting), waiting ? 'posts esperando aprovação' : 'nenhum pendente', waiting ? 'warn' : ''),
+    newReqs ? kpi('Pedidos novos', String(newReqs), 'vindos da área do cliente', 'warn') : null,
+    kpi('Clientes', String(clients.length), `${clients.filter((c) => c.ig_connected).length} com Instagram conectado`, clients.some((c) => !c.ig_connected) ? 'warn' : ''),
+  ].filter(Boolean);
+  const days = [...Array(7)].map((_, i) => shiftDay(today, i + 1));
+  const weekCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Próximos 7 dias'), h('a', { href: '#calendario', class: 'muted' }, 'Calendário →')),
+    h('div', { class: 'week-list' }, ...days.map((d) => {
+      const list = posts.filter((p) => p.status !== 'idea' && dayKey(p.scheduled_at, S.tz) === d);
+      const pend = list.filter((p) => ['idea', 'draft', 'internal_review', 'changes_requested'].includes(p.status)).length;
+      const appr = list.filter((p) => p.status === 'pending_approval').length;
+      const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`)).replace('.', '');
+      return h('a', { class: `week-row${list.length ? '' : ' is-free'}`, href: '#agenda' },
+        h('span', { class: 'week-day mono' }, `${wd} ${fmtDay(d).slice(0, 5)}`),
+        h('span', { class: 'week-main' }, list.length ? `${list.length} post${list.length > 1 ? 's' : ''} · ${[...new Set(list.map((p) => clientName(p.client_id)))].join(', ')}` : 'livre'),
+        pend ? h('span', { class: 'pill st-draft' }, `${pend} em produção`) : appr ? h('span', { class: 'pill st-pending_approval' }, `${appr} p/ aprovar`) : list.length ? h('span', { class: 'pill st-approved' }, 'pronto') : null);
+    })));
+  const planAlerts = [];
+  const dAlerts = commemorativeAlerts();
+  for (const a of dAlerts.slice(0, 5)) planAlerts.push(alertRow(a.in_days <= 5 ? 'warn' : '', `${a.name} em ${a.in_days} dia${a.in_days > 1 ? 's' : ''}: sem post para ${a.client}`, `${fmtDay(a.date)} · clique para criar a ideia`, () => openPost(null, { client: a.client_id, date: shiftDay(a.date, a.in_days > 1 ? -1 : 0), title: a.name, stage: 'idea' })));
+  if (dAlerts.length > 5) planAlerts.push(alertRow('', `+${dAlerts.length - 5} datas comemorativas sem post`, 'Veja no calendário', null, '#calendario'));
+  const planCard = planAlerts.length ? h('section', { class: 'card' }, h('h3', {}, 'Para planejar'), h('div', { class: 'alerts' }, ...planAlerts)) : null;
+
+  // ── 3. MÊS: financeiro (fica por último; dá para esconder os valores no olhinho)
+  let monthBlock = null;
   if (can('financeiro')) {
-    const list = S.clients.filter((c) => c.billing_start && c.billing_start.slice(5, 7) === month.slice(5, 7) && c.billing_start.slice(0, 4) < month.slice(0, 4));
-    if (list.length) reaj = h('section', { class: 'card' }, h('h3', {}, 'Reajustes do mês'),
+    let mrr = 0, received = 0, toReceive = 0, late = 0, active = 0;
+    const parts = [], missing = [], future = [];
+    for (const c of clients) {
+      if (!c.billing_start || !c.monthly_fee_cents) { if (c.monthly_fee_cents || c.billing_start || c.contract_data) missing.push(c.name); continue; }
+      if (c.billing_start.slice(0, 10) <= today) { mrr += c.monthly_fee_cents; active++; parts.push(`${c.name} ${brl(c.monthly_fee_cents)}`); }
+      else future.push(`${c.name} começa ${fmtDay(c.billing_start.slice(0, 10))}`);
+      for (const m of billingMonths(c)) {
+        late += m.late_cents;
+        if (m.month === month) { received += m.parcels.filter((p) => p.status === 'paid').reduce((x, p) => x + (p.cents || 0), 0); toReceive += m.open_cents - m.late_cents; }
+      }
+    }
+    const reajList = clients.filter((c) => c.billing_start && c.billing_start.slice(5, 7) === month.slice(5, 7) && c.billing_start.slice(0, 4) < month.slice(0, 4));
+    const reaj = reajList.length ? h('section', { class: 'card' }, h('h3', {}, 'Reajustes do mês'),
       h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Contratos que fazem aniversário este mês: hora de aplicar o IPCA de 12 meses (cláusula 6.4) e avisar o cliente.'),
-      h('div', { class: 'alerts' }, ...list.map((c) => alertRow('', `${c.name} · ${Number(month.slice(0, 4)) - Number(c.billing_start.slice(0, 4))} ano(s) de contrato`, `Mensalidade atual ${brl(c.monthly_fee_cents)}`, null, `#pasta/${c.id}`))));
+      h('div', { class: 'alerts' }, ...reajList.map((c) => alertRow('', `${c.name} · ${Number(month.slice(0, 4)) - Number(c.billing_start.slice(0, 4))} ano(s) de contrato`, `Mensalidade atual ${brl(c.monthly_fee_cents)}`, null, `#pasta/${c.id}`)))) : null;
+    monthBlock = [
+      homeHead(`O mês · ${monthLabel(month)}`, null),
+      h('div', { class: 'home-kpis' },
+        kpi('Receita mensal', brl(mrr), [
+          active <= 4 && parts.length ? parts.join(' · ') : `${active} contrato${active === 1 ? '' : 's'} ativo${active === 1 ? '' : 's'}`,
+          future.length ? ` · fora da conta: ${future.join(', ')}` : '',
+          missing.length ? ` · sem valor ou início: ${missing.join(', ')}` : '',
+        ].join(''), missing.length ? 'warn' : ''),
+        kpi(`Recebido em ${monthLabel(month, true)}`, brl(received), 'parcelas marcadas como pagas', 'good'),
+        kpi('A receber no mês', brl(toReceive), 'ainda no prazo'),
+        kpi('Em atraso', late ? brl(late) : 'Nada', late ? 'veja as cobranças acima' : 'tudo em dia', late ? 'bad' : 'good')),
+      reaj];
   }
 
   if (!S.clients.length) return [hero, noClients()];
   const team = teamSection(today, month, newReqs);
-  return [hero, pushPrompt(), h('div', { class: 'home-kpis' }, ...tiles), team,
-    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, upcomingDatesCard(), reaj, approvalReminders(), requestsInbox()))].filter(Boolean);
+  return [hero, pushPrompt(),
+    homeHead('Resolva agora', 'O que trava publicação, cliente esperando e cobrança'),
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, nowCard, todayCard), h('div', { class: 'home-col' }, approvalReminders(), requestsInbox(), chargesCard())),
+    homeHead('Semana', 'O que sai e o que falta planejar'),
+    h('div', { class: 'home-kpis' }, ...opsTiles),
+    h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, weekCard), h('div', { class: 'home-col' }, planCard, upcomingDatesCard())),
+    team,
+    ...(monthBlock || [])].filter(Boolean);
 }
+const homeHead = (title, sub) => h('div', { class: 'home-head' }, h('h2', {}, title), sub ? h('span', { class: 'muted' }, sub) : null);
 // ───────────────────────── equipe de IA: escritório ao vivo + missões da semana
 // Tudo calculado do trabalho real do app; nada é marcado à mão.
 function weekRange(today) {
@@ -2565,7 +2605,7 @@ function teamSection(today, month, newReqs) {
     return parts.length ? { id: c.id, client: c.name, planned: parts.reduce((a, x) => a + (x.planned || 0), 0), quota: parts.reduce((a, x) => a + x.quota, 0) } : null;
   }).filter(Boolean);
   const billing = [];
-  if (can('financeiro')) for (const c of S.clients) { const m = billingMonths(c).find((x) => x.month === month); if (m) billing.push({ id: c.id, client: c.name, status: m.status }); }
+  if (can('financeiro')) for (const c of S.clients.filter((x) => !x.own)) { const m = billingMonths(c).find((x) => x.month === month); if (m) billing.push({ id: c.id, client: c.name, status: m.status }); }
   const leads = can('vendas') && Array.isArray(S.leads) ? S.leads : [];
   const dueLeads = leads.filter((l) => !['fechado', 'perdido'].includes(l.stage) && ((l.wants_contact && l.stage === 'novo') || (l.next_action_at && l.next_action_at <= today)));
   const missions = weekMissions({ weekPosts: inWeek.map((p) => ({ status: p.status, hasMedia: hasMedia(p) })), deliveries, billing, leads, today, monthName: monthLabel(month).split(' ')[0] });
@@ -2982,6 +3022,16 @@ function settingsMail() {
 // ───────────────────────── backup
 function settingsBackup() {
   if (S.backups === undefined) { S.backups = null; api('/api/pasta?r=backup').then((v) => { S.backups = v; }).catch(() => { S.backups = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  if (S.backupCheck === undefined) { S.backupCheck = null; api('/api/pasta?r=backup&check=1').then((v) => { S.backupCheck = v || false; }).catch(() => { S.backupCheck = false; }).finally(() => { if (S.view === 'ajustes') render(); }); }
+  const ck = S.backupCheck;
+  const checkLine = ck ? h('span', { class: ck.ok ? 'ig-ok' : 'ig-warn' }, ck.ok
+    ? `✓ Conferido ${fmtDate(ck.at, S.tz)}: o último backup abre e está inteiro (${ck.rows} registros${ck.tables?.clients != null ? `, ${ck.tables.clients} clientes` : ''})`
+    : `• Problema na conferência de ${fmtDate(ck.at, S.tz)}: ${(ck.problems || []).join(' ')}`) : null;
+  const checkBtn = h('button', { class: 'btn sm', onclick: async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Conferindo…';
+    try { S.backupCheck = await api('/api/pasta?r=backup&check=1', { method: 'POST' }); toast(S.backupCheck?.ok ? 'Backup conferido: abre e está inteiro.' : 'Encontrei um problema no backup.', !S.backupCheck?.ok); render(); }
+    catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = 'Conferir último backup'; }
+  } }, 'Conferir último backup');
   const head = h('div', { class: 'page-head', style: 'margin-top:12px' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Proteção dos dados'), h('h2', { style: 'font-size:22px' }, 'Backup')));
   const list = S.backups || [];
   const last = list[0];
@@ -2994,11 +3044,13 @@ function settingsBackup() {
     list.length ? h('div', { class: 'backup-list' }, ...list.map((b) => h('div', { class: 'backup-row' },
       h('span', {}, h('b', {}, `${fmtDate(b.at, S.tz)} ${fmtTime(b.at, S.tz)}`), h('span', { class: 'muted' }, ` · ${b.reason === 'manual' ? 'manual' : 'automático'} · ${fileSize(b.size)}`)),
       h('a', { class: 'btn sm', href: `/api/pasta?r=backup&path=${encodeURIComponent(b.path)}` }, 'Baixar')))) : null,
-    h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async (e) => {
+    checkLine,
+    h('div', { class: 'actions' }, h('button', { class: 'btn sm', onclick: async (e) => {
       e.target.disabled = true;
       try { const b = await api('/api/pasta?r=backup', { method: 'POST' }); S.backups = [b, ...(S.backups || []).filter((x) => x.path !== b.path)].slice(0, 8); toast('Backup feito.'); render(); }
       catch (err) { toast(err.message, true); e.target.disabled = false; }
-    } }, 'Fazer backup agora'),
+    } }, 'Fazer backup agora'), list.length ? checkBtn : null),
+    h('span', { class: 'hint muted' }, 'Toda semana o app também confere sozinho se o último backup abre e está inteiro, e avisa no celular se algo der errado. Para restaurar numa emergência, use o script scripts/restaurar-backup.mjs (veja o SETUP.md).'),
     h('span', { class: 'hint muted' }, 'O arquivo tem dados sensíveis (contratos, tokens do Instagram): guarde em lugar seguro e não compartilhe.'))];
 }
 

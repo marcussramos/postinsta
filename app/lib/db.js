@@ -90,6 +90,22 @@ export const docs = {
     try { await call(`/storage/v1/object/${DOCS}/${path}`, { method: 'DELETE' }); }
     catch (e) { console.warn('Não foi possível apagar o documento', path, e.message); }
   },
+  // Lê um arquivo do cofre (usado para conferir backups); JSON volta já convertido
+  async download(path) { return call(`/storage/v1/object/${DOCS}/${path}`); },
+  // Arquivo grande (acima do limite da Vercel): o navegador envia direto ao Supabase por este link
+  async signUpload(path) {
+    const r = await call(`/storage/v1/object/upload/sign/${DOCS}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const rel = r.url || r.signedURL || r.signedUrl;
+    return { path, upload_url: `${env('SUPABASE_URL')}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}` };
+  },
+  // Confere se o arquivo chegou e devolve o tamanho (null se não existe)
+  async stat(path) {
+    const i = path.lastIndexOf('/');
+    const r = await call(`/storage/v1/object/list/${DOCS}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: path.slice(0, i), search: path.slice(i + 1), limit: 5 }) });
+    const it = (Array.isArray(r) ? r : []).find((x) => x?.name === path.slice(i + 1));
+    return it ? { size: Number(it.metadata?.size ?? it.metadata?.contentLength ?? 0) } : null;
+  },
 };
 
 export const storage = {
