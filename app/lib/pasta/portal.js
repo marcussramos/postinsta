@@ -14,12 +14,24 @@ import { billingMonths } from '../billing.js';
 import { summary } from '../reports.js';
 import { loadSettings } from './settings.js';
 import { notify } from '../push.js';
+import { getState, setState } from '../appstate.js';
+import { logEvent } from '../events.js';
+import { requirePerm, needClient } from '../auth.js';
 
 const VISIBLE = ['contract', 'receipt', 'report', 'briefing', 'invoice']; // "Outros" e "Marca" ficam só para a agência
 const UPLOAD_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime' };
 // Calendário do cliente: só datas, formato, título e situação. Prévia da arte só depois que vai para aprovação.
 const CAL_GROUP = { idea: 'producao', draft: 'producao', internal_review: 'producao', changes_requested: 'ajuste', failed: 'producao', pending_approval: 'aprovar', approved: 'programado', publishing: 'programado', published: 'publicado' };
-async function calendar(c, month) {
+// Cliente reorganiza o calendário (liga/desliga por cliente na agência): move posts com 48h de antecedência
+// e sugere ideias (entram como "ideia", não contam na cota, e só ele apaga as que ele mesmo sugeriu).
+export const LEAD_MS = 48 * 3600e3;
+export const CLIENT_IDEA = '💡 Ideia sugerida pelo cliente';
+const FIXED = ['published', 'publishing'];
+export async function portalEditable(clientId) { const list = await getState('portal_edit', []); return Array.isArray(list) && list.includes(clientId); }
+const isMine = (p) => p.status === 'idea' && String(p.notes || '').startsWith(CLIENT_IDEA);
+const canMove = (p, now = Date.now()) => !FIXED.includes(p.status) && p.scheduled_at && new Date(p.scheduled_at).getTime() - now >= LEAD_MS;
+const dayLabel = (iso, tz) => new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit' }).format(new Date(iso));
+async function calendar(c, month, editable = false) {
   need(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || ''), 400, 'Mês inválido.');
   const [y, m] = month.split('-').map(Number);
   const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -32,7 +44,8 @@ async function calendar(c, month) {
     const at = new Date(p.scheduled_at);
     const art = true; // a capa aparece em qualquer etapa (inclusive em produção)
     return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status] === 'producao' && p.script?.status === 'sent' ? 'roteiro' : CAL_GROUP[p.status],
-      image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null };
+      image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null,
+      ...(editable ? { can_move: canMove(p), mine: isMine(p) } : {}), ...(isMine(p) ? { group: 'sugestao' } : {}) };
   });
 }
 
@@ -49,7 +62,7 @@ export default route({
   GET: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
-    if (q.cal) return send(res, 200, { month: q.cal, timezone: TIMEZONE(), posts: await calendar(c, q.cal) }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+    if (q.cal) { const editable = await portalEditable(c.id); return send(res, 200, { month: q.cal, timezone: TIMEZONE(), editable, lead_hours: 48, posts: await calendar(c, q.cal, editable) }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }); }
     if (q.file) {
       const f = await db.one('client_files', { select: 'path,name,category,client_id', id: `eq.${q.file}` });
       need(f && f.client_id === c.id && VISIBLE.includes(f.category), 404, 'Arquivo não encontrado.');
@@ -94,6 +107,41 @@ export default route({
   POST: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
+    if (q.move || q.idea) {
+      need(await portalEditable(c.id), 403, 'A edição do calendário não está liberada. Fale com a agência.');
+      const b = await readJson(req);
+      const tz = TIMEZONE();
+      need(/^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '')), 400, 'Escolha o dia.');
+      if (q.move) {
+        const p = await db.one('posts', { select: '*', id: `eq.${String(b.id || '')}`, client_id: `eq.${c.id}` }).catch(() => null);
+        need(p, 404, 'Post não encontrado.');
+        need(!FIXED.includes(p.status), 409, 'Esse post já foi publicado.');
+        need(canMove(p), 409, 'Esse post sai em menos de 48h e já está travado. Para mudar, fale com a agência em Pedidos.');
+        const hhmm = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(p.scheduled_at));
+        const at = zonedISO(b.day, hhmm, tz);
+        need(new Date(at).getTime() - Date.now() >= LEAD_MS, 409, 'Esse dia está perto demais: a agência precisa de pelo menos 48h. Escolha outro dia.');
+        if (new Date(at).getTime() === new Date(p.scheduled_at).getTime()) return send(res, 200, { id: p.id, scheduled_at: p.scheduled_at });
+        const [row] = await db.update('posts', { id: `eq.${p.id}`, client_id: `eq.${c.id}` }, { scheduled_at: at });
+        const note = `de ${dayLabel(p.scheduled_at, tz)} para ${dayLabel(at, tz)}`;
+        await logEvent(row, 'client_moved', note);
+        await notify({ title: `📅 ${c.name} mudou um post de dia`, body: `${row.title || 'Post'}: ${note}`, url: '/#fluxo', tag: `move-${row.id}` }).catch(() => {});
+        return send(res, 200, { id: row.id, scheduled_at: row.scheduled_at });
+      }
+      const title = String(b.title || '').trim().slice(0, 120);
+      need(title.length >= 3, 400, 'Escreva a ideia.');
+      const media_type = ['IMAGE', 'CAROUSEL', 'REELS', 'STORY'].includes(b.media_type) ? b.media_type : 'IMAGE';
+      const at = zonedISO(b.day, '19:00', tz);
+      need(new Date(at).getTime() - Date.now() >= LEAD_MS, 409, 'Esse dia está perto demais: a agência precisa de pelo menos 48h. Escolha outro dia.');
+      const open = await db.select('posts', { select: 'id,notes', client_id: `eq.${c.id}`, status: 'eq.idea' });
+      need(open.filter(isMine).length < 30, 429, 'Você já tem muitas ideias aguardando. Espere a agência responder.');
+      const details = String(b.details || '').trim().slice(0, 1500);
+      const today = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit' }).format(new Date());
+      const row = await db.insert('posts', { client_id: c.id, status: 'idea', title, media_type, scheduled_at: at, caption: '',
+        notes: `${CLIENT_IDEA} em ${today} pela área do cliente.${details ? `\n${details}` : ''}` });
+      await logEvent(row, 'client_idea', details || null);
+      await notify({ title: `💡 ${c.name} sugeriu uma ideia`, body: `${title} · ${dayLabel(at, tz)}`, url: '/#fluxo', tag: `idea-${row.id}` }).catch(() => {});
+      return send(res, 201, { id: row.id });
+    }
     if (q.pix) { // o cliente pede o Pix de uma parcela em aberto
       need(asaasReady(), 404, 'Pagamento por Pix indisponível. Fale com a agência.');
       const b = await readJson(req);
@@ -131,5 +179,39 @@ export default route({
     const row = await db.insert('requests', { client_id: c.id, text, wanted_date: b.wanted_date || null, file_ids: ids, status: 'open' });
     await notify({ title: `📩 Pedido novo de ${c.name}`, body: text.slice(0, 160), url: `/#pasta/${c.id}`, tag: `req-${row.id}` });
     send(res, 201, { id: row.id, text: row.text, wanted_date: row.wanted_date, status: row.status, created_at: row.created_at });
+  },
+
+  // O cliente apaga só a ideia que ele mesmo sugeriu, enquanto ela ainda é ideia
+  DELETE: async (req, res) => {
+    const q = query(req);
+    const c = await clientByToken(q.t);
+    need(await portalEditable(c.id), 403, 'A edição do calendário não está liberada. Fale com a agência.');
+    const p = await db.one('posts', { select: '*', id: `eq.${String(q.idea || '')}`, client_id: `eq.${c.id}` }).catch(() => null);
+    need(p && isMine(p), 404, 'Só dá para apagar as ideias que você sugeriu e que a agência ainda não começou a produzir.');
+    await logEvent(p, 'client_idea_removed');
+    await db.remove('posts', { id: `eq.${p.id}`, client_id: `eq.${c.id}` });
+    send(res, 200, { ok: true });
+  },
+});
+
+// Agência liga/desliga, por cliente, a edição do calendário pela área do cliente
+export const portalEditRoute = route({
+  GET: async (req, res) => {
+    await requirePerm(req, 'conteudo', 'financeiro');
+    const list = await getState('portal_edit', []);
+    send(res, 200, { clients: Array.isArray(list) ? list : [] });
+  },
+  PUT: async (req, res) => {
+    const u = await requirePerm(req, 'conteudo', 'financeiro');
+    const b = await readJson(req);
+    need(b.client_id, 400, 'Cliente não informado.');
+    needClient(u, b.client_id);
+    const c = await db.one('clients', { select: 'id', id: `eq.${b.client_id}` });
+    need(c, 404, 'Cliente não encontrado.');
+    const cur = await getState('portal_edit', []);
+    const set = new Set(Array.isArray(cur) ? cur : []);
+    if (b.enabled) set.add(c.id); else set.delete(c.id);
+    await setState('portal_edit', [...set]);
+    send(res, 200, { client_id: c.id, enabled: Boolean(b.enabled) });
   },
 });

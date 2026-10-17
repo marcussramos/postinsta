@@ -77,6 +77,23 @@
   .cpost .sk.thumb .sk-tag { display: none; }
   .cpost .sk.thumb .sk-art { width: 70%; max-height: 70%; }
   @media (max-width: 520px) { .cal .sk { padding: 3px; border-width: 1px; } .cal .sk-tag, .cal .sk-t, .cal .sk-line { display: none; } .cal .sk-art { width: 80%; max-height: 80%; } }
+  .cal .cv.g-sugestao { --cvc: transparent; outline: 2px dashed var(--wait); outline-offset: -2px; }
+  .g-sugestao { background: transparent; box-shadow: inset 0 0 0 2px var(--wait); }
+  .dragme { touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+  .drag-ghost { position: fixed; left: 0; top: 0; width: 60px; pointer-events: none; z-index: 60; opacity: .92; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .drag-ghost img, .drag-ghost .sk { width: 100%; display: block; }
+  .cal .d.drop { outline: 2px dashed var(--ink); outline-offset: -2px; background: var(--accent-soft); }
+  .cal .d.picking { cursor: copy; }
+  .edit-hint { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; font-size: 13.5px; color: var(--muted); }
+  .edit-hint b { color: var(--ink); }
+  .idea-form { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+  .idea-form input[type=text], .idea-form select { font: inherit; color: inherit; width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; }
+  .idea-form textarea { min-height: 70px; }
+  .idea-form .err { color: var(--bad); font-size: 13px; }
+  .cpost > .dragme { display: block; width: 56px; }
+  .cpost .lockt { font-size: 12px; color: var(--muted); }
+  .cpost .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  @media (max-width: 560px) { .cpost:has(.acts) { grid-template-columns: 56px minmax(0, 1fr); } .cpost .acts { grid-column: 1 / -1; justify-content: flex-start; } }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-day { font-weight: 700; margin-top: 6px; }
@@ -155,7 +172,8 @@ const fileUrl = (id, dl) => `/api/pasta?r=portal&t=${encodeURIComponent(t)}&file
 const LABEL = { paid: 'Pago', open: 'Em aberto', late: 'Atrasado', waived: 'Isento' };
 
 let D, tab = 'calendario';
-const CAL = { month: null, data: null, day: null, loading: false };
+const CAL = { month: null, data: null, day: null, loading: false, pick: null, form: null };
+const DRAG = { until: 0 };
 try { const s = sessionStorage.getItem('mc_cliente_tab'); if (s) tab = s; } catch { /* sem armazenamento */ }
 
 // ── Calendário: dias de post do mês (o que está em produção aparece sem a arte)
@@ -176,18 +194,84 @@ function sketchCover(p, cls = '') {
     h('span', { class: 'sk-tag' }, SK_TAG[t]), art,
     p.title ? h('span', { class: 'sk-t' }, `“${p.title}”`) : null, line);
 }
-const GROUP = { producao: 'Em produção', roteiro: 'Roteiro para aprovar', ajuste: 'Em ajuste', aprovar: 'Para você aprovar', programado: 'Programado', publicado: 'Publicado' };
+const GROUP = { sugestao: 'Sua ideia', producao: 'Em produção', roteiro: 'Roteiro para aprovar', ajuste: 'Em ajuste', aprovar: 'Para você aprovar', programado: 'Programado', publicado: 'Publicado' };
 const FMT = { IMAGE: 'Post', CAROUSEL: 'Carrossel', REELS: 'Reels', STORY: 'Story' };
 const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba' }).format(new Date());
 const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 async function loadCal(month) {
-  CAL.month = month; CAL.loading = true; CAL.day = null;
+  if (CAL.month !== month) CAL.day = null;
+  CAL.month = month; CAL.loading = true; CAL.pick = null;
   try { const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}&cal=${month}`); CAL.data = r.ok ? await r.json() : { posts: [] }; }
   catch { CAL.data = { posts: [] }; }
   CAL.loading = false;
   if (tab === 'calendario') render();
 }
+// ── Edição pelo cliente (quando a agência libera): arrastar posts (mouse e dedo), "Mudar dia" e sugerir ideia
+const LEAD = 48 * 3600e3;
+const dayOK = (iso) => Date.parse(`${iso}T19:00:00-04:00`) - Date.now() >= LEAD;
+async function portalCall(qs, method, body) {
+  const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}${qs}`, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Não deu certo. Tente de novo.'); return d;
+}
+async function movePost(p, day) {
+  CAL.pick = null;
+  if (!day || day === p.day) { render(); return; }
+  if (!p.can_move) { toast(p.group === 'publicado' ? 'Esse post já foi publicado.' : 'Esse post sai em menos de 48h e já está travado. Para mudar, fale com a agência em Pedidos.'); render(); return; }
+  try { await portalCall('&move=1', 'POST', { id: p.id, day }); toast(`Mudou para ${dmy(day).slice(0, 5)}. A agência foi avisada.`); }
+  catch (e) { toast(e.message); }
+  loadCal(CAL.month);
+}
+function dragify(el, p) {
+  el.classList.add('dragme');
+  el.querySelectorAll('img').forEach((i) => { i.draggable = false; });
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    const sx = e.clientX, sy = e.clientY; let ghost = null, over = null;
+    const mv = (ev) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        ghost = h('div', { class: 'drag-ghost' }); ghost.append((el.querySelector('img, .sk') || el).cloneNode(true)); document.body.append(ghost);
+      }
+      ev.preventDefault();
+      ghost.style.transform = `translate(${ev.clientX - 30}px, ${ev.clientY - 40}px)`;
+      const tgt = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-day]');
+      if (tgt !== over) { over?.classList.remove('drop'); over = tgt; over?.classList.add('drop'); }
+      if (ev.clientY < 70) scrollBy(0, -14); else if (ev.clientY > innerHeight - 70) scrollBy(0, 14);
+    };
+    const up = () => {
+      removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (!ghost) return;
+      ghost.remove(); over?.classList.remove('drop'); DRAG.until = Date.now() + 400;
+      if (over) movePost(p, over.dataset.day);
+    };
+    addEventListener('pointermove', mv, { passive: false }); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  });
+  return el;
+}
+function ideaForm(day) {
+  const title = h('input', { type: 'text', maxlength: '120', placeholder: 'Ex.: lançamento da coleção nova' });
+  const fmt = h('select', {}, ...Object.entries(FMT).map(([v, l]) => h('option', { value: v }, l)));
+  const det = h('textarea', { maxlength: '1500', placeholder: 'Detalhes, referência ou o que não pode faltar (opcional)' });
+  const err = h('div', { class: 'err', role: 'alert' });
+  title.addEventListener('input', () => { err.textContent = ''; });
+  const send = h('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
+    if (title.value.trim().length < 3) { err.textContent = 'Escreva a ideia primeiro.'; title.focus(); return; }
+    send.disabled = true;
+    try { await portalCall('&idea=1', 'POST', { day, title: title.value, media_type: fmt.value, details: det.value }); CAL.form = null; toast('Ideia enviada. A agência vai ver e responder.'); loadCal(CAL.month); }
+    catch (e) { err.textContent = e.message; send.disabled = false; }
+  } }, 'Enviar ideia');
+  setTimeout(() => title.focus(), 0);
+  return h('div', { class: 'idea-form' }, h('b', {}, `Sugerir ideia para ${dmy(day).slice(0, 5)}`),
+    title, h('label', { class: 'muted', style: 'display:grid;gap:4px;font-size:13px' }, 'Formato', fmt), det, err,
+    h('div', { style: 'display:flex;gap:8px' }, send, h('button', { class: 'btn sm', type: 'button', onclick: () => { CAL.form = null; render(); } }, 'Cancelar')),
+    h('span', { class: 'muted', style: 'font-size:12.5px' }, 'A sugestão entra como ideia: não conta no seu plano, e você pode apagar enquanto a agência não começar a produzir.'));
+}
+async function removeIdea(p) {
+  try { await portalCall(`&idea=${encodeURIComponent(p.id)}`, 'DELETE'); toast('Ideia apagada.'); } catch (e) { toast(e.message); }
+  loadCal(CAL.month);
+}
+
 function calendarPanel(panel) {
   if (!CAL.month) { loadCal(todayISO().slice(0, 7)); panel.append(h('div', { class: 'empty' }, 'Carregando o calendário…')); return; }
   const posts = CAL.data?.posts || [];
@@ -196,40 +280,57 @@ function calendarPanel(panel) {
   const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const today = todayISO();
+  const edit = Boolean(CAL.data?.editable);
   panel.append(h('div', { class: 'cal-head' },
     h('button', { class: 'cal-nav', type: 'button', 'aria-label': 'Mês anterior', onclick: () => loadCal(shiftMonth(CAL.month, -1)) }, '‹'),
     h('b', {}, monthName(CAL.month)),
     h('button', { class: 'cal-nav', type: 'button', 'aria-label': 'Próximo mês', onclick: () => loadCal(shiftMonth(CAL.month, 1)) }, '›')));
   if (CAL.loading) { panel.append(h('div', { class: 'empty' }, 'Carregando…')); return; }
+  if (edit) panel.append(CAL.pick
+    ? h('div', { class: 'edit-hint', role: 'status' }, h('span', {}, 'Toque no novo dia para ', h('b', {}, `“${CAL.pick.title || FMT[CAL.pick.media_type] || 'Post'}”`)), h('button', { class: 'btn sm', type: 'button', style: 'margin-left:auto', onclick: () => { CAL.pick = null; render(); } }, 'Cancelar'))
+    : h('div', { class: 'edit-hint' }, h('span', {}, h('b', {}, 'Você pode reorganizar: '), 'arraste um post para outro dia, ou toque num dia livre para sugerir uma ideia. Posts travam 48h antes de sair.')));
   const grid = h('div', { class: 'cal' }, ...WD.map((w) => h('div', { class: 'wd' }, w)));
   for (let i = 0; i < first; i++) grid.append(h('div', { class: 'd out', 'aria-hidden': 'true' }));
   for (let d = 1; d <= days; d++) {
     const iso = `${CAL.month}-${String(d).padStart(2, '0')}`;
     const list = byDay[iso] || [];
-    grid.append(h('button', { type: 'button', class: `d${iso === today ? ' today' : ''}`, 'aria-pressed': String(CAL.day === iso),
+    grid.append(h('button', { type: 'button', class: `d${iso === today ? ' today' : ''}${CAL.pick ? ' picking' : ''}`, 'aria-pressed': String(CAL.day === iso), 'data-day': edit ? iso : null,
       'aria-label': `${d} de ${monthName(CAL.month).toLowerCase()}: ${list.length ? `${list.length} post(s)` : 'sem posts'}`,
-      onclick: () => { CAL.day = CAL.day === iso ? null : iso; render(); } },
+      onclick: () => { if (Date.now() < DRAG.until) return; if (CAL.pick) { movePost(CAL.pick, iso); return; } CAL.form = null; CAL.day = CAL.day === iso ? null : iso; render(); } },
       h('span', { class: 'n' }, String(d)),
       // capa do 1º post do dia (quando a arte já foi mostrada ao cliente) + quantos posts tem
-      list.length ? (() => { const cv = list.find((p) => p.image_url); return h('span', { class: `cv g-${(cv || list[0]).group}` },
-        cv ? h('img', { src: cv.image_url, alt: '', loading: 'lazy' }) : sketchCover(list[0], 'in-cal'),
-        list.length > 1 ? h('span', { class: 'cv-n' }, `+${list.length - 1}`) : null); })() : null,
+      list.length ? (() => { const cv = (edit && list.find((p) => p.can_move)) || list.find((p) => p.image_url) || list[0];
+        const el = h('span', { class: `cv g-${cv.group}` },
+          cv.image_url ? h('img', { src: cv.image_url, alt: '', loading: 'lazy' }) : sketchCover(cv, 'in-cal'),
+          list.length > 1 ? h('span', { class: 'cv-n' }, `+${list.length - 1}`) : null);
+        return edit && cv.can_move ? dragify(el, cv) : el; })() : null,
       list.length ? h('span', { class: 'dots' }, ...list.map((p) => h('span', { class: `dot g-${p.group}`, title: `${p.time} · ${FMT[p.media_type] || 'Post'} · ${GROUP[p.group]}` }))) : null));
   }
   panel.append(grid,
-    h('div', { class: 'cal-legend' }, ...Object.entries(GROUP).map(([k, l]) => h('span', {}, h('span', { class: `dot g-${k}`, style: 'width:8px;height:8px;border-radius:50%;display:inline-block' }), l))));
+    h('div', { class: 'cal-legend' }, ...Object.entries(GROUP).filter(([k]) => k !== 'sugestao' || posts.some((p) => p.group === 'sugestao')).map(([k, l]) => h('span', {}, h('span', { class: `dot g-${k}`, style: 'width:8px;height:8px;border-radius:50%;display:inline-block' }), l))));
   const shown = CAL.day ? (byDay[CAL.day] || []) : posts;
   if (CAL.day) panel.append(h('div', { class: 'cal-day' }, `${dmy(CAL.day)} · ${shown.length ? `${shown.length} post(s)` : 'nenhum post neste dia'}`));
+  if (edit && CAL.day && !CAL.pick) {
+    if (CAL.form === CAL.day) panel.append(ideaForm(CAL.day));
+    else if (dayOK(CAL.day)) panel.append(h('button', { class: 'btn sm', type: 'button', style: 'justify-self:start', onclick: () => { CAL.form = CAL.day; render(); } }, `＋ Sugerir ideia para ${dmy(CAL.day).slice(0, 5)}`));
+    else if (CAL.day >= today) panel.append(h('div', { class: 'muted', style: 'font-size:13px' }, 'Para sugerir ideia, escolha um dia a partir de 48h daqui.'));
+  }
   else if (!posts.length) panel.append(h('div', { class: 'empty' }, 'Nenhum post programado neste mês ainda.'));
   let lastDay = null;
   for (const p of shown) {
     if (!CAL.day && p.day !== lastDay) { panel.append(h('div', { class: 'cal-day' }, `${WD[new Date(`${p.day}T12:00:00Z`).getUTCDay()]}, ${dmy(p.day).slice(0, 5)}`)); lastDay = p.day; }
+    const thumb = p.image_url ? h('img', { class: 'thumb', src: p.image_url, alt: '', loading: 'lazy' }) : sketchCover({ ...p, title: '' }, 'thumb in-list');
+    const main = p.group === 'aprovar' || p.group === 'roteiro' ? h('a', { class: 'btn primary sm', href: D.approval.url }, 'Aprovar')
+      : p.permalink ? h('a', { class: 'btn sm', href: p.permalink, target: '_blank', rel: 'noopener' }, 'Ver post')
+      : h('span', { class: `pill ${p.group === 'publicado' || p.group === 'programado' ? 'paid' : p.group === 'ajuste' ? 'late' : p.group === 'sugestao' ? 'open' : 'waived'}` }, GROUP[p.group]);
+    const acts = edit ? h('div', { class: 'acts' }, main,
+      p.can_move ? h('button', { class: 'btn sm', type: 'button', onclick: () => { CAL.pick = p; CAL.form = null; scrollTo({ top: 0, behavior: 'smooth' }); render(); } }, 'Mudar dia') : null,
+      p.mine ? h('button', { class: 'btn sm', type: 'button', onclick: (e) => { if (e.currentTarget.dataset.ok) removeIdea(p); else { e.currentTarget.dataset.ok = '1'; e.currentTarget.textContent = 'Confirmar apagar'; } } }, 'Apagar') : null) : main;
     panel.append(h('div', { class: 'cpost' },
-      p.image_url ? h('img', { class: 'thumb', src: p.image_url, alt: '', loading: 'lazy' }) : sketchCover({ ...p, title: '' }, 'thumb in-list'),
-      h('div', {}, h('div', { class: 't' }, p.title || FMT[p.media_type] || 'Post'), h('div', { class: 's' }, `${p.time} · ${FMT[p.media_type] || 'Post'}`)),
-      p.group === 'aprovar' || p.group === 'roteiro' ? h('a', { class: 'btn primary sm', href: D.approval.url }, 'Aprovar')
-        : p.permalink ? h('a', { class: 'btn sm', href: p.permalink, target: '_blank', rel: 'noopener' }, 'Ver post')
-        : h('span', { class: `pill ${p.group === 'publicado' || p.group === 'programado' ? 'paid' : p.group === 'ajuste' ? 'late' : 'waived'}` }, GROUP[p.group])));
+      edit && p.can_move ? dragify(h('span', {}, thumb), p) : thumb,
+      h('div', {}, h('div', { class: 't' }, p.title || FMT[p.media_type] || 'Post'), h('div', { class: 's' }, `${p.time} · ${FMT[p.media_type] || 'Post'}`),
+        edit && !p.can_move && p.group !== 'publicado' ? h('div', { class: 'lockt' }, '🔒 Travado: sai em menos de 48h') : null),
+      acts));
   }
 }
 
@@ -316,7 +417,7 @@ function render() {
       h('div', { class: 'act' }, h('span', { class: `pill ${REQ[r.status][1]}` }, REQ[r.status][0])),
       h('div', { class: 's' }, `Enviado em ${dmy(r.created_at)}${r.wanted_date ? ` · para ${dmy(r.wanted_date)}` : ''}${r.files?.length ? ` · ${r.files.length} anexo(s)` : ''}`)));
   } else if (tab === 'aprovacoes') {
-    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar' };
+    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Você mudou a data', client_idea: 'Você sugeriu uma ideia', client_idea_removed: 'Você retirou a ideia' };
     panel.append(h('div', { class: 'card' }, h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Registro de cada envio, aprovação e publicação, com data e hora.'),
       h('a', { class: 'btn sm', href: `/historico?t=${encodeURIComponent(t)}`, target: '_blank', rel: 'noopener' }, 'Baixar em PDF')));
     if (!(D.history || []).length) panel.append(h('div', { class: 'empty' }, 'Os registros aparecem aqui a partir dos próximos envios.'));
