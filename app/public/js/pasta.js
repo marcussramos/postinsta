@@ -327,8 +327,8 @@ function chargesCard() {
       h('div', { style: 'min-width:0' }, h('b', {}, r.c.name), h('div', { class: 'muted', style: 'font-size:13px' }, `${p.of > 1 ? `${p.n}ª parcela · ` : ''}${monthLabel(p.month)} · ${brl(p.cents)} · vence ${fmtDay(p.due)}`)),
       h('div', { class: 'actions' }, chargeButton(r.c, { month: p.month }, p), h('a', { class: 'btn ghost sm', href: `#pasta/${r.c.id}`, onclick: () => { S.folder.tab = 'finance'; } }, 'Abrir')));
   };
-  const list = h('div', { class: 'charge-list' }, ...rows.slice(0, 6).map(row));
-  const more = rows.length > 6 ? h('button', { class: 'btn ghost sm more-row', onclick: () => { list.replaceChildren(...rows.map(row)); more.remove(); } }, `Ver todas (${rows.length})`) : null;
+  const list = h('div', { class: 'charge-list' }, ...rows.slice(0, 3).map(row));
+  const more = rows.length > 3 ? h('button', { class: 'btn ghost sm more-row', onclick: () => { list.replaceChildren(...rows.map(row)); more.remove(); } }, `Ver todas (${rows.length})`) : null;
   return h('section', { class: 'card charges' },
     h('div', {}, h('h3', {}, 'Cobranças'),
       h('span', { class: 'muted', style: 'font-size:13.5px' }, `${nLate ? `${nLate} cliente(s) com atraso · ` : ''}${rows.length - nLate} parcela(s) vencendo em até 2 dias. Cobrar/Lembrar abre o WhatsApp com a mensagem pronta.`)),

@@ -950,3 +950,12 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .home-kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 /* celular: todas as abas visíveis (quebram em 2 linhas em vez de esconder Vendas/Propostas/Ajustes fora da tela) */
 @media (max-width: 700px) { .topbar .tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; } .topbar .tabs .tab { padding-left: 8px; padding-right: 8px; } }
+
+/* Início alinhado: as colunas de cada bloco terminam juntas */
+.home-grid { align-items: stretch; }
+.home-grid > .home-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.home-grid > .home-col > :last-child { flex: 1 1 auto; }
+.home-grid.single { grid-template-columns: minmax(0, 1fr); }
+.home-grid.single > .home-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: stretch; }
+.home-team { align-items: stretch; }
+.home-team > * { height: 100%; }
