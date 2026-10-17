@@ -5,7 +5,7 @@ import { reviewPost, applyFix } from '/revisor.js';
 import { PERMS, TEAM_DEFAULT } from '/permissoes.js';
 import { TEMPLATES, DURATIONS, NICHE_RULES, SCRIPT_STATUS, checkScript } from '/roteiro.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
-import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
+import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, brlRaw, isMoneyHidden, setMoneyHidden, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
 
 const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
 const S = {
@@ -93,6 +93,16 @@ function applyTheme(t) {
   if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   try { if (t === 'auto') localStorage.removeItem('mc-theme'); else localStorage.setItem('mc-theme', t); } catch { /* sem armazenamento: vale só nesta aba */ }
 }
+const EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.5M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
+function moneyButton() {
+  const hidden = isMoneyHidden();
+  const b = h('button', { class: 'btn ghost sm theme-btn money-btn', type: 'button', 'aria-pressed': String(hidden),
+    title: hidden ? 'Mostrar valores' : 'Esconder valores', 'aria-label': hidden ? 'Mostrar valores em reais' : 'Esconder valores em reais',
+    onclick: () => { setMoneyHidden(!isMoneyHidden()); render(); toast(isMoneyHidden() ? 'Valores escondidos.' : 'Valores à mostra.'); } });
+  b.innerHTML = hidden ? EYE_OFF : EYE;
+  return b;
+}
 function themeButton() {
   const b = h('button', { class: 'btn ghost sm theme-btn', type: 'button' });
   const draw = () => { const t = currentTheme(); b.textContent = THEMES[t][0]; b.title = THEMES[t][1]; b.setAttribute('aria-label', `${THEMES[t][1]}. Clique para trocar.`); };
@@ -140,6 +150,7 @@ function render() {
     h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), can('vendas') ? tab('vendas', 'Vendas') : null, can('vendas') ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     can('conteudo') ? h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post') : null,
+    can('financeiro') ? moneyButton() : null,
     themeButton(),
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
@@ -1892,7 +1903,7 @@ function ensureSettings() {
 // Mensagem de cobrança pronta (lembrete 2 dias antes ou aviso de atraso).
 function chargeMessage(c, m, p) {
   const pix = S.settings?.agency?.pix;
-  const what = p.of > 1 ? `a ${p.n}ª parcela (${brl(p.cents)}) da mensalidade de ${monthLabel(m.month).toLowerCase()}` : `a mensalidade de ${monthLabel(m.month).toLowerCase()} (${brl(p.cents)})`;
+  const what = p.of > 1 ? `a ${p.n}ª parcela (${brlRaw(p.cents)}) da mensalidade de ${monthLabel(m.month).toLowerCase()}` : `a mensalidade de ${monthLabel(m.month).toLowerCase()} (${brlRaw(p.cents)})`;
   const head = p.status === 'late' ? `Olá! Tudo bem? Passando para lembrar que ${what} venceu em ${fmtDay(p.due)} e ainda consta em aberto por aqui.` : `Olá! Tudo bem? Lembrete: ${what} vence em ${fmtDay(p.due)}.`;
   const auto = S.setup?.asaas && c.portal_url ? `\n\nPague com Pix por aqui (a baixa é automática): ${c.portal_url}` : pix ? `\n\nChave PIX: ${pix}` : '';
   return `${head}${auto}\n\nSe já pagou, pode desconsiderar${S.setup?.asaas ? '' : ' e, se puder, me mande o comprovante'}. Obrigado! 🙂`;
@@ -1921,7 +1932,7 @@ function chargesCard() {
     if (r.late) {
       const total = r.late.reduce((s, p) => s + (p.cents || 0), 0);
       const msg = r.late.length === 1 ? chargeMessage(r.c, { month: r.late[0].month }, r.late[0])
-        : `Olá! Tudo bem? Passando para lembrar que constam ${r.late.length} parcelas em aberto por aqui, somando ${brl(total)} (a mais antiga venceu em ${fmtDay(r.late[0].due)}).${S.settings?.agency?.pix ? `\n\nChave PIX: ${S.settings.agency.pix}` : ''}\n\nSe já pagou, me mande os comprovantes que eu atualizo. Obrigado! 🙂`;
+        : `Olá! Tudo bem? Passando para lembrar que constam ${r.late.length} parcelas em aberto por aqui, somando ${brlRaw(total)} (a mais antiga venceu em ${fmtDay(r.late[0].due)}).${S.settings?.agency?.pix ? `\n\nChave PIX: ${S.settings.agency.pix}` : ''}\n\nSe já pagou, me mande os comprovantes que eu atualizo. Obrigado! 🙂`;
       return h('div', { class: 'charge is-late' },
         h('div', { style: 'min-width:0' }, h('b', {}, r.c.name), h('div', { class: 'muted', style: 'font-size:13px' }, `${r.late.length} parcela(s) em atraso · ${brl(total)} · desde ${fmtDay(r.late[0].due)}`)),
         h('div', { class: 'actions' },
@@ -2656,7 +2667,7 @@ function openPix(c, m, p) {
   const box = h('div', { class: 'pix-box' }, h('p', { class: 'muted' }, 'Gerando o Pix…'));
   drawer(`Pix · ${c.name}`, [box], []);
   api('/api/pasta?r=pix', { method: 'POST', body: { client_id: c.id, month: m.month, n: p.n } }).then((r) => {
-    const msg = `Olá! Segue o Pix ${r.label.toLowerCase()} (${brl(r.value_cents)}), vencimento ${fmtDay(r.due)}.\n\nPix copia e cola:\n${r.payload}\n\nAssim que pagar, a baixa é automática por aqui. Obrigado! 🙂`;
+    const msg = `Olá! Segue o Pix ${r.label.toLowerCase()} (${brlRaw(r.value_cents)}), vencimento ${fmtDay(r.due)}.\n\nPix copia e cola:\n${r.payload}\n\nAssim que pagar, a baixa é automática por aqui. Obrigado! 🙂`;
     box.replaceChildren(
       h('div', { class: 'eyebrow' }, r.label),
       h('div', { class: 'stat-v' }, brl(r.value_cents)),

@@ -146,7 +146,13 @@ export function blobToDataUrl(blob) {
 }
 
 // ── dinheiro e meses
-export const brl = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+// "Olhinho": esconde os valores em reais da tela (lembra a escolha neste aparelho)
+let moneyHidden = false;
+try { moneyHidden = localStorage.getItem('mc_hide_money') === '1'; } catch { /* sem armazenamento */ }
+export const isMoneyHidden = () => moneyHidden;
+export function setMoneyHidden(v) { moneyHidden = Boolean(v); try { localStorage.setItem('mc_hide_money', moneyHidden ? '1' : '0'); } catch { /* sem armazenamento */ } }
+export const brlRaw = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })); // para mensagens ao cliente (nunca escondido)
+export const brl = (cents) => (cents == null ? '—' : moneyHidden ? 'R$ ••••' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 export function monthLabel(ym, short = false) { // '2026-10' → 'outubro de 2026' / 'out/26'
   const [y, m] = ym.split('-').map(Number);
