@@ -5,6 +5,8 @@ import { reviewPost, applyFix } from '/revisor.js';
 import { PERMS, TEAM_DEFAULT } from '/permissoes.js';
 import { TEMPLATES, DURATIONS, NICHE_RULES, SCRIPT_STATUS, checkScript } from '/roteiro.js';
 import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dates.js';
+import { officeCard, AGENTS } from '/escritorio.js';
+import { weekMissions, weekLevel, isDone, missionXp } from '/missoes.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, brlRaw, isMoneyHidden, setMoneyHidden, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
 
 const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
@@ -2543,8 +2545,83 @@ function viewHome() {
   }
 
   if (!S.clients.length) return [hero, noClients()];
-  return [hero, pushPrompt(), h('div', { class: 'home-kpis' }, ...tiles),
+  const team = teamSection(today, month, newReqs);
+  return [hero, pushPrompt(), h('div', { class: 'home-kpis' }, ...tiles), team,
     h('div', { class: 'home-grid' }, h('div', { class: 'home-col' }, todayCard, attention, chargesCard()), h('div', { class: 'home-col' }, upcomingDatesCard(), reaj, approvalReminders(), requestsInbox()))].filter(Boolean);
+}
+// ───────────────────────── equipe de IA: escritório ao vivo + missões da semana
+// Tudo calculado do trabalho real do app; nada é marcado à mão.
+function weekRange(today) {
+  const d = new Date(`${today}T12:00:00Z`);
+  const mon = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 864e5);
+  return [mon.toISOString().slice(0, 10), new Date(mon.getTime() + 6 * 864e5).toISOString().slice(0, 10)];
+}
+function teamSection(today, month, newReqs) {
+  const [w0, w1] = weekRange(today);
+  const inWeek = S.posts.filter((p) => p.scheduled_at && p.status !== 'idea' && (() => { const k = dayKey(p.scheduled_at, S.tz); return k >= w0 && k <= w1; })());
+  const deliveries = S.clients.map((c) => {
+    const d = S.deliv?.[c.id]; if (!d) return null;
+    const parts = [d.posts, d.reels, d.stories].filter((x) => x && x.quota);
+    return parts.length ? { id: c.id, client: c.name, planned: parts.reduce((a, x) => a + (x.planned || 0), 0), quota: parts.reduce((a, x) => a + x.quota, 0) } : null;
+  }).filter(Boolean);
+  const billing = [];
+  if (can('financeiro')) for (const c of S.clients) { const m = billingMonths(c).find((x) => x.month === month); if (m) billing.push({ id: c.id, client: c.name, status: m.status }); }
+  const leads = can('vendas') && Array.isArray(S.leads) ? S.leads : [];
+  const dueLeads = leads.filter((l) => !['fechado', 'perdido'].includes(l.stage) && ((l.wants_contact && l.stage === 'novo') || (l.next_action_at && l.next_action_at <= today)));
+  const missions = weekMissions({ weekPosts: inWeek.map((p) => ({ status: p.status, hasMedia: hasMedia(p) })), deliveries, billing, leads, today, monthName: monthLabel(month).split(' ')[0] });
+
+  const by = (st) => S.posts.filter((p) => p.status === st);
+  const noArt = S.posts.filter((p) => ['draft', 'internal_review'].includes(p.status) && !hasMedia(p) && !isPlanned(p));
+  const planned = S.posts.filter(isPlanned);
+  const late = billing.filter((b) => b.status === 'late');
+  const under = deliveries.filter((d) => d.planned < d.quota);
+  const load = {
+    dir: by('approved').length + by('failed').length + by('internal_review').length,
+    plan: by('idea').length + under.length,
+    cont: by('draft').length + by('changes_requested').length,
+    des: noArt.length + planned.length,
+    atd: by('pending_approval').length + newReqs,
+    ven: dueLeads.length,
+    fin: late.length,
+  };
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
+  const item = (cond, label, href) => (cond ? { label, href } : null);
+  const describe = (id) => {
+    const items = {
+      dir: [item(by('approved').length, `${n(by('approved').length, 'post aprovado', 'posts aprovados')} esperando a hora de publicar`, '#fluxo'),
+        item(by('failed').length, `${n(by('failed').length, 'post não publicou', 'posts não publicaram')}`, '#fluxo'),
+        item(by('internal_review').length, `${n(by('internal_review').length, 'post', 'posts')} na revisão interna`, '#fluxo')],
+      plan: [item(by('idea').length, `${n(by('idea').length, 'ideia', 'ideias')} para transformar em pauta`, '#fluxo'),
+        ...under.map((d) => item(true, `${d.client}: ${d.planned}/${d.quota} entregas no mês`, '#calendario'))],
+      cont: [item(by('draft').length, `${n(by('draft').length, 'post', 'posts')} em produção`, '#fluxo'),
+        item(by('changes_requested').length, `${n(by('changes_requested').length, 'ajuste pedido', 'ajustes pedidos')} pelo cliente`, '#fluxo')],
+      des: [item(planned.length, `${n(planned.length, 'post planejado', 'posts planejados')} esperando arte`, '#fluxo'),
+        item(noArt.length, `${n(noArt.length, 'post', 'posts')} em produção sem arte`, '#fluxo')],
+      atd: [item(by('pending_approval').length, `${n(by('pending_approval').length, 'post', 'posts')} aguardando o cliente`, '#agenda'),
+        item(newReqs, `${n(newReqs, 'pedido novo', 'pedidos novos')} da área do cliente`, '#agenda')],
+      ven: dueLeads.slice(0, 5).map((l) => item(true, `Follow-up: ${l.name}`, '#vendas')),
+      fin: late.map((b) => item(true, `${b.client}: mensalidade atrasada`, `#pasta/${b.id}`)),
+      reu: [],
+    }[id] || [];
+    const mine = missions.filter((m) => m.s === id && !isDone(m));
+    return { sub: id === 'reu' ? 'Toque em “Chamar reunião” para reunir a equipe' : (mine.length ? `${n(mine.length, 'missão aberta', 'missões abertas')} na semana` : 'Missões da semana em dia'), items: items.filter(Boolean) };
+  };
+  const office = officeCard({ load, missions, describe });
+
+  const lv = weekLevel(missions);
+  const sorted = [...missions].sort((a, b) => isDone(a) - isDone(b));
+  const missionsCard = h('section', { class: 'card missions-card' },
+    h('div', { class: 'home-card-head' }, h('h3', {}, 'Missões da semana'), h('span', { class: 'muted', style: 'font-size:13px' }, `${lv.done} de ${missions.length} concluídas`)),
+    h('div', { class: 'ms-level' },
+      h('div', { class: 'ms-row' }, h('span', { class: 'eyebrow' }, `Nível ${lv.level} · ${lv.title}`), h('span', { class: 'muted mono', style: 'font-size:12px' }, `${lv.xp} XP`)),
+      h('div', { class: 'dl-bar ms-xp' }, h('span', { style: `width:${Math.round((lv.into / lv.next) * 100)}%` }))),
+    missions.length ? h('div', { class: 'ms-list' }, ...sorted.map((m) => h('div', { class: `ms${isDone(m) ? ' done' : ''}` },
+      h('div', { class: 'ms-row' }, h('span', { class: 'ms-t' }, m.t), h('span', { class: 'mono muted' }, `${m.n}/${m.total}`)),
+      h('div', { class: 'dl-bar' }, h('span', { style: `width:${Math.round((Math.min(m.n, m.total) / m.total) * 100)}%` })),
+      h('span', { class: 'muted ms-who' }, `${AGENTS[m.s]?.pessoa || ''} · ${isDone(m) ? 'concluída' : `vale ${missionXp({ n: m.total, total: m.total })} XP`}`))))
+      : h('p', { class: 'muted', style: 'margin:0' }, 'As missões aparecem quando houver posts marcados nesta semana.'),
+    h('p', { class: 'muted', style: 'margin:0;font-size:12.5px' }, 'Nada é marcado à mão: cada post produzido, aprovado e publicado, cada mensalidade paga e cada follow-up em dia avança a missão de quem cuida dele.'));
+  return h('div', { class: 'home-team' }, office, missionsCard);
 }
 const kpi = (label, value, sub, tone = '') => h('div', { class: `stat ${tone}` }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'stat-v' }, value), h('div', { class: 'muted', style: 'font-size:12.5px' }, sub));
 function alertRow(tone, title, sub, onclick, href) {
