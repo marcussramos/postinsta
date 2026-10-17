@@ -9,7 +9,7 @@ import { route, send, readJson, query, need, redirect } from '../http.js';
 import { requireAdmin, requireStaff } from '../auth.js';
 import { db, docs, storage } from '../db.js';
 import { setMediaPrivateCache } from '../media.js';
-import { listBackups, runBackup } from '../backup.js';
+import { listBackups, runBackup, verifyLatestBackup } from '../backup.js';
 import { vapidKeys, notify } from '../push.js';
 import { newSecret, otpauthUrl, verifyTotp, activeSecret, saveSecret, twoFactorOff } from '../totp.js';
 import { getState, setState } from '../appstate.js';
@@ -21,6 +21,7 @@ export const backupRoute = route({
     await requireAdmin(req);
     const { path } = query(req);
     const list = await listBackups();
+    if (query(req).check) return send(res, 200, await getState('backup_check', null));
     if (path) {
       need(list.some((b) => b.path === path), 404, 'Backup não encontrado.');
       return redirect(res, await docs.signedUrl(path, { expiresIn: 120, downloadName: path.split('/').pop() }), { 'Cache-Control': 'no-store' });
@@ -29,6 +30,7 @@ export const backupRoute = route({
   },
   POST: async (req, res) => {
     await requireAdmin(req);
+    if (query(req).check) return send(res, 200, await verifyLatestBackup());
     send(res, 201, await runBackup({ reason: 'manual' }));
   },
 });

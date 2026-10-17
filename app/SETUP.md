@@ -126,3 +126,12 @@ Isso já atende seus 10 clientes enquanto a análise da Meta (3.4) não sai.
 - Sem dependências: o backend são as funções em `api/`, em Node 20+, e o painel é JavaScript puro em `public/`.
 - Teste local com Supabase e Instagram simulados: `node test/dev-server.js` e abra http://localhost:4321 (senha `senha-teste`).
 - Testes automáticos: `npm test`.
+
+## Backup e restauração
+
+- Toda semana o app salva sozinho um backup de todos os dados (Ajustes → Backup; ficam as 8 últimas cópias) e, uma vez por semana, confere se o último abre e está inteiro. Se algo der errado, chega um aviso no celular.
+- O cron diário da Vercel também vigia o agendador automático: se ele ficar mais de 2 horas sem rodar, chega o aviso "Agendador automático parado".
+- Restaurar numa emergência (no computador, com as mesmas variáveis da Vercel):
+  1. Baixe o backup em Ajustes → Backup → Baixar.
+  2. `SUPABASE_URL=... SUPABASE_SERVICE_KEY=... node scripts/restaurar-backup.mjs arquivo.json` (só confere o arquivo)
+  3. Rode de novo com `--confirmar` no final para regravar no banco. Registros com o mesmo id são substituídos; nada criado depois do backup é apagado.

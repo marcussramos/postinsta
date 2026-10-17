@@ -72,9 +72,17 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
 
   async function supa(url, init) {
     const u = new URL(url); const method = init?.method || 'GET';
-    if (u.pathname.startsWith('/storage/v1/object/upload/sign/')) { // link assinado para o navegador enviar vídeo
+    if (u.pathname.startsWith('/storage/v1/object/upload/sign/')) { // link assinado para o navegador enviar vídeo/arquivo grande
       const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/upload/sign/', ''));
+      if (method === 'PUT') { const body = init.body; files.set(key.replace(/^posts\//, ''), body); return json(200, { Key: key }); }
       return json(200, { url: `/object/upload/sign/${key}?token=up-${encodeURIComponent(key)}` });
+    }
+    if (u.pathname.startsWith('/storage/v1/object/list/') && method === 'POST') {
+      const bucket = u.pathname.replace('/storage/v1/object/list/', '');
+      const { prefix = '', search = '' } = JSON.parse(init.body || '{}');
+      const key = `${bucket === 'posts' ? '' : `${bucket}/`}${prefix}/${search}`;
+      const b = files.get(key);
+      return json(200, b == null ? [] : [{ name: search, metadata: { size: b.length ?? b.byteLength ?? b.size ?? 0 } }]);
     }
     if (u.pathname === '/storage/v1/object/sign/posts' && method === 'POST') { // vários links de uma vez
       const { paths = [] } = JSON.parse(init.body || '{}');
@@ -90,6 +98,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
       const key = decodeURIComponent(u.pathname.replace('/storage/v1/object/', ''));
       const k = key.replace(/^posts\//, ''); // imagens dos posts ficam sem o prefixo (como nos testes antigos); documentos com "docs/"
       if (method === 'POST') { files.set(k, init.body); return json(200, { Key: key }); }
+      if (method === 'GET') { const b = files.get(k); if (b == null) return json(400, { message: 'Object not found' }); return new Response(typeof b === 'string' ? b : Buffer.from(b), { status: 200 }); }
       if (method === 'DELETE') { files.delete(k); return json(200, {}); }
     }
     const table = u.pathname.replace('/rest/v1/', '');
@@ -119,6 +128,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
         return json(201, []);
       }
       if (table === 'mail_log' && rows.some((x) => x.key === row.key)) return json(409, { message: 'duplicate key value violates unique constraint' });
+      if (/merge-duplicates/.test(init.headers?.Prefer || '') && row.id && rows.some((x) => x.id === row.id)) { Object.assign(rows.find((x) => x.id === row.id), JSON.parse(init.body)); return json(201, []); }
       rows.push(row); return json(201, [{ ...row }]);
     }
     if (method === 'PATCH') {
