@@ -89,6 +89,18 @@ async function finish(p, c, log, now) {
   if (!c?.ig_token) return fail(p, 'O Instagram deste cliente não está conectado.', log, true);
   if (!p.ig_container_id) return backToQueue(p, 'Publicação interrompida; tentando de novo.', log);
   try {
+    // carrossel com vídeo: espera os itens processarem e só então cria o carrossel
+    if (p.ig_container_id.startsWith(ig.CHILDREN)) {
+      const children = p.ig_container_id.slice(ig.CHILDREN.length).split(',').filter(Boolean);
+      if (await ig.carouselChildren(children, c.ig_token) === 'waiting') {
+        if (now() - new Date(p.updated_at || p.scheduled_at).getTime() > STUCK_MS * 2) return handleError(p, new ig.IgError('O Instagram demorou demais para processar os vídeos do carrossel.', { transient: true }), log);
+        log.waiting.push(p.id);
+        return;
+      }
+      const parent = await ig.createCarouselParent(c.ig_user_id, c.ig_token, children, p.caption);
+      await db.update('posts', { id: `eq.${p.id}` }, { ig_container_id: parent });
+      p.ig_container_id = parent;
+    }
     const st = await ig.containerStatus(p.ig_container_id, c.ig_token);
     if (st.code === 'IN_PROGRESS') {
       const limit = (p.media || []).some((m) => m.kind === 'video') ? STUCK_MS * 2 : STUCK_MS; // vídeo pode levar mais tempo

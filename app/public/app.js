@@ -676,17 +676,20 @@ function openPost(post = null, opts = {}) {
   // ── mídia: Foto (1 imagem) | Carrossel (2 a 10 imagens) | Reels (vídeo + capa)
   let mtype = post?.media_type || 'IMAGE';
   let mediaDirty = false;
-  let items = mtype === 'CAROUSEL' ? (post.media || []).filter((m) => m.kind === 'image').map((m) => ({ url: m.url, path: m.path })) : [];
+  // itens do carrossel: { kind: 'image'|'video', url, path, blob?, file?, duration?, poster? } — vídeo usa a 1ª imagem do vídeo como miniatura/capa
+  let items = mtype === 'CAROUSEL' ? (post.media || []).map((m, i) => ({ kind: m.kind === 'video' ? 'video' : 'image', url: m.url, path: m.path,
+    poster: m.kind === 'video' && i === 0 && post.image_url ? { url: post.image_url, path: post.image_path } : null })) : [];
   let video = ['REELS', 'STORY'].includes(mtype) ? ((post.media || []).find((m) => m.kind === 'video') || null) : null; // { url, path } ou { file, url, duration }
   let coverT = 1;
+  const carCover = () => (items[0]?.kind === 'video' ? items[0].poster : items[0]) || null; // imagem que representa o carrossel
   const fileIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => fileIn.files[0] && takeFile(fileIn.files[0]) });
-  const multiIn = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: () => addItems([...multiIn.files]) });
+  const multiIn = h('input', { type: 'file', accept: 'image/*,video/mp4,video/quicktime,.mp4,.mov,.m4v', multiple: true, hidden: true, onchange: () => addItems([...multiIn.files]) });
   const videoIn = h('input', { type: 'file', accept: 'video/mp4,video/quicktime,.mp4,.mov,.m4v', hidden: true, onchange: () => videoIn.files[0] && takeVideo(videoIn.files[0]) });
   const imgBox = h('div', { class: 'media-box' });
   const typeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Formato do post' });
   const drawSeg = () => typeSeg.replaceChildren(...Object.entries(MEDIA_LABEL).map(([k, l]) => h('button', {
     type: 'button', class: 'seg-btn', 'aria-pressed': String(mtype === k), disabled: locked,
-    onclick: () => { if (mtype === k) return; if (['REELS', 'STORY'].includes(mtype) || k === 'STORY') { img = null; video = null; } mtype = k; mediaDirty = true; syncCaption(); if (k === 'CAROUSEL' && img && !items.length) items = [{ ...img }]; if (k === 'IMAGE' && items[0] && !img) img = { ...items[0] }; drawSeg(); drawImage(); drawScriptBox?.(); },
+    onclick: () => { if (mtype === k) return; if (['REELS', 'STORY'].includes(mtype) || k === 'STORY') { img = null; video = null; } mtype = k; mediaDirty = true; syncCaption(); if (k === 'CAROUSEL' && img && !items.length) items = [{ kind: 'image', ...img }]; if (k === 'IMAGE' && carCover() && !img) img = { ...carCover() }; drawSeg(); drawImage(); drawScriptBox?.(); },
   }, { IMAGE: '🖼 ', CAROUSEL: '❐ ', REELS: '▶ ', STORY: '◷ ' }[k] + l)));
   const dropZone = (title, hint, onPick, onFiles) => {
     const drop = h('div', { class: 'drop', tabindex: 0, role: 'button', onclick: () => !locked && onPick(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } },
@@ -708,21 +711,36 @@ function openPost(post = null, opts = {}) {
   };
   const drawCarousel = () => {
     const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; mediaDirty = true; drawImage(); };
-    const tiles = items.map((it, i) => h('div', { class: 'car-item' },
-      h('img', { src: it.url, alt: `Imagem ${i + 1}` }), h('span', { class: 'car-n' }, String(i + 1)),
+    const tiles = items.map((it, i) => h('div', { class: `car-item${it.kind === 'video' ? ' is-video' : ''}` },
+      it.kind === 'video'
+        ? h('video', { src: it.url, poster: it.poster?.url || null, muted: true, playsinline: true, preload: 'metadata', 'aria-label': `Vídeo ${i + 1}`, onmouseenter: (e) => e.target.play().catch(() => {}), onmouseleave: (e) => { e.target.pause(); } })
+        : h('img', { src: it.url, alt: `Imagem ${i + 1}` }),
+      h('span', { class: 'car-n' }, String(i + 1)),
+      it.kind === 'video' ? h('span', { class: 'car-vid' }, `▶ ${it.duration ? `${Math.round(it.duration)} s` : 'vídeo'}`) : null,
       locked ? null : h('div', { class: 'car-act' },
         h('button', { type: 'button', title: 'Mover para a esquerda', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
         h('button', { type: 'button', title: 'Remover', onclick: () => { items.splice(i, 1); mediaDirty = true; drawImage(); } }, '✕'),
         h('button', { type: 'button', title: 'Mover para a direita', disabled: i === items.length - 1, onclick: () => move(i, 1) }, '→'))));
-    const add = items.length < 10 && !locked ? h('button', { type: 'button', class: 'car-add', onclick: () => multiIn.click() }, h('b', {}, '+'), h('span', {}, items.length ? 'Adicionar' : 'Escolher imagens')) : null;
+    const add = items.length < 10 && !locked ? h('button', { type: 'button', class: 'car-add', onclick: () => multiIn.click() }, h('b', {}, '+'), h('span', {}, items.length ? 'Adicionar' : 'Escolher fotos ou vídeos')) : null;
     const box = h('div', { class: 'car-grid' }, ...tiles, add);
     box.addEventListener('dragover', (e) => e.preventDefault());
     box.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) addItems([...e.dataTransfer.files]); });
-    imgBox.replaceChildren(box, h('span', { class: 'hint muted' }, `${items.length}/10 imagens · a 1ª é a capa · o Instagram usa a proporção da 1ª em todas (use o mesmo formato, de preferência 4:5).`), multiIn);
+    imgBox.replaceChildren(box, h('span', { class: 'hint muted' }, `${items.length}/10 itens · fotos e vídeos (MP4/MOV de 3 a 60 s) · o 1º é a capa · o Instagram usa a proporção do 1º em todos (use o mesmo formato, de preferência 4:5).`), multiIn);
   };
   const addItems = async (files) => {
-    for (const f of files.slice(0, 10 - items.length)) {
-      try { items.push(await prepareImage(f)); mediaDirty = true; } catch (e) { toast(e.message, true); }
+    if (files.length > 10 - items.length) toast(`O carrossel aceita até 10 itens: entraram só ${Math.max(0, 10 - items.length)}.`, true);
+    for (const f0 of files.slice(0, 10 - items.length)) {
+      try {
+        if ((f0.type || '').startsWith('video/') || /\.(mp4|mov|m4v)$/i.test(f0.name || '')) {
+          let f = f0, info = await videoInfo(f);
+          if (info.duration < 3) throw new Error(`"${f.name}": vídeo de carrossel precisa ter pelo menos 3 segundos.`);
+          if (info.duration > 60.5) throw new Error(`"${f.name}": vídeo de carrossel pode ter no máximo 60 segundos (para vídeos maiores, use Reels).`);
+          if (f.size > VIDEO_MAX) { URL.revokeObjectURL(info.url); f = await shrink(f); info = await videoInfo(f); }
+          const poster = await videoFrame(info.url, Math.min(1, info.duration / 2));
+          items.push({ kind: 'video', file: f, url: info.url, duration: info.duration, poster });
+        } else items.push({ kind: 'image', ...(await prepareImage(f0)) });
+        mediaDirty = true;
+      } catch (e) { toast(e.message, true); }
     }
     multiIn.value = ''; drawImage();
   };
@@ -813,7 +831,7 @@ function openPost(post = null, opts = {}) {
   // foto do banco de mídia do cliente (já está no Storage: não precisa enviar de novo)
   const takeFromBank = (m) => {
     const it = { url: m.url, path: m.path };
-    if (mtype === 'CAROUSEL') { if (items.length >= 10) return toast('O carrossel já tem 10 imagens.', true); items.push(it); }
+    if (mtype === 'CAROUSEL') { if (items.length >= 10) return toast('O carrossel já tem 10 itens.', true); items.push({ kind: 'image', ...it }); }
     else if (mtype === 'STORY') { img = it; video = null; }
     else img = it;
     mediaDirty = true; drawImage(); toast(mtype === 'REELS' ? 'Capa escolhida do banco.' : 'Imagem do banco aplicada.');
@@ -881,7 +899,7 @@ function openPost(post = null, opts = {}) {
       isNew ? h('span', { class: 'hint' }, 'Escolha mais de um para criar o mesmo post em vários perfis.') : null),
     h('div', { class: 'field' }, h('label', { for: 'f-title' }, 'Pauta (uso interno)'), title),
     h('div', { class: 'field' }, h('span', { class: 'label' }, 'Formato e mídia'), typeSeg, imgBox,
-      h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? items[0]?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
+      h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => openFeedPreview([...picked][0], { image_url: (mtype === 'CAROUSEL' ? carCover()?.url : img?.url) || null, scheduled_at: collect().scheduled_at, id: post?.id || 'novo', media_type: mtype }) }, '▦ Ver no feed do cliente'),
       scriptFileBox(),
       locked ? null : h('div', { class: 'canva-row' },
         h('a', { class: 'btn sm canva', href: 'https://www.canva.com/', target: '_blank', rel: 'noopener' }, h('span', { class: 'canva-dot', 'aria-hidden': 'true' }, 'C'), 'Abrir Canva'),
@@ -978,7 +996,7 @@ function openPost(post = null, opts = {}) {
       go.disabled = true; results.replaceChildren(h('p', { class: 'muted', style: 'margin:0' }, img ? 'Lendo a imagem e escrevendo…' : 'Escrevendo…'));
       try {
         const payload = { client_id: [...picked][0], brief: brief.value, title: title.value, current: cap.value };
-        const aiImg = mtype === 'CAROUSEL' ? items[0] : img;
+        const aiImg = mtype === 'CAROUSEL' ? carCover() : img;
         if (aiImg?.blob) payload.image_base64 = await blobToDataUrl(aiImg.blob);
         else if (aiImg?.url && /^https:/.test(aiImg.url)) payload.image_url = aiImg.url;
         payload.media_type = mtype;
@@ -1012,7 +1030,7 @@ function openPost(post = null, opts = {}) {
     const day = d.scheduled_at ? dayKey(d.scheduled_at, S.tz) : null;
     const sameDay = day ? [...S.posts, ...S.cal.posts].filter((x, i, arr) => arr.findIndex((y) => y.id === x.id) === i && x.client_id === cid && x.id !== post?.id && x.media_type !== 'STORY' && x.scheduled_at && dayKey(x.scheduled_at, S.tz) === day).length : 0;
     const issues = reviewPost({ media_type: mtype, caption: d.caption, scheduled_at: d.scheduled_at,
-      image: mtype !== 'CAROUSEL' ? await sizeOf(img?.url) : null, items: mtype === 'CAROUSEL' ? (await Promise.all(items.map((it) => sizeOf(it.url)))).filter(Boolean) : null,
+      image: mtype !== 'CAROUSEL' ? await sizeOf(img?.url) : null, items: mtype === 'CAROUSEL' ? (await Promise.all(items.map((it) => (it.kind === 'video' ? vidSize(it.url) : sizeOf(it.url))))).filter(Boolean) : null,
       video: ['REELS', 'STORY'].includes(mtype) && video ? await vidSize(video.url) : null }, { brand_kit: clientById(cid)?.brand_kit || {}, sameDay, tz: S.tz });
     drawReview(issues, null);
     if (!silent || issues.length) { revBox.hidden = false; revBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
@@ -1026,7 +1044,7 @@ function openPost(post = null, opts = {}) {
       aiBtn.disabled = true; aiBtn.textContent = 'Revisando com IA…';
       try {
         const payload = { client_id: [...picked][0], caption: cap.value, title: title.value, media_type: mtype };
-        const aiImg = mtype === 'CAROUSEL' ? items[0] : img;
+        const aiImg = mtype === 'CAROUSEL' ? carCover() : img;
         if (aiImg?.blob) payload.image_base64 = await blobToDataUrl(aiImg.blob); else if (aiImg?.url && /^https:/.test(aiImg.url)) payload.image_url = aiImg.url;
         drawReview(issues, await api('/api/pasta?r=review', { method: 'POST', body: payload }));
       } catch (e) { toast(e.message, true); aiBtn.disabled = false; aiBtn.textContent = '✨ Revisar português e arte com IA'; }
@@ -1047,7 +1065,7 @@ function openPost(post = null, opts = {}) {
   async function save(mode) {
     const data = collect();
     const needsComplete = mode === 'send' || mode === 'approve';
-    if (needsComplete && mtype === 'CAROUSEL' && items.length < 2) return toast('O carrossel precisa de pelo menos 2 imagens.', true);
+    if (needsComplete && mtype === 'CAROUSEL' && items.length < 2) return toast('O carrossel precisa de pelo menos 2 itens (fotos ou vídeos).', true);
     if (needsComplete && mtype === 'REELS' && !video) return toast('Escolha o vídeo do Reels.', true);
     if (needsComplete && mtype === 'STORY' && !img && !video) return toast('Escolha a foto ou o vídeo do Story.', true);
     if (needsComplete && !['CAROUSEL', 'STORY'].includes(mtype) && !img) return toast(mtype === 'REELS' ? 'Falta a capa do Reels.' : 'Para enviar ou aprovar, o post precisa de imagem.', true);
@@ -1065,9 +1083,16 @@ function openPost(post = null, opts = {}) {
       const cid = [...picked][0];
       const up = (blob) => api(`/api/upload?client=${cid}`, { method: 'POST', raw: blob });
       if (mtype === 'CAROUSEL') {
-        for (const [i, it] of items.entries()) if (it.blob) { toast(`Enviando imagem ${i + 1} de ${items.length}…`); const r = await up(it.blob); Object.assign(it, { url: r.image_url, path: r.image_path, blob: null }); }
-        data.media = items.map((it) => ({ url: it.url, path: it.path, kind: 'image' }));
-        if (items[0]) Object.assign(data, { image_url: items[0].url, image_path: items[0].path });
+        for (const [i, it] of items.entries()) {
+          if (it.kind === 'video' && it.file) { const v = await uploadVideo(it.file, cid, (pr) => toast(`Enviando vídeo ${i + 1} de ${items.length}… ${Math.round(pr * 100)}%`)); Object.assign(it, { url: v.url, path: v.path, file: null }); }
+          else if (it.blob) { toast(`Enviando imagem ${i + 1} de ${items.length}…`); const r = await up(it.blob); Object.assign(it, { url: r.image_url, path: r.image_path, blob: null }); }
+        }
+        data.media = items.map((it) => ({ url: it.url, path: it.path, kind: it.kind === 'video' ? 'video' : 'image' }));
+        const first = items[0];
+        if (first?.kind === 'video') { // capa = um quadro do vídeo (miniaturas, aprovação e feed)
+          if (first.poster?.blob) { const r = await up(first.poster.blob); first.poster = { url: r.image_url, path: r.image_path }; }
+          if (first.poster?.url) Object.assign(data, { image_url: first.poster.url, image_path: first.poster.path ?? null });
+        } else if (first) Object.assign(data, { image_url: first.url, image_path: first.path });
       } else {
         if (img?.blob) { const r = await up(img.blob); Object.assign(data, r); img = { url: r.image_url, path: r.image_path }; }
         else if (img) Object.assign(data, { image_url: img.url, image_path: img.path ?? post?.image_path ?? null });

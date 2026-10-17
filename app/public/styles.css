@@ -384,7 +384,8 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
 .media-box { display: grid; gap: 8px; }
 .car-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 .car-item { position: relative; aspect-ratio: 4 / 5; border-radius: 8px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); }
-.car-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-item img, .car-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-vid { position: absolute; right: 4px; top: 4px; background: rgba(10,12,16,.75); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 6px; pointer-events: none; }
 .car-n { position: absolute; left: 4px; top: 4px; background: rgba(10,12,16,.75); color: #fff; font-size: 11px; font-weight: 800; border-radius: 999px; min-width: 20px; height: 20px; display: grid; place-items: center; }
 .car-act { position: absolute; inset: auto 0 0 0; display: flex; justify-content: space-between; padding: 4px; background: linear-gradient(transparent, rgba(10,12,16,.7)); }
 .car-act button { border: 0; background: rgba(255,255,255,.92); color: #2B2B2B; border-radius: 6px; width: 26px; height: 24px; font-weight: 800; cursor: pointer; font-size: 12px; }
@@ -405,6 +406,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
 .ap-reel video, .ap-reel img { display: block; width: 100%; max-height: 78vh; aspect-ratio: 9 / 16; object-fit: contain; background: #000; }
 .ap-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .ap-track::-webkit-scrollbar { display: none; }
+.ap-track video { flex: 0 0 100%; width: 100%; scroll-snap-align: center; display: block; height: auto; max-height: 80vh; background: #000; }
 .ap-track img { flex: 0 0 100%; width: 100%; scroll-snap-align: center; display: block; height: auto; }
 .ap-badge { position: absolute; right: 10px; top: 10px; background: rgba(10,12,16,.72); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; pointer-events: none; }
 .ap-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
