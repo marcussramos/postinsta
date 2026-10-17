@@ -169,7 +169,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     }
     if (u.pathname.endsWith('/media') && method === 'POST') {
       const id = `C${ig.containers.size + 1}`;
-      ig.containers.set(id, { status: ig.videoInProgress && body.get('media_type') === 'REELS' ? 'IN_PROGRESS' : 'FINISHED', image_url: body.get('image_url'), caption: body.get('caption'),
+      ig.containers.set(id, { status: ig.videoInProgress && ['REELS', 'VIDEO'].includes(body.get('media_type')) ? 'IN_PROGRESS' : 'FINISHED', image_url: body.get('image_url'), caption: body.get('caption'),
         media_type: body.get('media_type') || (body.get('is_carousel_item') ? 'ITEM' : 'IMAGE'), video_url: body.get('video_url'), cover_url: body.get('cover_url'), children: body.get('children') });
       return json(200, { id });
     }

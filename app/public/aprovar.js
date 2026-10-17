@@ -189,13 +189,16 @@ function media(p) {
       h('span', { class: 'ap-badge' }, '▶ Reels'));
   }
   if (type === 'CAROUSEL') {
-    const imgs = (p.media || []).filter((m) => m.kind === 'image');
+    const imgs = (p.media || []).filter((m) => m?.url);
     const dots = h('div', { class: 'ap-dots' }, ...imgs.map((_, i) => h('span', { class: i === 0 ? 'on' : null })));
     const track = h('div', { class: 'ap-track', onscroll: (e) => {
       const i = Math.round(e.target.scrollLeft / e.target.clientWidth);
       [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
-    } }, ...imgs.map((m, i) => h('img', { src: m.url, alt: `${i + 1} de ${imgs.length}`, loading: 'lazy' })));
-    return h('div', { class: 'ap-car' }, track, h('span', { class: 'ap-badge' }, `❐ ${imgs.length} fotos · deslize`), dots);
+    } }, ...imgs.map((m, i) => (m.kind === 'video'
+      ? h('video', { src: m.url, poster: i === 0 ? p.image_url || null : null, controls: true, playsinline: true, preload: 'metadata', 'aria-label': `Vídeo ${i + 1} de ${imgs.length}` })
+      : h('img', { src: m.url, alt: `${i + 1} de ${imgs.length}`, loading: 'lazy' }))));
+    const nv = imgs.filter((m) => m.kind === 'video').length;
+    return h('div', { class: 'ap-car' }, track, h('span', { class: 'ap-badge' }, `❐ ${imgs.length} ${nv ? (nv === imgs.length ? 'vídeos' : 'itens') : 'fotos'} · deslize`), dots);
   }
   return h('img', { src: p.image_url, alt: p.alt_text || 'Imagem do post', loading: 'lazy' });
 }

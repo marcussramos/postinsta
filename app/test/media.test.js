@@ -25,7 +25,7 @@ after(() => { S.server.close(); S.fakes.restore(); });
 test('carrossel precisa de 2+ imagens e publica com os itens', async () => {
   const bad = await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'CAROUSEL', media: [{ url: 'https://x/1.jpg', kind: 'image' }], image_url: 'https://x/1.jpg', scheduled_at: soon(), approved: true } });
   assert.equal(bad.status, 400);
-  assert.match(bad.data.error, /2 imagens/);
+  assert.match(bad.data.error, /2 itens/);
   const media = [1, 2, 3].map((i) => ({ url: `https://x/${i}.jpg`, path: `p/${i}.jpg`, kind: 'image' }));
   const p = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'CAROUSEL', media, image_url: media[0].url, image_path: media[0].path, caption: 'carrossel', scheduled_at: soon(), approved: true } })).data;
   assert.equal(p.status, 'approved');
@@ -34,6 +34,31 @@ test('carrossel precisa de 2+ imagens e publica com os itens', async () => {
   const parent = [...S.fakes.ig.containers.values()].find((x) => x.media_type === 'CAROUSEL');
   assert.equal(parent.children.split(',').length, 3);
   assert.equal([...S.fakes.ig.containers.values()].filter((x) => x.media_type === 'ITEM').length, 3);
+});
+
+test('carrossel com vídeo: cria os itens, espera o vídeo processar e só então monta e publica', async () => {
+  S.fakes.ig.videoInProgress = true;
+  const media = [{ url: 'https://x/c1.mp4', path: 'p/c1.mp4', kind: 'video' }, { url: 'https://x/c2.jpg', path: 'p/c2.jpg', kind: 'image' }, { url: 'https://x/c3.mov', path: 'p/c3.mov', kind: 'video' }];
+  const p = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'CAROUSEL', media, image_url: 'https://x/c1-capa.jpg', caption: 'misto', scheduled_at: soon(), approved: true } })).data;
+  assert.equal(p.status, 'approved');
+  assert.deepEqual(p.media.map((m) => m.kind), ['video', 'image', 'video']);
+  const before = S.fakes.ig.containers.size;
+  let log = await runPublisher({ wait: async () => {} });
+  assert.deepEqual(log.waiting, [p.id], JSON.stringify(log));
+  const made = [...S.fakes.ig.containers.entries()].slice(before);
+  assert.deepEqual(made.map(([, v]) => v.media_type), ['VIDEO', 'ITEM', 'VIDEO'], 'itens criados, carrossel ainda não');
+  assert.equal(made[0][1].video_url, 'https://x/c1.mp4');
+  assert.match(S.fakes.tables.posts.find((x) => x.id === p.id).ig_container_id, /^children:C\d+,C\d+,C\d+$/);
+  log = await runPublisher({ wait: async () => {} });
+  assert.deepEqual(log.waiting, [p.id], 'continua esperando sem criar itens de novo');
+  assert.equal(S.fakes.ig.containers.size, before + 3);
+  for (const v of S.fakes.ig.containers.values()) if (v.status === 'IN_PROGRESS') v.status = 'FINISHED';
+  log = await runPublisher({ wait: async () => {} });
+  assert.equal(log.published.length, 1, JSON.stringify(log));
+  const parent = [...S.fakes.ig.containers.values()].find((x) => x.media_type === 'CAROUSEL' && x.caption === 'misto');
+  assert.deepEqual(parent.children.split(','), made.map(([id]) => id));
+  assert.equal(S.fakes.tables.posts.find((x) => x.id === p.id).status, 'published');
+  S.fakes.ig.videoInProgress = false;
 });
 
 test('Reels: exige vídeo, publica com capa e espera o processamento', async () => {

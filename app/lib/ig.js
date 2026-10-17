@@ -118,19 +118,36 @@ export async function createPostContainer(igUserId, token, post, { wait = (ms) =
     if (!video) throw new IgError('O Reels está sem vídeo.', { transient: false });
     return create({ media_type: 'REELS', video_url: video.url, cover_url: post.image_url, caption: post.caption, share_to_feed: 'true' });
   }
-  // CAROUSEL
-  const items = (post.media || []).filter((m) => m.kind === 'image').slice(0, 10);
-  if (items.length < 2) throw new IgError('O carrossel precisa de pelo menos 2 imagens.', { transient: false });
+  // CAROUSEL: fotos e vídeos misturados (2 a 10 itens)
+  const items = (post.media || []).filter((m) => m?.url).slice(0, 10);
+  if (items.length < 2) throw new IgError('O carrossel precisa de pelo menos 2 itens (fotos ou vídeos).', { transient: false });
   const children = [];
-  for (const it of items) children.push(await create({ image_url: it.url, is_carousel_item: 'true' }));
-  // espera os itens ficarem prontos (imagens costumam levar segundos)
-  for (let i = 0; i < 6; i++) {
-    const st = await Promise.all(children.map((id) => containerStatus(id, token)));
-    if (st.some((x) => x.code === 'ERROR' || x.code === 'EXPIRED')) throw new IgError('O Instagram recusou uma das imagens do carrossel.', { transient: false });
-    if (st.every((x) => x.code === 'FINISHED')) break;
-    await wait(2000);
+  for (const it of items) children.push(await create(it.kind === 'video' ? { media_type: 'VIDEO', video_url: it.url, is_carousel_item: 'true' } : { image_url: it.url, is_carousel_item: 'true' }));
+  const hasVideo = items.some((it) => it.kind === 'video');
+  // espera os itens ficarem prontos (imagens levam segundos; vídeos podem levar minutos)
+  for (let i = 0; i < (hasVideo ? 4 : 6); i++) {
+    const r = await carouselChildren(children, token);
+    if (r === 'ready') return create({ media_type: 'CAROUSEL', children: children.join(','), caption: post.caption });
+    await wait(hasVideo ? 3000 : 2000);
   }
+  // vídeo ainda processando: guarda os itens e o publicador monta o carrossel numa próxima rodada
+  if (hasVideo) return `${CHILDREN}${children.join(',')}`;
   return create({ media_type: 'CAROUSEL', children: children.join(','), caption: post.caption });
+}
+
+// Carrossel com vídeo: os itens são criados primeiro e o "pai" só depois que todos ficam prontos.
+// ig_container_id guarda "children:id1,id2,…" enquanto isso.
+export const CHILDREN = 'children:';
+export async function carouselChildren(children, token) {
+  const st = await Promise.all(children.map((id) => containerStatus(id, token)));
+  if (st.some((x) => x.code === 'ERROR' || x.code === 'EXPIRED')) {
+    throw new IgError(`O Instagram recusou um dos itens do carrossel (vídeo: MP4/MOV, H.264, 3 a 60 s, até 100 MB; ${st.find((x) => x.code === 'ERROR' || x.code === 'EXPIRED').detail || 'erro'}).`, { transient: false });
+  }
+  return st.every((x) => x.code === 'FINISHED') ? 'ready' : 'waiting';
+}
+export async function createCarouselParent(igUserId, token, children, caption) {
+  const r = await igFetch(`${graph()}/${igUserId}/media`, { method: 'POST', body: form({ media_type: 'CAROUSEL', children: children.join(','), caption, access_token: token }) });
+  return r.id;
 }
 
 // FINISHED = pronto; IN_PROGRESS = processando; ERROR/EXPIRED = falhou.
