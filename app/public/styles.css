@@ -889,3 +889,4 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .vz { display: grid; gap: 8px; padding: 18px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 14px; background: var(--accent-soft); font-size: 14px; }
 .vz-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 18%, var(--surface)); overflow: hidden; }
 .vz-fill { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .2s; }
+.money-btn { display: inline-flex; align-items: center; justify-content: center; }
