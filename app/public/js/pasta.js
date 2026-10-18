@@ -441,7 +441,7 @@ function igReports(c) {
         metric('alcance', s.reach), metric('curtidas', s.likes), metric('comentários', s.comments), metric('salvamentos', s.saves),
         metric('seguidores ganhos', s.followers_gained), metric('posts', s.posts), metric('engajamento', s.engagement, '%')),
       h('div', { class: 'actions' },
-        h('button', { class: 'btn ghost sm', onclick: () => openReportNote(c, r) }, r.note ? '✎ Editar comentário' : '✎ Comentário para o cliente'),
+        h('button', { class: 'btn ghost sm', onclick: () => openReportNote(c, r) }, '✎ Próximos passos e comentário'),
         h('button', { class: 'btn ghost sm', onclick: (e) => generate(r.ref_month, e.currentTarget) }, '↻ Atualizar números'),
         confirmButton('Apagar', 'Confirmar: o link para de abrir', async () => {
           await api(`/api/pasta?r=reports&id=${r.id}`, { method: 'DELETE' });
@@ -453,18 +453,30 @@ function igReports(c) {
 }
 
 function openReportNote(c, r) {
-  const ta = h('textarea', { id: 'r-note', style: 'min-height:180px', placeholder: 'Ex.: Setembro teve o melhor alcance do ano, puxado pelo carrossel de frases. Para outubro vamos testar mais Reels às 19h.' });
+  const steps = h('textarea', { id: 'r-steps', style: 'min-height:200px', placeholder: 'Um passo por linha' });
+  steps.value = (r.next_steps || []).join('\n\n');
+  const auto = (r.next_steps_auto || []).join('\n\n');
+  const ta = h('textarea', { id: 'r-note', style: 'min-height:140px', placeholder: 'Ex.: Setembro teve o melhor alcance do ano, puxado pelo carrossel de frases.' });
   ta.value = r.note || '';
-  const close = drawer(`Comentário · ${monthLabel(r.ref_month)}`, [
-    h('div', { class: 'field' }, h('label', { for: 'r-note' }, 'Aparece no relatório do cliente, em "Comentários da agência"'), ta,
-      h('span', { class: 'hint' }, 'Análise do mês, destaques e próximos passos. Deixe em branco para não mostrar.'))],
+  const bt = r.best_times?.slots?.length ? h('div', { class: 'card', style: 'gap:6px;padding:12px' }, h('b', {}, 'Melhores horários (aparecem no relatório)'),
+    h('span', {}, r.best_times.slots.map((s) => s.label).join(' · ')),
+    h('span', { class: 'hint' }, r.best_times.source === 'perfil' ? `Calculado com ${r.best_times.based_on} posts dos últimos 4 meses.` : 'Poucos posts ainda: sugestão inicial para testar.')) : null;
+  const close = drawer(`Relatório · ${monthLabel(r.ref_month)}`, [
+    bt,
+    h('div', { class: 'field' }, h('label', { for: 'r-steps' }, 'Próximos passos'), steps,
+      h('span', { class: 'hint' }, r.next_steps_edited ? 'Escrito pela agência. Separe um passo do outro com uma linha em branco.' : 'Sugestão automática, tirada dos números do mês. Edite à vontade antes de mandar (um passo por parágrafo).'),
+      auto ? h('button', { type: 'button', class: 'btn ghost sm', style: 'justify-self:start', onclick: () => { steps.value = auto; } }, '↺ Voltar para a sugestão automática') : null),
+    h('div', { class: 'field' }, h('label', { for: 'r-note' }, 'Comentários da agência (opcional)'), ta,
+      h('span', { class: 'hint' }, 'Análise do mês e destaques. Deixe em branco para não mostrar.'))],
   [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: async () => {
     try {
-      const saved = await api('/api/pasta?r=reports', { method: 'PATCH', body: { id: r.id, note: ta.value } });
-      S.folder.reports = S.folder.reports.map((x) => (x.id === saved.id ? saved : x)); close(); render(); toast('Comentário salvo.');
+      const list = steps.value.split(/\n\s*\n|\n(?=\s*[-•\d]+[.)]?\s)/).map((x) => x.replace(/^\s*[-•]\s*/, '').trim()).filter(Boolean);
+      const same = list.join('\n\n') === auto;
+      const saved = await api('/api/pasta?r=reports', { method: 'PATCH', body: { id: r.id, note: ta.value, next_steps: same ? null : list } });
+      S.folder.reports = S.folder.reports.map((x) => (x.id === saved.id ? saved : x)); close(); render(); toast('Relatório atualizado.');
     } catch (e) { toast(e.message, true); }
   } }, 'Salvar')]);
-  ta.focus();
+  steps.focus();
 }
 function folderOther(c) {
   return [filesSection(c, 'other', 'Outros documentos', 'Briefing, manual de marca, notas fiscais, propostas, acessos documentados…')];

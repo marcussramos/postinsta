@@ -61,6 +61,17 @@
   .nums div { background: var(--surface-2); border-radius: 8px; padding: 6px 8px; font-size: 11.5px; color: var(--muted); }
   .nums b { display: block; color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
   .tp a.link { font-size: 13px; font-weight: 700; color: var(--accent); text-decoration: none; }
+  .fmt-list { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .fmt-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 230px; gap: 14px; align-items: center; }
+  .fmt-name b { display: block; } .fmt-name span, .fmt-num span { color: var(--muted); font-size: 13px; }
+  .fmt-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; } .fmt-bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .fmt-num { font-size: 14px; }
+  .slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .slot { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; }
+  .slot b { font-size: 18px; } .slot span { color: var(--muted); font-size: 13px; }
+  .slot.first { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .steps { margin: 0; padding: 16px 18px 16px 40px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; display: grid; gap: 10px; font-size: 15px; line-height: 1.55; }
+  @media (max-width: 640px) { .fmt-row { grid-template-columns: 1fr; gap: 6px; } .slots { grid-template-columns: 1fr; } }
   .note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 18px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
   .tablewrap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 640px; }
@@ -173,6 +184,25 @@ function render({ ref_month, data: d, note, updated_at }) {
       h('td', {}, fmt(p.reach)), h('td', {}, fmt(p.likes)), h('td', {}, fmt(p.comments)), h('td', {}, fmt(p.saved)), h('td', {}, fmt(p.shares)))))))
     : null;
 
+  // Desempenho por formato (só aparece com 2+ formatos no mês)
+  const F = d.formats || [];
+  const maxI = Math.max(1, ...F.map((x) => x.avg_interactions));
+  const formats = F.length >= 2 ? h('div', { class: 'fmt-list' }, ...F.map((x) => h('div', { class: 'fmt-row' },
+    h('div', { class: 'fmt-name' }, h('b', {}, x.type), h('span', {}, `${x.posts} post${x.posts > 1 ? 's' : ''}`)),
+    h('div', { class: 'fmt-bar' }, h('span', { style: `width:${Math.round((x.avg_interactions / maxI) * 100)}%` })),
+    h('div', { class: 'fmt-num' }, h('b', {}, fmt(x.avg_interactions)), ' interações/post', x.avg_reach != null ? h('span', {}, ` · ${fmt(x.avg_reach)} de alcance`) : null))))
+    : null;
+  // Melhores horários
+  const BT = d.best_times;
+  const times = BT?.slots?.length ? h('div', { class: 'times' },
+    h('div', { class: 'slots' }, ...BT.slots.map((s, i) => h('div', { class: `slot${i === 0 ? ' first' : ''}` }, h('b', {}, s.label.replace(/^(\S+)/, (w) => ({ dom: 'Domingo', seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', 'sáb': 'Sábado' }[w] || w))),
+      s.lift ? h('span', {}, `${nf.format(s.lift)}× o engajamento normal`) : h('span', {}, 'sugestão inicial')))),
+    h('p', { class: 'warn' }, BT.source === 'perfil'
+      ? `Calculado com ${BT.based_on} posts do perfil nos últimos 4 meses: compara curtidas e comentários de cada post com a média do perfil, por dia da semana e hora (horário de Cuiabá).`
+      : 'Ainda há poucos posts para calcular os horários deste perfil. Estes são pontos de partida: a ideia é testar e comparar nos próximos meses.')) : null;
+  const steps = (d.next_steps_custom || d.next_steps || []);
+  const stepsBox = steps.length ? h('ol', { class: 'steps' }, ...steps.map((s) => h('li', {}, s))) : null;
+
   $app.replaceChildren(
     h('header', { class: 'hero' },
       h('div', { class: 'eyebrow' }, 'Relatório de desempenho · Instagram'),
@@ -182,6 +212,9 @@ function render({ ref_month, data: d, note, updated_at }) {
     h('section', {}, h('h2', {}, 'Resumo do mês'), kpis,
       d.previous ? h('p', { class: 'warn' }, 'As setas comparam com o mês anterior.') : null),
     h('section', {}, h('h2', {}, 'Melhores posts do mês'), topCards),
+    formats ? h('section', {}, h('h2', {}, 'Desempenho por formato'), formats) : null,
+    times ? h('section', {}, h('h2', {}, 'Melhores horários para postar'), times) : null,
+    stepsBox ? h('section', { class: 'next' }, h('h2', {}, 'Próximos passos'), stepsBox) : null,
     note ? h('section', {}, h('h2', {}, 'Comentários da agência'), h('div', { class: 'note' }, note)) : null,
     table ? h('section', { class: 'allposts' }, h('h2', {}, 'Todos os posts do mês'), table) : null,
     h('section', {}, h('h2', {}, 'Como ler'),

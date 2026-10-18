@@ -5,11 +5,14 @@ import { requirePerm, needClient, seesClient } from '../auth.js';
 import { db } from '../db.js';
 import { appUrl } from '../env.js';
 import { saveReport, summary, isMonth } from '../reports.js';
+import { formatBreakdown, nextSteps } from '../insights.js';
 
 const shareUrl = (t) => `${appUrl()}/relatorio?t=${t}`;
 const listItem = (r) => ({
   id: r.id, client_id: r.client_id, ref_month: r.ref_month, note: r.note, created_at: r.created_at, updated_at: r.updated_at,
   share_url: shareUrl(r.share_token), summary: summary(r.data || {}), partial: Boolean(r.data?.period?.partial), warnings: r.data?.warnings || [],
+  next_steps: r.data?.next_steps_custom || r.data?.next_steps || [], next_steps_auto: r.data?.next_steps || [], next_steps_edited: Boolean(r.data?.next_steps_custom),
+  best_times: r.data?.best_times || null,
 });
 
 export default route({
@@ -32,10 +35,18 @@ export default route({
     send(res, 200, listItem(row));
   },
   PATCH: async (req, res) => {
-    await requirePerm(req, 'relatorios');
+    const u = await requirePerm(req, 'relatorios');
     const b = await readJson(req);
     need(b.id, 400, 'Relatório não informado.');
-    const [row] = await db.update('reports', { id: `eq.${b.id}` }, { note: String(b.note || '').trim().slice(0, 3000) || null });
+    const cur = await db.one('reports', { select: 'client_id,data', id: `eq.${b.id}` });
+    need(cur && seesClient(u, cur.client_id), 404, 'Relatório não encontrado.');
+    const patch = {};
+    if (b.note !== undefined) patch.note = String(b.note || '').trim().slice(0, 3000) || null;
+    if (b.next_steps !== undefined) { // lista de passos escrita pela agência; null volta para a sugestão automática
+      const list = Array.isArray(b.next_steps) ? b.next_steps.map((x) => String(x).trim().slice(0, 500)).filter(Boolean).slice(0, 10) : null;
+      patch.data = { ...(cur.data || {}), next_steps_custom: list && list.length ? list : null };
+    }
+    const [row] = await db.update('reports', { id: `eq.${b.id}` }, patch);
     need(row, 404, 'Relatório não encontrado.');
     send(res, 200, listItem(row));
   },
@@ -55,6 +66,9 @@ export const publicReport = route({
     need(t && /^[a-f0-9]{20,64}$/.test(t), 404, 'Relatório não encontrado.');
     const r = await db.one('reports', { select: 'ref_month,data,note,updated_at', share_token: `eq.${t}` });
     need(r, 404, 'Relatório não encontrado. Peça um link novo para a agência.');
-    send(res, 200, { ref_month: r.ref_month, data: r.data, note: r.note, updated_at: r.updated_at });
+    const data = { ...(r.data || {}) };
+    if (!data.formats) data.formats = formatBreakdown(data.posts || []); // relatórios gerados antes desta versão
+    if (!data.next_steps) data.next_steps = nextSteps(data);
+    send(res, 200, { ref_month: r.ref_month, data, note: r.note, updated_at: r.updated_at });
   },
 });
