@@ -106,6 +106,7 @@ export default route({
       need(row, 409, 'Este post não pode ir para essa etapa agora. Atualize a página e tente de novo.');
       if (body.action === 'send') await logEvent(row, 'sent');
       if (body.action === 'approve') await logEvent(row, 'approved_by_agency');
+      if (body.action === 'mark_published') await logEvent(row, 'published_manual');
       return send(res, 200, row);
     }
 

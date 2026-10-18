@@ -26,7 +26,7 @@ const COLUMNS = [
   { id: 'pending_approval', label: 'Aguardando cliente', drop: 'send' },
   { id: 'changes_requested', label: 'Ajuste pedido' },
   { id: 'approved', label: 'Aprovado', drop: 'approve', also: ['publishing', 'failed'] },
-  { id: 'published', label: 'Publicado' },
+  { id: 'published', label: 'Publicado', drop: 'mark_published' },
 ];
 
 // cor fixa por cliente (etiqueta no estilo Trello)
@@ -72,6 +72,7 @@ function viewBoard() {
         const id = e.dataTransfer.getData('text/plain');
         const p = S.posts.find((x) => x.id === id);
         if (!p || p.status === (col.status || col.id)) return;
+        if (col.drop === 'mark_published' && !confirm(`Marcar "${p.title || 'este post'}" como já publicado?\n\nUse só se você postou manualmente no Instagram. O app não vai publicar este post.`)) return;
         await movePost(p, col.drop, `Movido para ${col.label}.`);
       });
     }

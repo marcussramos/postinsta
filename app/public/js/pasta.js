@@ -606,7 +606,7 @@ function portalEditBox(c) {
 }
 
 // ───────────────────────── histórico de aprovações (prova)
-const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia' };
+const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia', published_manual: 'Publicado manualmente' };
 const EVENT_TONE = { approved: 'st-approved', changes_requested: 'st-changes_requested', published: 'st-published', failed: 'st-failed', approved_by_agency: 'st-internal_review', sent: 'st-pending_approval', reminded: 'st-draft' };
 function folderHistory(c) {
   const F = S.folder;

@@ -94,6 +94,9 @@ export function actionPatch(action, now = new Date().toISOString()) {
         patch: { status: 'approved', decided_at: now } };
     case 'retry': // tentar publicar de novo depois de uma falha
       return { from: ['failed'], complete: true, patch: { status: 'approved', attempts: 0, last_error: null, ig_container_id: null } };
+    case 'mark_published': // a agência postou direto no Instagram (manual) e só registra no painel
+      return { from: ['draft', 'internal_review', 'pending_approval', 'changes_requested', 'approved', 'failed'],
+        patch: { status: 'published', published_at: now, last_error: null, attempts: 0, ig_container_id: null } };
     default:
       return null;
   }
