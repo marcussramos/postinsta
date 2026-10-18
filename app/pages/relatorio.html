@@ -198,7 +198,7 @@ function render({ ref_month, data: d, note, updated_at }) {
     h('div', { class: 'slots' }, ...BT.slots.map((s, i) => h('div', { class: `slot${i === 0 ? ' first' : ''}` }, h('b', {}, s.label.replace(/^(\S+)/, (w) => ({ dom: 'Domingo', seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', 'sáb': 'Sábado' }[w] || w))),
       s.lift ? h('span', {}, `${nf.format(s.lift)}× o engajamento normal`) : h('span', {}, 'sugestão inicial')))),
     h('p', { class: 'warn' }, BT.source === 'perfil'
-      ? `Calculado com ${BT.based_on} posts do perfil nos últimos 4 meses: compara curtidas e comentários de cada post com a média do perfil, por dia da semana e hora (horário de Cuiabá).`
+      ? `Calculado com ${BT.based_on} posts do perfil nos últimos 4 meses: compara curtidas e comentários de cada post com a média do perfil, por dia da semana e hora (horário de Cuiabá).${BT.slots.every((s) => (s.n || 1) < 2) ? ' Por enquanto cada horário tem só 1 post: é um indício para testar, não uma regra.' : ''}`
       : 'Ainda há poucos posts para calcular os horários deste perfil. Estes são pontos de partida: a ideia é testar e comparar nos próximos meses.')) : null;
   const steps = (d.next_steps_custom || d.next_steps || []);
   const stepsBox = steps.length ? h('ol', { class: 'steps' }, ...steps.map((s) => h('li', {}, s))) : null;
