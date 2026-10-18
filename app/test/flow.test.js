@@ -144,3 +144,15 @@ test('renova token perto de vencer', async () => {
   assert.deepEqual(log.refreshed, ['Frases de Funk']);
   assert.equal(c.ig_token, 'long-tok-2');
 });
+
+test('post que falhou pode ser marcado como publicado manualmente', async () => {
+  const c = S.fakes.tables.clients[0];
+  const p = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, image_url: 'https://fake.supabase.co/m.jpg', caption: 'm', scheduled_at: new Date(Date.now() + 864e5).toISOString(), approved: true } })).data;
+  S.fakes.tables.posts.find((x) => x.id === p.id).status = 'failed';
+  const r = (await call(`/api/posts?id=${p.id}`, { method: 'PATCH', body: { action: 'mark_published' } })).data;
+  assert.equal(r.status, 'published');
+  assert.ok(r.published_at);
+  assert.equal(r.last_error, null);
+  const again = await call(`/api/posts?id=${p.id}`, { method: 'PATCH', body: { action: 'mark_published' } });
+  assert.equal(again.status, 409, 'já publicado não muda de novo');
+});

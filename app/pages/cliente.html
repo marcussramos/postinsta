@@ -417,7 +417,7 @@ function render() {
       h('div', { class: 'act' }, h('span', { class: `pill ${REQ[r.status][1]}` }, REQ[r.status][0])),
       h('div', { class: 's' }, `Enviado em ${dmy(r.created_at)}${r.wanted_date ? ` · para ${dmy(r.wanted_date)}` : ''}${r.files?.length ? ` · ${r.files.length} anexo(s)` : ''}`)));
   } else if (tab === 'aprovacoes') {
-    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Você mudou a data', client_idea: 'Você sugeriu uma ideia', client_idea_removed: 'Você retirou a ideia' };
+    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Você mudou a data', client_idea: 'Você sugeriu uma ideia', client_idea_removed: 'Você retirou a ideia', published_manual: 'Publicado no Instagram' };
     panel.append(h('div', { class: 'card' }, h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Registro de cada envio, aprovação e publicação, com data e hora.'),
       h('a', { class: 'btn sm', href: `/historico?t=${encodeURIComponent(t)}`, target: '_blank', rel: 'noopener' }, 'Baixar em PDF')));
     if (!(D.history || []).length) panel.append(h('div', { class: 'empty' }, 'Os registros aparecem aqui a partir dos próximos envios.'));

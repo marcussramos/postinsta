@@ -43,7 +43,7 @@
 if (!Element.prototype.__mcSafe) { const rc = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...k) { return rc.apply(this, k.flat().filter((x) => x != null && x !== false)); }; Element.prototype.__mcSafe = true; }
 const q = new URLSearchParams(location.search);
 const $doc = document.getElementById('doc');
-const LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia' };
+const LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia', published_manual: 'Publicado manualmente' };
 const TYPE = { IMAGE: 'Foto', CAROUSEL: 'Carrossel', REELS: 'Reels' };
 const fmt = (iso) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Cuiaba' }).format(new Date(iso));
 function h(tag, attrs = {}, ...kids) {

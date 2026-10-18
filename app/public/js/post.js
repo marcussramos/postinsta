@@ -519,6 +519,7 @@ function openPost(post = null, opts = {}) {
     if (st === 'changes_requested') foot.push(B('Aprovar assim mesmo', 'ghost', () => save('approve')), B('Salvar e reenviar', 'primary', () => save('send')));
     if (st === 'approved') foot.push(B('Tirar da fila', 'ghost', () => action('to_production', 'Saiu da fila: voltou para produção.')), B('Salvar', 'primary', () => save('save')));
     if (st === 'failed') foot.push(B('Voltar p/ produção', 'ghost', () => action('to_production', 'Voltou para produção.')), B('Tentar de novo', 'primary', () => action('retry', 'Na fila de novo. Sai em até 5 minutos.')));
+    if (['approved', 'failed', 'pending_approval', 'changes_requested'].includes(st)) foot.splice(2, 0, confirmButton('Já postei manualmente', 'Confirmar: já está no Instagram', () => action('mark_published', 'Marcado como publicado.'), 'btn ghost'));
   }
   if (!can('enviar')) foot = foot.filter((b) => !(b instanceof HTMLButtonElement) || !/Enviar para aprovação|Aprovar|reenviar|Tentar de novo/.test(b.textContent));
   if (!can('apagar') && foot[0]?.textContent === 'Apagar') foot = foot.slice(1);
