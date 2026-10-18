@@ -7,6 +7,8 @@ import { db, storage } from './db.js';
 import { TIMEZONE } from './env.js';
 import * as ig from './ig.js';
 import { HttpError } from './http.js';
+import { bestTimes } from './besttime.js';
+import { formatBreakdown, nextSteps } from './insights.js';
 
 const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m || '');
 export { isMonth };
@@ -151,6 +153,9 @@ export async function buildReport(client, month, { now = Date.now(), tz = TIMEZO
     month, client_name: client.name, ig_username: prof.username || client.ig_username,
     period: { start: new Date(start).toISOString(), end: new Date(end).toISOString(), partial: end < monthStart(shiftMonth(month, 1), tz) },
     totals, top: ranked.slice(0, 3).map((p) => p.id), posts: posts.sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    formats: formatBreakdown(posts),
+    // melhores horários: últimos 4 meses de posts do perfil (curtidas + comentários por dia/hora)
+    best_times: await bestTimes(client.id, { now, tz }).then((b) => ({ source: b.source, based_on: b.based_on, slots: b.slots })).catch(() => null),
     warnings, generated_at: new Date(now).toISOString(),
   };
 }
@@ -160,7 +165,9 @@ export async function saveReport(client, month, opts) {
   const data = await buildReport(client, month, opts);
   const prev = await db.one('reports', { select: 'data', client_id: `eq.${client.id}`, ref_month: `eq.${shiftMonth(month, -1)}` }).catch(() => null);
   if (prev?.data?.totals) data.previous = summary(prev.data);
-  const old = await db.one('reports', { select: 'id,share_token', client_id: `eq.${client.id}`, ref_month: `eq.${month}` });
+  data.next_steps = nextSteps(data, { tz: opts?.tz || TIMEZONE() });
+  const old = await db.one('reports', { select: 'id,share_token,data', client_id: `eq.${client.id}`, ref_month: `eq.${month}` });
+  if (old?.data?.next_steps_custom) data.next_steps_custom = old.data.next_steps_custom; // o que a agência escreveu não se perde ao atualizar
   const now = new Date().toISOString();
   if (old) {
     const [row] = await db.update('reports', { id: `eq.${old.id}` }, { data, updated_at: now });
