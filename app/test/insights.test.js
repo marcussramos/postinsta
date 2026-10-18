@@ -21,7 +21,7 @@ test('próximos passos: formato, post campeão, salvamentos, seguidores, frequê
     posts, top: ['1'], formats: formatBreakdown(posts), period: { partial: false },
     totals: { posts: { value: 4 }, interactions: { value: 700 }, saves: { value: 10 }, shares: { value: 5 }, followers_gained: { value: -3 } },
     previous: { posts: 8 },
-    best_times: { source: 'perfil', based_on: 30, slots: [{ label: 'qua 19h', weekday: 3, hour: 19 }, { label: 'sex 12h', weekday: 5, hour: 12 }, { label: 'dom 10h' }] },
+    best_times: { source: 'perfil', based_on: 30, slots: [{ label: 'qua 19h', weekday: 3, hour: 19, n: 3 }, { label: 'sex 12h', weekday: 5, hour: 12, n: 2 }, { label: 'dom 10h', n: 2 }] },
   };
   const s = nextSteps(d);
   assert.equal(s.length, 5, 'no máximo 5');
@@ -33,6 +33,8 @@ test('próximos passos: formato, post campeão, salvamentos, seguidores, frequê
   // com menos motivos, entram os horários
   const s2 = nextSteps({ ...d, totals: { ...d.totals, saves: { value: 200 }, followers_gained: { value: 10 } }, previous: {} });
   assert.match(s2.at(-1), /quarta às 19h, sexta às 12h e dom 10h/);
+  // só 1 post por horário: fala em confirmar
+  assert.match(nextSteps({ ...d, totals: { ...d.totals, saves: { value: 200 }, followers_gained: { value: 10 } }, previous: {}, best_times: { source: 'perfil', slots: [{ weekday: 1, hour: 14, n: 1 }] } }).at(-1), /segunda às 14h, mas ainda é 1 post por horário/);
   // sem posts
   assert.match(nextSteps({ posts: [], totals: { posts: { value: 0 } } })[0], /retomar a frequência/);
   // horários genéricos: fala em testar

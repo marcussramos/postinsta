@@ -53,8 +53,11 @@ export function nextSteps(d, { tz = 'America/Cuiaba' } = {}) {
   const bt = d.best_times;
   if (bt?.slots?.length) {
     const list = bt.slots.map(slotName).join(', ').replace(/, ([^,]*)$/, ' e $1');
-    out.push(bt.source === 'perfil'
+    const weak = bt.slots.every((s) => (s.n || 1) < 2); // cada horário tem só 1 post: indício, não regra
+    out.push(bt.source === 'perfil' && !weak
       ? `Os horários com melhor resposta do público foram ${list}. Concentre os próximos posts nessas faixas e compare o resultado no próximo relatório.`
+      : bt.source === 'perfil'
+      ? `Os posts com melhor resposta saíram ${list}, mas ainda é 1 post por horário. Vale repetir esses horários algumas vezes para confirmar antes de fixar.`
       : `Ainda há poucos posts para saber o melhor horário deste perfil. Teste ${list} e compare o desempenho ao longo do mês.`);
   }
   return out.slice(0, 5);
