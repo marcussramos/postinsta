@@ -17,6 +17,7 @@ export const EVENT_LABEL = {
   client_idea: 'Cliente sugeriu uma ideia',
   client_idea_removed: 'Cliente retirou a ideia',
   published_manual: 'Publicado manualmente',
+  delivered: 'Material entregue ao cliente',
 };
 
 export function snapshot(p) {

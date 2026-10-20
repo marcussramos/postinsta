@@ -72,6 +72,7 @@ function viewBoard() {
         const id = e.dataTransfer.getData('text/plain');
         const p = S.posts.find((x) => x.id === id);
         if (!p || p.status === (col.status || col.id)) return;
+        if (col.drop === 'mark_published' && prodClient(p.client_id)) { if (confirm(`Marcar "${p.title || 'este post'}" como entregue ao cliente?`)) await movePost(p, 'deliver', 'Entregue ao cliente.'); return; }
         if (col.drop === 'mark_published' && !confirm(`Marcar "${p.title || 'este post'}" como já publicado?\n\nUse só se você postou manualmente no Instagram. O app não vai publicar este post.`)) return;
         await movePost(p, col.drop, `Movido para ${col.label}.`);
       });
@@ -172,6 +173,8 @@ function openViewer(p, start = 0) {
   draw(); box.focus();
 }
 
+const prodClient = (id) => Boolean(S.clients.find((c) => c.id === id)?.production_only); // cliente só de produção: ele mesmo posta
+
 function boardCard(p, col) {
   const late = isLate(p);
   const t = p.scheduled_at ? new Date(p.scheduled_at) : null;
@@ -187,7 +190,8 @@ function boardCard(p, col) {
         fmt ? h('span', { class: 'tlabel fmt' }, fmt) : null,
         (p.notes || '').startsWith('✨') ? h('span', { class: 'tlabel ia', title: 'Planejado com IA' }, '✨ IA') : null,
         (p.notes || '').startsWith('💡 Ideia sugerida pelo cliente') ? h('span', { class: 'tlabel ia', title: 'Sugerida pelo cliente na área do cliente' }, '💡 Do cliente') : null,
-        scriptBadge(p)),
+        scriptBadge(p),
+        prodClient(p.client_id) ? h('span', { class: 'tlabel ia', title: 'Cliente só de produção: o app não publica, a agência entrega o material' }, p.status === 'published' ? '📦 Entregue' : '📦 Cliente posta') : null),
       h('div', { class: 'ttitle' }, postLabel(p)),
       p.status === 'changes_requested' && (p.client_feedback || p.feedback_audio) ? h('div', { class: 'tnote' }, p.feedback_audio ? '🎤 ' : '', p.client_feedback && p.client_feedback !== '🎤 Pedido por áudio' ? `“${p.client_feedback}”` : 'Ajuste pedido por áudio') : null,
       p.status === 'failed' ? h('div', { class: 'tnote fail' }, `Falhou: ${p.last_error || ''}`) : null,

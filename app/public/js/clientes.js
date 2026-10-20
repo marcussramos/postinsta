@@ -33,7 +33,8 @@ function cardClient(c) {
   const pend = S.posts.filter((p) => p.client_id === c.id && p.status === 'pending_approval').length;
   const exp = c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 86400e3) : null;
   const expired = exp !== null && exp <= 0;
-  const ig = !c.ig_connected ? h('span', { class: 'ig-off' }, 'Não conectado')
+  const ig = c.production_only && !c.ig_connected ? h('span', { class: 'ig-ok' }, '📦 Só produção · o cliente posta')
+    : !c.ig_connected ? h('span', { class: 'ig-off' }, 'Não conectado')
     : expired ? h('span', { class: 'ig-off' }, `@${c.ig_username} · conexão expirou`)
     : h('span', { class: exp !== null && exp < 5 ? 'ig-warn' : 'ig-ok' }, `@${c.ig_username || 'conectado'}`);
   return h('article', { class: 'card' },
@@ -63,6 +64,7 @@ function openClient(c = null) {
   const wa = h('input', { type: 'tel', id: 'c-wa', value: c?.contact_whatsapp ? c.contact_whatsapp.replace(/^55/, '') : '', placeholder: '65 99999-9999', inputmode: 'tel' });
   const email = h('input', { type: 'email', id: 'c-email', value: c?.contact_email || '', placeholder: 'cliente@empresa.com.br' });
   const own = h('input', { type: 'checkbox', id: 'c-own', checked: Boolean(c?.own) });
+  const prod = h('input', { type: 'checkbox', id: 'c-prod', checked: Boolean(c?.production_only) });
   const voice = h('textarea', { id: 'c-voice', style: 'min-height:90px', placeholder: 'Ex.: Linguagem jovem e de rua, gírias de funk, frases curtas de atitude. Nada de palavrão. Público 18–30.' }, c?.brand_voice || '');
   const body = [
     h('div', { class: 'field' }, h('label', { for: 'c-name' }, 'Nome do cliente'), name),
@@ -70,6 +72,7 @@ function openClient(c = null) {
     h('div', { class: 'field' }, h('label', { for: 'c-email' }, 'E-mail de quem aprova'), email, h('span', { class: 'hint' }, 'Usado no botão de e-mail.')),
     h('div', { class: 'field' }, h('label', { for: 'c-voice' }, 'Tom de voz da marca'), voice, h('span', { class: 'hint' }, 'A IA usa isto para escrever legendas no jeito da marca.')),
     h('label', { class: 'check-row' }, own, h('span', {}, h('b', {}, 'Conta própria da agência'), h('span', { class: 'hint', style: 'display:block' }, 'Ex.: o perfil da própria agência. Continua com posts e calendário, mas fica fora da receita, das cobranças e da contagem de clientes.'))),
+    h('label', { class: 'check-row' }, prod, h('span', {}, h('b', {}, 'Só produção (o cliente publica)'), h('span', { class: 'hint', style: 'display:block' }, 'A agência capta, edita e entrega; quem posta é o cliente. O app não publica nem pede Instagram conectado: o aprovado vira "Pronto para entregar" e o cliente baixa o material e a legenda pelo link dele.'))),
   ];
   if (c) {
     body.push(h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Instagram'),
@@ -82,7 +85,7 @@ function openClient(c = null) {
       h('div', { class: 'actions' }, confirmButton('Gerar link novo', 'Confirmar: o antigo deixa de abrir', async () => { await saveClient({ new_approval_link: true }); toast('Link novo gerado.'); }, 'btn sm'))));
   }
   async function saveClient(extra = {}) {
-    const payload = { name: name.value, contact_whatsapp: wa.value, contact_email: email.value, brand_voice: voice.value, own_account: own.checked, ...extra };
+    const payload = { name: name.value, contact_whatsapp: wa.value, contact_email: email.value, brand_voice: voice.value, own_account: own.checked, production_only: prod.checked, ...extra };
     try {
       const saved = c ? await api(`/api/clients?id=${c.id}`, { method: 'PATCH', body: payload }) : await api('/api/clients', { method: 'POST', body: payload });
       const i = S.clients.findIndex((x) => x.id === saved.id);

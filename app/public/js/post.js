@@ -10,6 +10,7 @@ import { officeCard, AGENTS } from '/escritorio.js';
 import { weekMissions, weekLevel, isDone, missionXp } from '/missoes.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, brlRaw, isMoneyHidden, setMoneyHidden, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
 import { monthOf } from './calendario.js';
+const prodClient = (id) => Boolean(S.clients.find((c) => c.id === id)?.production_only); // cliente só de produção: ele mesmo posta
 const CAR_MAX = 20; // limite do Instagram para carrossel (fotos e vídeos)
 import { S, can, clientById, clientName, confirmButton, drawer, render } from './core.js';
 import { fmtDay, openBankPicker, snippetBar, todayLocal, uploadDoc } from './pasta.js';
@@ -491,7 +492,7 @@ function openPost(post = null, opts = {}) {
       }
       list.forEach((p) => upsert(p, false)); render(); close();
       const n = list.length > 1 ? ` (${list.length} clientes)` : '';
-      toast({ send: `Enviado para aprovação${n}. O cliente já vê no link dele.`, approve: `Aprovado${n}. Publica sozinho no horário.`, idea: `Ideia salva${n}.`, review: `Na revisão interna${n}.`, production: `Em produção${n}.` }[mode] || `Salvo${n}.`);
+      toast({ send: `Enviado para aprovação${n}. O cliente já vê no link dele.`, approve: list.every((p) => prodClient(p.client_id)) ? `Aprovado${n}. Pronto para entregar ao cliente.` : `Aprovado${n}. Publica sozinho no horário.`, idea: `Ideia salva${n}.`, review: `Na revisão interna${n}.`, production: `Em produção${n}.` }[mode] || `Salvo${n}.`);
       if (mode === 'send') maybeNotify(list);
     } catch (e) {
       toast(e.message, true);
@@ -520,12 +521,14 @@ function openPost(post = null, opts = {}) {
     if (st === 'changes_requested') foot.push(B('Aprovar assim mesmo', 'ghost', () => save('approve')), B('Salvar e reenviar', 'primary', () => save('send')));
     if (st === 'approved') foot.push(B('Tirar da fila', 'ghost', () => action('to_production', 'Saiu da fila: voltou para produção.')), B('Salvar', 'primary', () => save('save')));
     if (st === 'failed') foot.push(B('Voltar p/ produção', 'ghost', () => action('to_production', 'Voltou para produção.')), B('Tentar de novo', 'primary', () => action('retry', 'Na fila de novo. Sai em até 5 minutos.')));
-    if (['approved', 'failed', 'pending_approval', 'changes_requested'].includes(st)) foot.splice(2, 0, confirmButton('Já postei manualmente', 'Confirmar: já está no Instagram', () => action('mark_published', 'Marcado como publicado.'), 'btn ghost'));
+    if (prodClient(post.client_id) && st === 'approved') { foot = foot.filter((b) => b.textContent !== 'Salvar'); foot.push(B('Salvar', '', () => save('save')), B('Marcar como entregue', 'primary', () => action('deliver', 'Entregue ao cliente.'))); }
+    else if (['approved', 'failed', 'pending_approval', 'changes_requested'].includes(st)) foot.splice(2, 0, confirmButton('Já postei manualmente', 'Confirmar: já está no Instagram', () => action('mark_published', 'Marcado como publicado.'), 'btn ghost'));
   }
   if (!can('enviar')) foot = foot.filter((b) => !(b instanceof HTMLButtonElement) || !/Enviar para aprovação|Aprovar|reenviar|Tentar de novo/.test(b.textContent));
   if (!can('apagar') && foot[0]?.textContent === 'Apagar') foot = foot.slice(1);
   if (!can('conteudo')) foot = [h('span', { class: 'muted' }, 'Só leitura: sem permissão para editar posts.')];
   const footBtns = foot.filter((b) => b instanceof HTMLButtonElement);
+  if (post && prodClient(post.client_id)) body.push(h('p', { class: 'hint muted', style: 'margin:0;font-size:13px' }, '📦 Cliente só de produção: o app não publica este post. Depois de aprovado, o cliente baixa o material e a legenda pelo link dele; marque como entregue quando mandar.'));
   if (post && ['pending_approval', 'approved'].includes(post.status) && !locked) {
     body.push(h('p', { class: 'hint muted', style: 'margin:0;font-size:13px' }, 'Mudar imagem, legenda ou texto alternativo volta o post para produção, para o cliente aprovar a versão nova. Mudar só data, hora, pauta ou notas mantém o status.'));
   }

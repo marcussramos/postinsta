@@ -2,6 +2,7 @@
 // contrato(s), relatórios e financeiro. Nada sobre outros clientes, nada interno.
 // GET ?t=token            → dados da área
 // GET ?t=token&file=ID    → abre o arquivo (link temporário) se ele for deste cliente e de uma seção liberada
+import { isProductionOnly } from '../production.js';
 import crypto from 'node:crypto';
 import { route, send, query, need, redirect, readRaw, readJson } from '../http.js';
 import { deliveries } from '../deliveries.js';
@@ -31,7 +32,7 @@ export async function portalEditable(clientId) { const list = await getState('po
 const isMine = (p) => p.status === 'idea' && String(p.notes || '').startsWith(CLIENT_IDEA);
 const canMove = (p, now = Date.now()) => !FIXED.includes(p.status) && p.scheduled_at && new Date(p.scheduled_at).getTime() - now >= LEAD_MS;
 const dayLabel = (iso, tz) => new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit' }).format(new Date(iso));
-async function calendar(c, month, editable = false) {
+async function calendar(c, month, editable = false, prod = false) {
   need(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || ''), 400, 'Mês inválido.');
   const [y, m] = month.split('-').map(Number);
   const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -45,8 +46,18 @@ async function calendar(c, month, editable = false) {
     const art = true; // a capa aparece em qualquer etapa (inclusive em produção)
     return { id: p.id, day: day.format(at), time: hour.format(at), title: p.title || null, media_type: p.media_type || 'IMAGE', group: CAL_GROUP[p.status] === 'producao' && p.script?.status === 'sent' ? 'roteiro' : CAL_GROUP[p.status],
       image_url: art ? (p.image_url || p.media?.[0]?.url || null) : null, permalink: p.status === 'published' ? p.ig_permalink || null : null,
+      // só produção: material pronto para o cliente baixar e postar (com a legenda)
+      ...(prod && ['approved', 'published'].includes(p.status) ? { caption: p.caption || '', files: mediaFiles(p) } : {}),
       ...(editable ? { can_move: canMove(p), mine: isMine(p) } : {}), ...(isMine(p) ? { group: 'sugestao' } : {}) };
   });
+}
+
+function mediaFiles(p) {
+  const list = (p.media || []).filter((m) => m?.url).map((m) => ({ url: m.url, kind: m.kind === 'video' ? 'video' : 'image' }));
+  if (!list.length && p.image_url) list.push({ url: p.image_url, kind: 'image' });
+  // Reels: o vídeo vem primeiro; a capa vai junto como imagem
+  if (p.media_type === 'REELS' && p.image_url && !list.some((f) => f.url === p.image_url)) list.push({ url: p.image_url, kind: 'image', cover: true });
+  return list;
 }
 
 const okToken = (t) => typeof t === 'string' && /^[a-f0-9]{32,64}$/.test(t);
@@ -62,7 +73,7 @@ export default route({
   GET: async (req, res) => {
     const q = query(req);
     const c = await clientByToken(q.t);
-    if (q.cal) { const editable = await portalEditable(c.id); return send(res, 200, { month: q.cal, timezone: TIMEZONE(), editable, lead_hours: 48, posts: await calendar(c, q.cal, editable) }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }); }
+    if (q.cal) { const editable = await portalEditable(c.id); const prod = await isProductionOnly(c.id); return send(res, 200, { month: q.cal, timezone: TIMEZONE(), editable, production_only: prod, lead_hours: 48, posts: await calendar(c, q.cal, editable, prod) }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }); }
     if (q.file) {
       const f = await db.one('client_files', { select: 'path,name,category,client_id', id: `eq.${q.file}` });
       need(f && f.client_id === c.id && VISIBLE.includes(f.category), 404, 'Arquivo não encontrado.');
@@ -97,6 +108,7 @@ export default route({
       history: events.map((e) => ({ type: e.type, note: e.note, at: e.created_at, title: e.snapshot?.title || null, caption: e.snapshot?.caption || '', scheduled_at: e.snapshot?.scheduled_at || null, media_type: e.snapshot?.media_type || 'IMAGE', image_url: e.snapshot?.image_url || null, permalink: e.snapshot?.permalink || null })),
       requests: requests.map((r) => ({ ...r, files: (r.file_ids || []).map((id) => files.find((f) => f.id === id)).filter(Boolean) })),
       deliveries: deliv[c.id] || null,
+      production_only: await isProductionOnly(c.id),
       pix_enabled: asaasReady(),
       onboarding: { url: `${appUrl()}/boasvindas?t=${c.portal_token}`, done: Boolean(c.brand_kit?.onboarding?.submitted_at) },
     }, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
