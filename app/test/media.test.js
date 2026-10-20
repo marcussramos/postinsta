@@ -112,3 +112,18 @@ test('Story: foto ou vídeo, sem legenda, publica como STORIES', async () => {
   assert.ok(st.some((x) => x.image_url === 'https://x/story.jpg'));
   assert.ok(st.some((x) => x.video_url === 'https://x/s.mp4'));
 });
+
+test('carrossel aceita até 20 itens (limite atual do Instagram) e recusa 21', async () => {
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ url: `https://x/v20-${i}.jpg`, kind: 'image' }));
+  const over = await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'CAROUSEL', media: mk(21), image_url: 'https://x/v20-0.jpg', scheduled_at: soon(), approved: true } });
+  assert.equal(over.status, 400);
+  assert.match(over.data.error, /20 itens/);
+  const p = (await call('/api/posts', { method: 'POST', body: { client_id: c.id, media_type: 'CAROUSEL', media: mk(20), image_url: 'https://x/v20-0.jpg', caption: 'vinte', scheduled_at: soon(), approved: true } })).data;
+  assert.equal(p.status, 'approved');
+  await runPublisher({ wait: async () => {} });
+  const parent = [...S.fakes.ig.containers.values()].find((x) => x.media_type === 'CAROUSEL' && x.caption === 'vinte');
+  assert.ok(parent, 'publicou o carrossel');
+  const ids = parent.children.split(',');
+  assert.equal(ids.length, 20);
+  assert.deepEqual(ids.map((id) => S.fakes.ig.containers.get(id).image_url), mk(20).map((m) => m.url), 'mantém a ordem dos itens');
+});

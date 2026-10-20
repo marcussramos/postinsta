@@ -10,6 +10,7 @@ import { officeCard, AGENTS } from '/escritorio.js';
 import { weekMissions, weekLevel, isDone, missionXp } from '/missoes.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, brlRaw, isMoneyHidden, setMoneyHidden, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
 import { monthOf } from './calendario.js';
+const CAR_MAX = 20; // limite do Instagram para carrossel (fotos e vídeos)
 import { S, can, clientById, clientName, confirmButton, drawer, render } from './core.js';
 import { fmtDay, openBankPicker, snippetBar, todayLocal, uploadDoc } from './pasta.js';
 
@@ -82,15 +83,15 @@ function openPost(post = null, opts = {}) {
         h('button', { type: 'button', title: 'Mover para a esquerda', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
         h('button', { type: 'button', title: 'Remover', onclick: () => { items.splice(i, 1); mediaDirty = true; drawImage(); } }, '✕'),
         h('button', { type: 'button', title: 'Mover para a direita', disabled: i === items.length - 1, onclick: () => move(i, 1) }, '→'))));
-    const add = items.length < 10 && !locked ? h('button', { type: 'button', class: 'car-add', onclick: () => multiIn.click() }, h('b', {}, '+'), h('span', {}, items.length ? 'Adicionar' : 'Escolher fotos ou vídeos')) : null;
+    const add = items.length < CAR_MAX && !locked ? h('button', { type: 'button', class: 'car-add', onclick: () => multiIn.click() }, h('b', {}, '+'), h('span', {}, items.length ? 'Adicionar' : 'Escolher fotos ou vídeos')) : null;
     const box = h('div', { class: 'car-grid' }, ...tiles, add);
     box.addEventListener('dragover', (e) => e.preventDefault());
     box.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) addItems([...e.dataTransfer.files]); });
-    imgBox.replaceChildren(box, h('span', { class: 'hint muted' }, `${items.length}/10 itens · fotos e vídeos (MP4/MOV de 3 a 60 s) · o 1º é a capa · o Instagram usa a proporção do 1º em todos (use o mesmo formato, de preferência 4:5).`), multiIn);
+    imgBox.replaceChildren(box, h('span', { class: 'hint muted' }, `${items.length}/${CAR_MAX} itens · fotos e vídeos (MP4/MOV de 3 a 60 s) · o 1º é a capa · o Instagram usa a proporção do 1º em todos (use o mesmo formato, de preferência 4:5).`), multiIn);
   };
   const addItems = async (files) => {
-    if (files.length > 10 - items.length) toast(`O carrossel aceita até 10 itens: entraram só ${Math.max(0, 10 - items.length)}.`, true);
-    for (const f0 of files.slice(0, 10 - items.length)) {
+    if (files.length > CAR_MAX - items.length) toast(`O carrossel aceita até ${CAR_MAX} itens: entraram só ${Math.max(0, CAR_MAX - items.length)}.`, true);
+    for (const f0 of files.slice(0, CAR_MAX - items.length)) {
       try {
         if ((f0.type || '').startsWith('video/') || /\.(mp4|mov|m4v)$/i.test(f0.name || '')) {
           let f = f0, info = await videoInfo(f);
@@ -192,7 +193,7 @@ function openPost(post = null, opts = {}) {
   // foto do banco de mídia do cliente (já está no Storage: não precisa enviar de novo)
   const takeFromBank = (m) => {
     const it = { url: m.url, path: m.path };
-    if (mtype === 'CAROUSEL') { if (items.length >= 10) return toast('O carrossel já tem 10 itens.', true); items.push({ kind: 'image', ...it }); }
+    if (mtype === 'CAROUSEL') { if (items.length >= CAR_MAX) return toast(`O carrossel já tem ${CAR_MAX} itens.`, true); items.push({ kind: 'image', ...it }); }
     else if (mtype === 'STORY') { img = it; video = null; }
     else img = it;
     mediaDirty = true; drawImage(); toast(mtype === 'REELS' ? 'Capa escolhida do banco.' : 'Imagem do banco aplicada.');

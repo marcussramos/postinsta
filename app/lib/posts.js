@@ -50,7 +50,7 @@ export function cleanPostInput(input) {
   }
   if (out.media !== undefined && out.media !== null) {
     if (!Array.isArray(out.media)) throw bad('Mídia inválida.');
-    if (out.media.length > 10) throw bad('O carrossel aceita no máximo 10 itens.');
+    if (out.media.length > 20) throw bad('O carrossel aceita no máximo 20 itens.');
     out.media = out.media.map((m) => {
       const url = String(m?.url || '');
       if (!/^https?:\/\//.test(url)) throw bad('Mídia inválida.');
