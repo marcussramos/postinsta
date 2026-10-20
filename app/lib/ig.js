@@ -118,11 +118,14 @@ export async function createPostContainer(igUserId, token, post, { wait = (ms) =
     if (!video) throw new IgError('O Reels está sem vídeo.', { transient: false });
     return create({ media_type: 'REELS', video_url: video.url, cover_url: post.image_url, caption: post.caption, share_to_feed: 'true' });
   }
-  // CAROUSEL: fotos e vídeos misturados (2 a 10 itens)
-  const items = (post.media || []).filter((m) => m?.url).slice(0, 10);
+  // CAROUSEL: fotos e vídeos misturados (2 a 20 itens)
+  const items = (post.media || []).filter((m) => m?.url).slice(0, 20);
   if (items.length < 2) throw new IgError('O carrossel precisa de pelo menos 2 itens (fotos ou vídeos).', { transient: false });
+  // cria os itens em grupos de 5 ao mesmo tempo (com 20 itens, um por vez passaria do tempo da função)
   const children = [];
-  for (const it of items) children.push(await create(it.kind === 'video' ? { media_type: 'VIDEO', video_url: it.url, is_carousel_item: 'true' } : { image_url: it.url, is_carousel_item: 'true' }));
+  for (let i = 0; i < items.length; i += 5) {
+    children.push(...await Promise.all(items.slice(i, i + 5).map((it) => create(it.kind === 'video' ? { media_type: 'VIDEO', video_url: it.url, is_carousel_item: 'true' } : { image_url: it.url, is_carousel_item: 'true' }))));
+  }
   const hasVideo = items.some((it) => it.kind === 'video');
   // espera os itens ficarem prontos (imagens levam segundos; vídeos podem levar minutos)
   for (let i = 0; i < (hasVideo ? 4 : 6); i++) {
