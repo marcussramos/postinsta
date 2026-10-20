@@ -91,6 +91,13 @@
   .idea-form textarea { min-height: 70px; }
   .idea-form .err { color: var(--bad); font-size: 13px; }
   .cpost > .dragme { display: block; width: 56px; }
+  .deliv-box { margin: -4px 0 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; gap: 10px; }
+  .deliv-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .deliv-f { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--off-bg); cursor: pointer; aspect-ratio: 4 / 5; }
+  .deliv-f img, .deliv-f video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .deliv-f span { position: absolute; left: 4px; bottom: 4px; font-size: 11.5px; font-weight: 700; background: rgba(0,0,0,.65); color: #fff; padding: 2px 6px; border-radius: 6px; }
+  .deliv-cap pre { white-space: pre-wrap; font: inherit; font-size: 13.5px; margin: 4px 0 8px; max-height: 180px; overflow: auto; }
+  .deliv-box > .btn, .deliv-cap .btn { justify-self: start; }
   .cpost .lockt { font-size: 12px; color: var(--muted); }
   .cpost .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   @media (max-width: 560px) { .cpost:has(.acts) { grid-template-columns: 56px minmax(0, 1fr); } .cpost .acts { grid-column: 1 / -1; justify-content: flex-start; } }
@@ -172,7 +179,7 @@ const fileUrl = (id, dl) => `/api/pasta?r=portal&t=${encodeURIComponent(t)}&file
 const LABEL = { paid: 'Pago', open: 'Em aberto', late: 'Atrasado', waived: 'Isento' };
 
 let D, tab = 'calendario';
-const CAL = { month: null, data: null, day: null, loading: false, pick: null, form: null };
+const CAL = { month: null, data: null, day: null, loading: false, pick: null, form: null, open: null };
 const DRAG = { until: 0 };
 try { const s = sessionStorage.getItem('mc_cliente_tab'); if (s) tab = s; } catch { /* sem armazenamento */ }
 
@@ -204,9 +211,34 @@ async function loadCal(month) {
   CAL.month = month; CAL.loading = true; CAL.pick = null;
   try { const r = await fetch(`/api/pasta?r=portal&t=${encodeURIComponent(t)}&cal=${month}`); CAL.data = r.ok ? await r.json() : { posts: [] }; }
   catch { CAL.data = { posts: [] }; }
+  if (CAL.data.production_only) Object.assign(GROUP, { programado: 'Pronto para você postar', publicado: 'Entregue' });
   CAL.loading = false;
   if (tab === 'calendario') render();
 }
+// ── Só produção: o cliente baixa o material pronto e copia a legenda
+async function downloadFile(f, name) {
+  try {
+    const r = await fetch(f.url); if (!r.ok) throw new Error();
+    const b = await r.blob(); const u = URL.createObjectURL(b);
+    const ext = (b.type.split('/')[1] || (f.kind === 'video' ? 'mp4' : 'jpg')).replace('jpeg', 'jpg').replace('quicktime', 'mov');
+    const a = h('a', { href: u, download: `${name}.${ext}` }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 60e3);
+  } catch { window.open(f.url, '_blank', 'noopener'); }
+}
+const slug = (s) => String(s || 'post').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 40) || 'post';
+function deliveryBox(p) {
+  const base = `${p.day}-${slug(p.title)}`;
+  const files = p.files || [];
+  const name = (i) => files.length > 1 ? `${base}-${String(i + 1).padStart(2, '0')}${files[i].cover ? '-capa' : ''}` : base;
+  return h('div', { class: 'deliv-box' },
+    h('div', { class: 'deliv-files' }, ...files.map((f, i) => h('button', { type: 'button', class: 'deliv-f', title: 'Baixar', onclick: () => downloadFile(f, name(i)) },
+      f.kind === 'video' ? h('video', { src: f.url, muted: true, preload: 'metadata', playsinline: true }) : h('img', { src: f.url, alt: '', loading: 'lazy' }),
+      h('span', {}, f.cover ? '⬇ Capa' : f.kind === 'video' ? '⬇ Vídeo' : `⬇ ${files.length > 1 ? i + 1 : 'Foto'}`)))),
+    files.length > 1 ? h('button', { class: 'btn sm', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; for (let i = 0; i < files.length; i++) { await downloadFile(files[i], name(i)); await new Promise((r) => setTimeout(r, 400)); } e.currentTarget.disabled = false; } }, `Baixar tudo (${files.length})`) : null,
+    p.caption ? h('div', { class: 'deliv-cap' }, h('div', { class: 'eyebrow' }, 'Legenda'), h('pre', {}, p.caption),
+      h('button', { class: 'btn sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(p.caption); toast('Legenda copiada.'); } catch { toast('Selecione e copie a legenda.'); } } }, 'Copiar legenda')) : null);
+}
+
 // ── Edição pelo cliente (quando a agência libera): arrastar posts (mouse e dedo), "Mudar dia" e sugerir ideia
 const LEAD = 48 * 3600e3;
 const dayOK = (iso) => Date.parse(`${iso}T19:00:00-04:00`) - Date.now() >= LEAD;
@@ -321,6 +353,7 @@ function calendarPanel(panel) {
     if (!CAL.day && p.day !== lastDay) { panel.append(h('div', { class: 'cal-day' }, `${WD[new Date(`${p.day}T12:00:00Z`).getUTCDay()]}, ${dmy(p.day).slice(0, 5)}`)); lastDay = p.day; }
     const thumb = p.image_url ? h('img', { class: 'thumb', src: p.image_url, alt: '', loading: 'lazy' }) : sketchCover({ ...p, title: '' }, 'thumb in-list');
     const main = p.group === 'aprovar' || p.group === 'roteiro' ? h('a', { class: 'btn primary sm', href: D.approval.url }, 'Aprovar')
+      : p.files?.length ? h('button', { class: `btn ${CAL.open === p.id ? '' : 'primary '}sm`, type: 'button', onclick: () => { CAL.open = CAL.open === p.id ? null : p.id; render(); } }, CAL.open === p.id ? 'Fechar' : 'Baixar')
       : p.permalink ? h('a', { class: 'btn sm', href: p.permalink, target: '_blank', rel: 'noopener' }, 'Ver post')
       : h('span', { class: `pill ${p.group === 'publicado' || p.group === 'programado' ? 'paid' : p.group === 'ajuste' ? 'late' : p.group === 'sugestao' ? 'open' : 'waived'}` }, GROUP[p.group]);
     const acts = edit ? h('div', { class: 'acts' }, main,
@@ -331,6 +364,7 @@ function calendarPanel(panel) {
       h('div', {}, h('div', { class: 't' }, p.title || FMT[p.media_type] || 'Post'), h('div', { class: 's' }, `${p.time} · ${FMT[p.media_type] || 'Post'}`),
         edit && !p.can_move && p.group !== 'publicado' ? h('div', { class: 'lockt' }, '🔒 Travado: sai em menos de 48h') : null),
       acts));
+    if (CAL.open === p.id && p.files?.length) panel.append(deliveryBox(p));
   }
 }
 
@@ -353,7 +387,7 @@ function render() {
             const pct = x.quota ? Math.min(100, Math.round((x.planned / x.quota) * 100)) : 0;
             return h('div', {}, h('div', {}, h('b', { class: 'big' }, x.quota != null ? `${x.planned}/${x.quota}` : String(x.planned)), ` ${l}`),
               x.quota ? h('div', { class: 'pbar' }, h('span', { style: `width:${pct}%` })) : null,
-              h('div', { class: 'muted', style: 'font-size:12.5px' }, `${x.published} já publicado(s), ${x.planned - x.published} programado(s)`));
+              h('div', { class: 'muted', style: 'font-size:12.5px' }, D.production_only ? `${x.published} entregue(s), ${x.planned - x.published} em andamento` : `${x.published} já publicado(s), ${x.planned - x.published} programado(s)`));
           })))
       : null,
     h('div', { class: 'card' }, h('div', { class: 'eyebrow' }, 'Posts para aprovar'),
@@ -417,7 +451,7 @@ function render() {
       h('div', { class: 'act' }, h('span', { class: `pill ${REQ[r.status][1]}` }, REQ[r.status][0])),
       h('div', { class: 's' }, `Enviado em ${dmy(r.created_at)}${r.wanted_date ? ` · para ${dmy(r.wanted_date)}` : ''}${r.files?.length ? ` · ${r.files.length} anexo(s)` : ''}`)));
   } else if (tab === 'aprovacoes') {
-    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Você mudou a data', client_idea: 'Você sugeriu uma ideia', client_idea_removed: 'Você retirou a ideia', published_manual: 'Publicado no Instagram' };
+    const LBL = { sent: 'Enviado para você aprovar', reminded: 'Lembrete enviado', approved: 'Você aprovou', changes_requested: 'Você pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Você mudou a data', client_idea: 'Você sugeriu uma ideia', client_idea_removed: 'Você retirou a ideia', published_manual: 'Publicado no Instagram', delivered: 'Material entregue para você' };
     panel.append(h('div', { class: 'card' }, h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Registro de cada envio, aprovação e publicação, com data e hora.'),
       h('a', { class: 'btn sm', href: `/historico?t=${encodeURIComponent(t)}`, target: '_blank', rel: 'noopener' }, 'Baixar em PDF')));
     if (!(D.history || []).length) panel.append(h('div', { class: 'empty' }, 'Os registros aparecem aqui a partir dos próximos envios.'));

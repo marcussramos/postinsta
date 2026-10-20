@@ -7,6 +7,7 @@ import * as ig from './ig.js';
 import { logEvent } from './events.js';
 import { notify } from './push.js';
 import { signMedia } from './media.js';
+import { productionList } from './production.js';
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -44,8 +45,11 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
   }
 
   // 3) Aprovados com horário vencido.
+  // clientes "só produção" publicam por conta própria: o app nunca posta por eles
+  const prod = await productionList();
   const due = await db.select('posts', {
     select: '*', status: 'eq.approved', scheduled_at: `lte.${new Date(now()).toISOString()}`,
+    ...(prod.length ? { client_id: `not.in.(${prod.join(',')})` } : {}),
     order: 'scheduled_at.asc', limit: 15,
   });
   for (const p of due) {

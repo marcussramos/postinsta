@@ -408,6 +408,7 @@ function igReports(c) {
     h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Relatórios do Instagram'),
       h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Alcance, curtidas, comentários, salvamentos, compartilhamentos, seguidores ganhos e os melhores posts do mês. Gerado automaticamente todo dia 3 para o mês anterior.'))), ...kids);
   if (F.reports === null) return card(h('div', { class: 'banner' }, 'Falta a atualização do banco para os relatórios. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.'));
+  if (!c.ig_connected && c.production_only) return card(h('div', { class: 'banner' }, '📦 Cliente só de produção: quem posta é o cliente, então o relatório do Instagram fica desligado. Se um dia ele quiser relatório, conecte o Instagram dele (o app continua sem publicar). ', h('a', { href: `/api/ig/connect?client=${c.id}` }, 'Conectar')));
   if (!c.ig_connected) return card(h('div', { class: 'banner' }, 'Conecte o Instagram deste cliente para gerar relatórios. ', h('a', { href: `/api/ig/connect?client=${c.id}` }, 'Conectar agora')));
   const month = h('input', { type: 'month', class: 'month-in', value: shiftMonth(todayLocal().slice(0, 7), -1), max: todayLocal().slice(0, 7), 'aria-label': 'Mês do relatório' });
   const err = h('div');
@@ -606,7 +607,7 @@ function portalEditBox(c) {
 }
 
 // ───────────────────────── histórico de aprovações (prova)
-const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia', published_manual: 'Publicado manualmente' };
+const EVENT_LABEL = { sent: 'Enviado para aprovação', reminded: 'Lembrete enviado', approved: 'Aprovado pelo cliente', changes_requested: 'Cliente pediu ajuste', approved_by_agency: 'Aprovado pela agência', published: 'Publicado no Instagram', failed: 'Falha ao publicar', client_moved: 'Cliente mudou a data', client_idea: 'Cliente sugeriu uma ideia', client_idea_removed: 'Cliente retirou a ideia', published_manual: 'Publicado manualmente', delivered: 'Material entregue ao cliente' };
 const EVENT_TONE = { approved: 'st-approved', changes_requested: 'st-changes_requested', published: 'st-published', failed: 'st-failed', approved_by_agency: 'st-internal_review', sent: 'st-pending_approval', reminded: 'st-draft' };
 function folderHistory(c) {
   const F = S.folder;

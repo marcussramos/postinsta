@@ -107,6 +107,7 @@ export default route({
       if (body.action === 'send') await logEvent(row, 'sent');
       if (body.action === 'approve') await logEvent(row, 'approved_by_agency');
       if (body.action === 'mark_published') await logEvent(row, 'published_manual');
+      if (body.action === 'deliver') await logEvent(row, 'delivered');
       return send(res, 200, row);
     }
 

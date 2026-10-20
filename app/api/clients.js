@@ -5,6 +5,7 @@ import { db, storage, docs } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
 import { getState, setState } from '../lib/appstate.js';
+import { productionList, setProductionOnly } from '../lib/production.js';
 
 // Conta própria da agência (ex.: o perfil da MC DIGITAL): continua com posts, mas fica fora de receita, cobranças e contagem de clientes
 const ownList = async () => { const v = await getState('own_accounts', []); return Array.isArray(v) ? v : []; };
@@ -100,7 +101,8 @@ export default route({
     const u = await requireStaff(req);
     const rows = (await db.select('clients', { select: '*', order: 'name.asc' })).filter((c) => seesClient(u, c.id));
     const own = new Set(await ownList());
-    send(res, 200, rows.map((c) => ({ ...(can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl())), own: own.has(c.id) })));
+    const prod = new Set(await productionList());
+    send(res, 200, rows.map((c) => ({ ...(can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl())), own: own.has(c.id), production_only: prod.has(c.id) })));
   },
 
   POST: async (req, res) => {
@@ -137,7 +139,9 @@ export default route({
       if (body.own_account) own.add(row.id); else own.delete(row.id);
       await setState('own_accounts', [...own]);
     }
-    send(res, 200, { ...(can(u, 'financeiro') ? publicClient(row, appUrl()) : teamClient(row, appUrl())), own: own.has(row.id) });
+    let prod = new Set(await productionList());
+    if (body.production_only !== undefined) prod = await setProductionOnly(row.id, Boolean(body.production_only));
+    send(res, 200, { ...(can(u, 'financeiro') ? publicClient(row, appUrl()) : teamClient(row, appUrl())), own: own.has(row.id), production_only: prod.has(row.id) });
   },
 
   DELETE: async (req, res) => {

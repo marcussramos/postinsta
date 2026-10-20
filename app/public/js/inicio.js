@@ -52,8 +52,8 @@ function viewHome() {
   if (failed.length) alerts.push(alertRow('bad', `${failed.length} post${failed.length > 1 ? 's' : ''} não publicou`, 'Abra e tente de novo', () => openPost(failed[0])));
   const lastRun = S.setup?.publisher_last_run ? Date.now() - new Date(S.setup.publisher_last_run).getTime() : null;
   if (S.role === 'admin' && lastRun != null && lastRun > 30 * 60e3) alerts.push(alertRow('bad', `Agendador automático parado há ${lastRun > 2 * 3600e3 ? `${Math.round(lastRun / 3600e3)} h` : `${Math.round(lastRun / 60e3)} min`}`, 'Posts aprovados não estão saindo. Confira em Ajustes', null, '#ajustes'));
-  const noIg = S.clients.filter((c) => !c.ig_connected);
-  if (noIg.length) alerts.push(alertRow('bad', noIg.length === S.clients.length ? 'Nenhum cliente com Instagram conectado' : `${noIg.length} cliente${noIg.length > 1 ? 's' : ''} sem Instagram conectado`,
+  const noIg = S.clients.filter((c) => !c.ig_connected && !c.production_only);
+  if (noIg.length) alerts.push(alertRow('bad', noIg.length === S.clients.filter((c) => !c.production_only).length ? 'Nenhum cliente com Instagram conectado' : `${noIg.length} cliente${noIg.length > 1 ? 's' : ''} sem Instagram conectado`,
     `Nada deles é publicado sozinho: ${noIg.map((c) => c.name).join(', ')}`, null, '#clientes'));
   for (const c of S.clients) {
     const exp = c.ig_connected && c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 864e5) : null;
@@ -85,7 +85,7 @@ function viewHome() {
     kpi('Próximos 7 dias', String(week.length), week.length ? `${week.filter((p) => p.status === 'approved').length} já aprovado(s)` : 'nada marcado ainda', week.length ? '' : 'warn'),
     kpi('Aguardando clientes', String(waiting), waiting ? 'posts esperando aprovação' : 'nenhum pendente', waiting ? 'warn' : ''),
     newReqs ? kpi('Pedidos novos', String(newReqs), 'vindos da área do cliente', 'warn') : null,
-    kpi('Clientes', String(clients.length), `${clients.filter((c) => c.ig_connected).length} com Instagram conectado`, clients.some((c) => !c.ig_connected) ? 'warn' : ''),
+    kpi('Clientes', String(clients.length), `${clients.filter((c) => c.ig_connected).length} com Instagram conectado${clients.some((c) => c.production_only) ? ` · ${clients.filter((c) => c.production_only).length} só produção` : ''}`, clients.some((c) => !c.ig_connected && !c.production_only) ? 'warn' : ''),
   ].filter(Boolean);
   const days = [...Array(7)].map((_, i) => shiftDay(today, i + 1));
   const weekCard = h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Próximos 7 dias'), h('a', { href: '#calendario', class: 'muted' }, 'Calendário →')),
