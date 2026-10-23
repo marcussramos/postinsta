@@ -533,6 +533,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.45; }
 /* ── atualização 9: datas, notificações, segurança, e-mails, backup, planejamento, banco de mídia, modelos */
 .cal-date { font-size: 11px; line-height: 1.25; font-weight: 600; color: var(--s-wait); background: var(--s-wait-bg); border-radius: 6px; padding: 2px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; justify-self: start; }
 .cal-date.major { color: var(--s-change); background: var(--s-change-bg); }
+.cal-date.holiday { color: var(--s-ok); background: var(--s-ok-bg); }
 @media (max-width: 640px) { .cal-day .cal-date { font-size: 0; padding: 0; width: 6px; height: 6px; border-radius: 99px; background: var(--s-change); justify-self: end; margin-top: -26px; } }
 .dates-list { display: grid; gap: 6px; }
 .date-row { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }
@@ -804,6 +805,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .cal-day.past:not(.today) .cal-tile:hover { opacity: 1; }
 .cal-strip { margin: -6px -6px 0; padding: 2px 6px; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: var(--s-wait); background: var(--s-wait-bg); border-radius: 9px 9px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-strip.major { color: var(--s-change); background: var(--s-change-bg); }
+.cal-strip.holiday { color: var(--s-ok); background: var(--s-ok-bg); }
 .cal-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .cal-add { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 8px; font: inherit; font-size: 17px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
 .cal-day:hover .cal-add, .cal-add:focus-visible, .cal-day:not(:has(.cal-tile)) .cal-add { opacity: 1; }
@@ -959,3 +961,4 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .home-grid.single > .home-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: stretch; }
 .home-team { align-items: stretch; }
 .home-team > * { height: 100%; }
+@media (max-width: 640px) { .cal-day .cal-date.holiday, .cal-strip.holiday { background: var(--s-ok); } }
