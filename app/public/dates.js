@@ -16,7 +16,8 @@ const FIXED = [
   ['03-15', 'Dia do Consumidor', ['varejo', 'moda', 'beleza', 'tecnologia', 'alimentacao', 'pet']],
   ['04-07', 'Dia Mundial da Saúde', ['saude', 'odonto', 'fitness']],
   ['04-14', 'Dia do Café', ['alimentacao']],
-  ['04-21', 'Tiradentes (feriado)', ['geral']],
+  ['04-08', 'Aniversário de Cuiabá', ['geral']],
+  ['04-21', 'Tiradentes', ['geral']],
   ['04-25', 'Dia do Contador', ['contabil']],
   ['05-01', 'Dia do Trabalhador', ['geral'], true],
   ['05-12', 'Dia da Enfermagem', ['saude']],
@@ -46,6 +47,7 @@ const FIXED = [
   ['10-04', 'Dia dos Animais', ['pet']],
   ['10-05', 'Dia do Empreendedor', ['geral']],
   ['10-12', 'Dia das Crianças', ['geral'], true],
+  ['10-12', 'Nossa Senhora Aparecida', ['geral']],
   ['10-13', 'Dia do Fisioterapeuta', ['saude']],
   ['10-15', 'Dia do Professor', ['educacao', 'geral']],
   ['10-18', 'Dia do Médico', ['saude']],
@@ -53,7 +55,9 @@ const FIXED = [
   ['10-31', 'Halloween', ['infantil', 'alimentacao', 'moda']],
   ['11-01', 'Início do Novembro Azul', ['saude']],
   ['11-19', 'Dia da Mulher Empreendedora', ['geral']],
-  ['11-20', 'Consciência Negra (feriado)', ['geral']],
+  ['11-02', 'Finados', ['geral']],
+  ['11-15', 'Proclamação da República', ['geral']],
+  ['11-20', 'Consciência Negra', ['geral']],
   ['11-22', 'Dia do Músico', ['musica']],
   ['12-25', 'Natal', ['geral'], true],
   ['12-31', 'Réveillon', ['geral']],
@@ -72,6 +76,15 @@ function nthWeekday(y, month, weekday, n) { // n-ésimo dia da semana do mês (w
   return plus(first, ((weekday - first.getUTCDay() + 7) % 7) + (n - 1) * 7);
 }
 
+// Feriados (nacionais + Cuiabá). Aparecem no calendário marcados como feriado:
+// dia de alcance diferente (gente em casa/viajando) e de comércio/consultório fechado.
+const HOLIDAYS = {
+  'Ano Novo': 'Feriado nacional', 'Sexta-feira Santa': 'Feriado nacional', 'Tiradentes': 'Feriado nacional',
+  'Dia do Trabalhador': 'Feriado nacional', 'Independência do Brasil': 'Feriado nacional', 'Nossa Senhora Aparecida': 'Feriado nacional',
+  'Finados': 'Feriado nacional', 'Proclamação da República': 'Feriado nacional', 'Consciência Negra': 'Feriado nacional', 'Natal': 'Feriado nacional',
+  'Aniversário de Cuiabá': 'Feriado em Cuiabá', 'Carnaval': 'Ponto facultativo', 'Corpus Christi': 'Ponto facultativo',
+};
+
 export function datesOfYear(y) {
   const e = easter(y);
   const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -86,6 +99,7 @@ export function datesOfYear(y) {
     { date: iso(plus(nthWeekday(y, 11, 4, 4), 1)), name: 'Black Friday', tags: ['geral', 'varejo'], major: true },
     { date: leap ? `${y}-09-12` : `${y}-09-13`, name: 'Dia do Programador', tags: ['tecnologia'] },
   );
+  for (const d of list) if (HOLIDAYS[d.name]) d.holiday = HOLIDAYS[d.name]; // aparece no calendário de todos, sem virar sugestão de post
   return list.sort((a, b) => a.date.localeCompare(b.date));
 }
 
