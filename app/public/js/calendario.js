@@ -86,7 +86,7 @@ function viewCalendar() {
   const gridDays = monthGrid(m);
   const niches = new Set((S.fClient ? [clientById(S.fClient)] : S.clients).map((c) => c?.brand_kit?.niche).filter(Boolean));
   const dayDates = new Map();
-  for (const x of datesBetween(gridDays[0], gridDays.at(-1)).filter((x) => x.major || x.tags.some((t) => niches.has(t)))) dayDates.set(x.date, [...(dayDates.get(x.date) || []), x]);
+  for (const x of datesBetween(gridDays[0], gridDays.at(-1)).filter((x) => x.major || x.holiday || x.tags.some((t) => niches.has(t)))) dayDates.set(x.date, [...(dayDates.get(x.date) || []), x]);
   const FMT_ICON = { REELS: '▶', CAROUSEL: '❐', STORY: '◷' };
   const FMT_NAME = { IMAGE: 'Post', REELS: 'Reels', CAROUSEL: 'Carrossel', STORY: 'Story' };
   const weekend = (d) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay());
@@ -114,7 +114,7 @@ function viewCalendar() {
         h('div', { class: 'ag-head' },
           h('b', {}, name.charAt(0).toUpperCase() + name.slice(1)),
           h('span', { class: 'muted' }, list.length ? `${list.length} post${list.length > 1 ? 's' : ''}` : 'dia livre'),
-          ...dates.map((x) => h('span', { class: `cal-date${x.major ? ' major' : ''}` }, x.name)),
+          ...dates.map((x) => h('span', { class: `cal-date${x.holiday ? ' holiday' : x.major ? ' major' : ''}`, title: x.holiday || x.name }, x.holiday ? `🏖 ${x.name}` : x.name)),
           h('span', { class: 'spacer' }), list.length ? addBtn(d) : null),
         ...(list.length ? list.map((p) => h('button', { type: 'button', class: 'ag-row', style: `--cc:${clientColor(p.client_id)}`, onclick: () => openPost(p), ...drag(p),
           title: movable(p) ? 'Abrir · arraste para outro dia para remarcar' : 'Abrir' },
@@ -140,7 +140,7 @@ function viewCalendar() {
         return h('div', { class: `cal-day${out ? ' out' : ''}${d === today ? ' today' : ''}${d < today ? ' past' : ''}${weekend(d) ? ' wkend' : ''}${S.cal.day === d ? ' sel' : ''}`, role: 'gridcell', tabindex: 0,
           onclick: (e) => { if (!e.target.closest('.cal-tile, .cal-add')) openDay(d, dates); },
           onkeydown: (e) => { if (e.key === 'Enter') openDay(d, dates); }, ...dropOn(d) },
-          dates.length ? h('div', { class: `cal-strip${dates.some((x) => x.major) ? ' major' : ''}`, title: dates.map((x) => x.name).join(' · ') }, dates.map((x) => x.name).join(' · ')) : null,
+          dates.length ? h('div', { class: `cal-strip${dates.some((x) => x.holiday) ? ' holiday' : dates.some((x) => x.major) ? ' major' : ''}`, title: dates.map((x) => x.holiday ? `${x.name} (${x.holiday})` : x.name).join(' · ') }, dates.map((x) => x.holiday ? `🏖 ${x.name}` : x.name).join(' · ')) : null,
           h('div', { class: 'cal-top' }, h('span', { class: 'cal-num' }, String(Number(d.slice(8)))), out ? null : addBtn(d)),
           h('div', { class: 'cal-dots', 'aria-hidden': 'true' }, ...list.slice(0, 4).map((p) => h('span', { class: 'dot', style: `color:${clientColor(p.client_id)}` }))),
           list.length ? h('div', { class: 'cal-mini', style: `--cc:${clientColor(list[0].client_id)}`, 'aria-hidden': 'true' },
