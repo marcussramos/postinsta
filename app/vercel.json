@@ -120,6 +120,10 @@
       "destination": "/api/page?p=exclusao"
     },
     {
+      "source": "/exclusao",
+      "destination": "/api/page?p=exclusao"
+    },
+    {
       "source": "/termos",
       "destination": "/api/page?p=termos"
     },
