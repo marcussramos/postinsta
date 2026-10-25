@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Diagnóstico grátis do seu Instagram · MC Digital</title>
-<meta name="theme-color" content="#EBEBE6">
+<meta name="theme-color" content="#ECEAE7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Poppins:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400&family=Yellowtail&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
-  :root { --bg: #EBEBE6; --ink: #2B2B2B; --muted: #5E5D57; --gold: #7A6200; --line: #D3D1C6; --card: #F6F6F2;
-    --head: "Cormorant Garamond", Georgia, serif; --body: "Poppins", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
+  :root { --bg: #ECEAE7; --ink: #1D1A1A; --muted: #5F5955; --gold: #7B1F31; --line: #DDD8D3; --card: #FFFFFF;
+    --head: "Montserrat", Georgia, serif; --body: "Montserrat", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16.5px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
   h1, h2, h3 { font-family: var(--head); font-weight: 600; margin: 0; line-height: 1.02; letter-spacing: -.01em; text-wrap: balance; }
@@ -183,13 +183,13 @@ function waiting() {
   $.replaceChildren(header(), h('div', { class: 'card wait' }, h('div', { class: 'spin', 'aria-hidden': 'true' }), h('h2', {}, 'Analisando…'), msg));
   $.dataset.t = t;
 }
-const color = (s) => (s >= 70 ? '#2E7D4F' : s >= 45 ? '#7A6200' : '#B4232F');
+const color = (s) => (s >= 70 ? '#2E7D4F' : s >= 45 ? '#7B1F31' : '#B4232F');
 function ring(score) {
   const ns = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 120 120'); svg.setAttribute('class', 'ring'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Nota ${score} de 100`);
   const c = (r, st, dash) => { const e = document.createElementNS(ns, 'circle'); e.setAttribute('cx', 60); e.setAttribute('cy', 60); e.setAttribute('r', r); e.setAttribute('fill', 'none'); e.setAttribute('stroke', st); e.setAttribute('stroke-width', 11); if (dash) { e.setAttribute('stroke-dasharray', dash); e.setAttribute('transform', 'rotate(-90 60 60)'); e.setAttribute('stroke-linecap', 'round'); } return e; };
   const L = 2 * Math.PI * 50;
-  svg.append(c(50, '#D3D1C6'), c(50, color(score), `${(score / 100) * L} ${L}`));
-  const t = document.createElementNS(ns, 'text'); t.setAttribute('x', 60); t.setAttribute('y', 68); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', 34); t.setAttribute('fill', '#2B2B2B'); t.textContent = score;
+  svg.append(c(50, '#DDD8D3'), c(50, color(score), `${(score / 100) * L} ${L}`));
+  const t = document.createElementNS(ns, 'text'); t.setAttribute('x', 60); t.setAttribute('y', 68); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', 34); t.setAttribute('fill', '#1D1A1A'); t.textContent = score;
   svg.append(t); return svg;
 }
 function result(r, handle, name) {

@@ -32,10 +32,10 @@ function viewHome() {
   const newReqs = (S.requests || []).filter((r) => r.status === 'open').length;
 
   const hero = h('section', { class: 'home-hero' },
-    h('div', { class: 'home-mark', 'aria-hidden': 'true' }, h('img', { src: '/brand/logo-claro.png', alt: '' })),
+    h('div', { class: 'home-mark', 'aria-hidden': 'true' }, h('img', { class: 'brand-logo light', src: '/brand/logo.png', alt: '' }), h('img', { class: 'brand-logo dark', src: '/brand/logo-claro.png', alt: '' })),
     h('div', { class: 'home-hello' },
       h('div', { class: 'eyebrow' }, longDate),
-      h('h1', {}, `${hello}${who ? `, ${who}` : ''}.`),
+      h('h1', {}, who ? [`${hello}, `, h('span', { class: 'script' }, who)] : `${hello}.`),
       h('p', { class: 'muted' }, todays.length ? `Hoje saem ${todays.length} publicaç${todays.length > 1 ? 'ões' : 'ão'}.` : 'Nenhuma publicação marcada para hoje.',
         waiting ? ` ${waiting} post${waiting > 1 ? 's' : ''} esperando aprovação dos clientes.` : '')),
     h('div', { class: 'home-quick' },

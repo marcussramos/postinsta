@@ -7,13 +7,13 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400&family=Yellowtail&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   :root {
-    --bg: #EBEBE6; --surface: #fff; --surface-2: #F2F2ED; --ink: #2B2B2B; --muted: #6B6A63; --line: #D9D8CF;
-    --accent: #2B2B2B; --accent-soft: #E4E1D3; --up: #17703F; --up-bg: #E2F4E9; --down: #B4232F; --down-bg: #FBE3E5;
-    --gold: #B07A00; --display: "Poppins", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    --bg: #ECEAE7; --surface: #fff; --surface-2: #F7F5F2; --ink: #1D1A1A; --muted: #5F5955; --line: #DDD8D3;
+    --accent: #7B1F31; --accent-soft: #F4E3E6; --up: #17703F; --up-bg: #E2F4E9; --down: #B4232F; --down-bg: #FBE3E5;
+    --gold: #7B1F31; --display: "Montserrat", "Helvetica Neue", Arial, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -24,10 +24,16 @@
   .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: .02em; }
   .brand-mark { background: var(--ink); color: #fff; border-radius: 7px; padding: 3px 6px; font-size: 13px; }
   .spacer { flex: 1; }
-  .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; cursor: pointer; color: var(--ink); text-decoration: none; }
+  .btn { font: inherit; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 16px; cursor: pointer; color: var(--ink); text-decoration: none; }
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   header.hero { padding: 36px 0 8px; display: grid; gap: 6px; }
-  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow { font-family: var(--display); font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+  header.hero .eyebrow { display: flex; align-items: center; gap: 12px; }
+  header.hero .eyebrow::after { content: ""; width: 64px; height: 1px; background: currentColor; opacity: .7; }
+  .script { font-family: "Yellowtail", cursive; font-weight: 400; font-style: normal; color: #7B1F31; }
+  .light-it { font-weight: 300; font-style: italic; }
+  .btn, .card { border-radius: 999px; }
+  .card { border-radius: 20px; border-color: transparent; }
   h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; margin: 0; letter-spacing: -.01em; }
   .who { font-size: 16px; color: var(--muted); }
   .who b { color: var(--ink); }
@@ -206,7 +212,7 @@ function render({ ref_month, data: d, note, updated_at }) {
   $app.replaceChildren(
     h('header', { class: 'hero' },
       h('div', { class: 'eyebrow' }, 'Relatório de desempenho · Instagram'),
-      h('h1', {}, title),
+      (() => { const m = String(title).match(/^(\S+)\s+(de\s+\d{4})$/i); return m ? h('h1', {}, h('span', { style: 'text-transform:uppercase;font-weight:800' }, m[1]), ' ', h('span', { class: 'light-it' }, m[2])) : h('h1', {}, title); })(),
       h('div', { class: 'who' }, h('b', {}, d.client_name), d.ig_username ? ` · @${d.ig_username}` : ''),
       d.period?.partial ? h('div', { class: 'partial' }, `Mês em andamento: dados até ${day(d.period.end)}. Os números finais saem no começo do mês seguinte.`) : null),
     h('section', {}, h('h2', {}, 'Resumo do mês'), kpis,

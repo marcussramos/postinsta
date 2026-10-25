@@ -1,50 +1,55 @@
 /* MC DIGITAL — sistema visual
    Layout: barra superior fina + coluna de trabalho larga; agenda agrupada por dia, como uma pauta de redação. */
+/* MC DIGITAL — identidade visual (Direção B · editorial)
+   Paleta da marca: vinho #7B1F31 · off-white de estúdio #ECEAE7 · preto #1D1A1A · taupe #6E5A46 · creme #F4EFEA.
+   Tipografia: Montserrat em contraste de peso (ExtraBold + Light itálico) e Yellowtail só em detalhes. */
 :root {
-  --bg: #EBEBE6;
-  --surface: #FAFAF7;
-  --surface-2: #F2F2ED;
-  --ink: #2B2B2B;
-  --muted: #6B6A63;
-  --line: #D9D8CF;
-  --accent: #2B2B2B;        /* grafite: ações (identidade MC Digital) */
-  --accent-ink: #EBEBE6;
-  --gold: #7A6200;          /* dourado: detalhes, títulos pequenos, links */
-  --accent-soft: #E4E1D3;
+  --bg: #ECEAE7;
+  --surface: #FFFFFF;
+  --surface-2: #F7F5F2;
+  --ink: #1D1A1A;
+  --muted: #5F5955;
+  --line: #DDD8D3;
+  --accent: #7B1F31;        /* vinho: ações principais */
+  --accent-ink: #F4EFEA;
+  --gold: #7B1F31;          /* nome antigo mantido: links, títulos pequenos e detalhes agora em vinho */
+  --accent-soft: #F4E3E6;
+  --taupe: #6E5A46;
   /* estados (semânticos, separados do acento) */
-  --s-draft: #6B7280;     --s-draft-bg: #E4E3DC;
-  --s-wait: #8A5A00;      --s-wait-bg: #FCF1D9;
-  --s-ok: #17703F;        --s-ok-bg: #E2F4E9;
-  --s-change: #B23C17;    --s-change-bg: #FCE7DF;
-  --s-pub: #2B2B2B;       --s-pub-bg: #E4E1D3;
+  --s-draft: #5F5955;     --s-draft-bg: #E8E3DE;
+  --s-wait: #7A4A00;      --s-wait-bg: #FBEFD9;
+  --s-ok: #1E5A35;        --s-ok-bg: #E6F0E9;
+  --s-change: #A3361A;    --s-change-bg: #FBE6DE;
+  --s-pub: #1D1A1A;       --s-pub-bg: #E8E3DE;
   --s-fail: #B4232F;      --s-fail-bg: #FBE3E5;
-  --shadow: 0 1px 2px rgba(20,22,27,.06), 0 8px 24px rgba(20,22,27,.06);
-  --display: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --body: "Poppins", "Helvetica Neue", Arial, sans-serif;
+  --shadow: 0 1px 2px rgba(29,26,26,.05), 0 8px 24px rgba(29,26,26,.05);
+  --display: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --body: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --script: "Yellowtail", cursive;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
-  --r: 12px;
+  --r: 16px;
 }
-@media (prefers-color-scheme: dark) {:root:not([data-theme="light"]) {
-    --bg: #1A1A18; --surface: #232320; --surface-2: #2A2A27; --ink: #EBEBE6; --muted: #A6A499; --line: #3A3934;
-    --accent: #E6E1CF; --accent-ink: #1A1A18; --gold: #D6BC6A; --accent-soft: #34312A;
-    --s-draft: #A3A9B4; --s-draft-bg: #23272F;
+@media (prefers-color-scheme: dark) {:root[data-theme="auto"] {
+    --bg: #161414; --surface: #211E1D; --surface-2: #2A2625; --ink: #F4EFEA; --muted: #B3AAA4; --line: #3A3432;
+    --accent: #9E2B42; --accent-ink: #F4EFEA; --gold: #E8A3B0; --accent-soft: #3A1F25; --taupe: #C2AE98;
+    --s-draft: #B3AAA4; --s-draft-bg: #2A2625;
     --s-wait: #F1BE5C;  --s-wait-bg: #33280F;
     --s-ok: #6DD39A;    --s-ok-bg: #12301F;
     --s-change: #FF9873; --s-change-bg: #3A1D12;
-    --s-pub: #D6BC6A;   --s-pub-bg: #34312A;
+    --s-pub: #E8A3B0;   --s-pub-bg: #3A1F25;
     --s-fail: #FF7C86;  --s-fail-bg: #3A161B;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-    --bg: #1A1A18; --surface: #232320; --surface-2: #2A2A27; --ink: #EBEBE6; --muted: #A6A499; --line: #3A3934;
-    --accent: #E6E1CF; --accent-ink: #1A1A18; --gold: #D6BC6A; --accent-soft: #34312A;
-    --s-draft: #A3A9B4; --s-draft-bg: #23272F;
+    --bg: #161414; --surface: #211E1D; --surface-2: #2A2625; --ink: #F4EFEA; --muted: #B3AAA4; --line: #3A3432;
+    --accent: #9E2B42; --accent-ink: #F4EFEA; --gold: #E8A3B0; --accent-soft: #3A1F25; --taupe: #C2AE98;
+    --s-draft: #B3AAA4; --s-draft-bg: #2A2625;
     --s-wait: #F1BE5C;  --s-wait-bg: #33280F;
     --s-ok: #6DD39A;    --s-ok-bg: #12301F;
     --s-change: #FF9873; --s-change-bg: #3A1D12;
-    --s-pub: #D6BC6A;   --s-pub-bg: #34312A;
+    --s-pub: #E8A3B0;   --s-pub-bg: #3A1F25;
     --s-fail: #FF7C86;  --s-fail-bg: #3A161B;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
     color-scheme: dark;
@@ -654,9 +659,7 @@ body.vw-open { overflow: hidden; }
 .tadd-x { border: 0; background: none; font-size: 18px; color: #44546F; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .tadd-x:hover { background: rgba(9,30,66,.08); }
 .tsearch { width: 200px; }
-@media (prefers-color-scheme: dark) {:root:not([data-theme="light"]) .tboard-wrap { background: linear-gradient(135deg, #1C2B6B 0%, #2E2366 55%, #3F1F55 100%); }:root:not([data-theme="light"]) .tlist { background: #101204; background: #16181D; }:root:not([data-theme="light"]) .tlist-head h2 { color: #DEE4EA; }:root:not([data-theme="light"]) .tlist-n { color: #9FADBC; background: rgba(255,255,255,.08); }:root:not([data-theme="light"]) .tlist-foot { color: #8C9BAB; }:root:not([data-theme="light"]) .tcard { background: #22272B; color: #DEE4EA; box-shadow: 0 1px 1px rgba(0,0,0,.5); }:root:not([data-theme="light"]) .tcard-act { border-color: #2C333A; }:root:not([data-theme="light"]) .tbadges { color: #9FADBC; }:root:not([data-theme="light"]) .tnext { color: #D6BC6A; }:root:not([data-theme="light"]) .tlabel.fmt { background: #2C333A; color: #B6C2CF; }:root:not([data-theme="light"]) .tadd-btn { color: #9FADBC; }:root:not([data-theme="light"]) .tadd-btn:hover { background: rgba(255,255,255,.08); color: #DEE4EA; }:root:not([data-theme="light"]) .tadd-ta, :root:not([data-theme="light"]) .tadd-sel { background: #22272B; color: #DEE4EA; }:root:not([data-theme="light"]) .tnote { background: #3A2A1D; color: #FEC195; }:root:not([data-theme="light"]) .tnote.fail { background: #42221F; color: #FD9891; }
 }
-:root[data-theme="dark"] .tboard-wrap { background: linear-gradient(135deg, #1C2B6B 0%, #2E2366 55%, #3F1F55 100%); }:root[data-theme="dark"] .tlist { background: #101204; background: #16181D; }:root[data-theme="dark"] .tlist-head h2 { color: #DEE4EA; }:root[data-theme="dark"] .tlist-n { color: #9FADBC; background: rgba(255,255,255,.08); }:root[data-theme="dark"] .tlist-foot { color: #8C9BAB; }:root[data-theme="dark"] .tcard { background: #22272B; color: #DEE4EA; box-shadow: 0 1px 1px rgba(0,0,0,.5); }:root[data-theme="dark"] .tcard-act { border-color: #2C333A; }:root[data-theme="dark"] .tbadges { color: #9FADBC; }:root[data-theme="dark"] .tnext { color: #D6BC6A; }:root[data-theme="dark"] .tlabel.fmt { background: #2C333A; color: #B6C2CF; }:root[data-theme="dark"] .tadd-btn { color: #9FADBC; }:root[data-theme="dark"] .tadd-btn:hover { background: rgba(255,255,255,.08); color: #DEE4EA; }:root[data-theme="dark"] .tadd-ta, :root[data-theme="dark"] .tadd-sel { background: #22272B; color: #DEE4EA; }:root[data-theme="dark"] .tnote { background: #3A2A1D; color: #FEC195; }:root[data-theme="dark"] .tnote.fail { background: #42221F; color: #FD9891; }
 @media (max-width: 640px) { .tboard-wrap { margin: 0 -16px; border-radius: 0; } .tlist { width: 84vw; max-height: none; } .tsearch { width: 100%; } }
 
 /* ── Calendário: agenda do dia por horário */
@@ -698,21 +701,10 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 @media (prefers-color-scheme: dark) {:root:not([data-theme="light"]) .brand-logo.light { display: none; }:root:not([data-theme="light"]) .brand-logo.dark { display: block; } }
 :root[data-theme="dark"] .brand-logo.light { display: none; }:root[data-theme="dark"] .brand-logo.dark { display: block; }
 .topbar-in { padding: 6px 20px; }
-.tab[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--gold), var(--shadow); }
-.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--gold)); }
 .btn.ai { background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 14%, var(--surface)), var(--surface)); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); color: var(--gold); }
-.home-hero { background: #2B2B2B; color: #EBEBE6; }
-.home-hero::after { background: radial-gradient(circle, rgba(122,98,0,.55), transparent 70%); }
-.home-hero .eyebrow { color: #CDB66B; }
 .home-mark { background: transparent; width: 86px; height: 86px; }
 .home-mark img { width: 100%; height: 100%; display: block; }
-.home-hero .btn.primary { background: #EBEBE6; color: #2B2B2B; border-color: #EBEBE6; }
-.home-hero .btn:not(.primary) { color: #EBEBE6; border-color: rgba(235,235,230,.35); background: transparent; }
-.tboard-wrap { background: linear-gradient(135deg, #2B2B2B 0%, #3D3726 55%, #7A6200 100%); }
-.tlist { background: #EBEBE6; }
 .tadd-ta, .tadd-sel { background: #FAFAF7; }
-@media (prefers-color-scheme: dark) {:root:not([data-theme="light"]) .tboard-wrap { background: linear-gradient(135deg, #141413 0%, #2A261B 60%, #4A3C08 100%); }:root:not([data-theme="light"]) .tlist { background: #1F1F1C; } }
-:root[data-theme="dark"] .tboard-wrap { background: linear-gradient(135deg, #141413 0%, #2A261B 60%, #4A3C08 100%); }:root[data-theme="dark"] .tlist { background: #1F1F1C; }
 .login .brand-logo { width: 96px; height: 96px; margin: 0 auto 4px; }
 
 /* onboarding no painel */
@@ -962,3 +954,82 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -.015em; }
 .home-team { align-items: stretch; }
 .home-team > * { height: 100%; }
 @media (max-width: 640px) { .cal-day .cal-date.holiday, .cal-strip.holiday { background: var(--s-ok); } }
+
+/* ═════════════ Direção B · identidade MC DIGITAL (editorial) ═════════════
+   Vem por último de propósito: ajusta componentes antigos sem mexer na estrutura. */
+body { font-size: 14.5px; }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -.01em; }
+.script { font-family: var(--script); font-weight: 400; font-style: normal; color: var(--accent); letter-spacing: 0; }
+:root[data-theme="dark"] .script { color: var(--gold); }
+@media (prefers-color-scheme: dark) { :root[data-theme="auto"] .script { color: var(--gold); } }
+
+/* olho da marca: caixa alta espaçada seguida de linha fina */
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .22em; color: var(--muted); display: flex; align-items: center; gap: 12px; }
+.eyebrow::after { content: ""; width: 64px; height: 1px; background: currentColor; opacity: .7; flex: none; }
+.page-head h1 { font-size: clamp(30px, 4vw, 42px); font-weight: 800; text-transform: uppercase; letter-spacing: -.02em; text-shadow: none; }
+.page-head h1 em, .page-head h1 i { font-weight: 300; text-transform: none; }
+
+/* barra superior */
+.topbar { background: color-mix(in srgb, var(--surface-2) 92%, transparent); }
+.tab { border-radius: 999px; padding: 8px 14px; font-weight: 500; font-size: 13.5px; color: var(--muted); }
+.tab:hover { color: var(--ink); }
+.tab[aria-current="page"] { background: var(--accent); color: var(--accent-ink); box-shadow: none; font-weight: 600; }
+.topbar .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+
+/* botões em pílula */
+.btn { border-radius: 999px; padding: 9px 18px; font-weight: 600; }
+.btn.sm { border-radius: 999px; padding: 6px 13px; }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.ai { background: transparent; border: 1.5px solid var(--accent); color: var(--accent); }
+:root[data-theme="dark"] .btn.ai { border-color: var(--gold); color: var(--gold); }
+@media (prefers-color-scheme: dark) { :root[data-theme="auto"] .btn.ai { border-color: var(--gold); color: var(--gold); } }
+
+/* cartões: brancos, sem borda pesada, cantos generosos */
+.card { border-color: transparent; border-radius: 20px; box-shadow: none; }
+.drawer-head h2 { font-weight: 800; letter-spacing: .02em; }
+input:not([type]), input[type=number], input[type=month], input[type=text], input[type=password], input[type=email], input[type=tel], input[type=date], input[type=time], select, textarea { border-radius: 12px; }
+.login form { border: 0; border-radius: 24px; }
+
+/* Início: abertura editorial, sem bloco escuro */
+.home-hero { background: transparent; color: var(--ink); padding: 8px 0 4px; border-radius: 0; }
+.home-hero::after { display: none; }
+.home-mark { width: 72px; height: 72px; }
+.home-hello .eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: .22em; }
+.home-hello h1 { font-size: clamp(30px, 4.6vw, 46px); font-weight: 300; font-style: italic; letter-spacing: -.02em; margin: 6px 0 6px; }
+.home-hello h1 .script { font-size: 1.28em; line-height: .9; }
+.home-hello p { color: var(--muted); font-size: 15px; }
+.home-quick .btn:not(.primary) { background: var(--surface); color: var(--ink); border-color: transparent; }
+.home-quick .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.ht, .alert { background: var(--surface); border-color: transparent; border-radius: 14px; }
+.stat { border-radius: 16px; }
+
+/* Fluxo: quadro claro com colunas em off-white (sem degradê) */
+.tboard-wrap { background: transparent; padding: 0 0 12px; border-radius: 0; scrollbar-color: var(--line) transparent; }
+.tlist { background: var(--surface-2); border-radius: 18px; box-shadow: none; }
+.tlist.over { box-shadow: 0 0 0 2px var(--accent); }
+.tlist-head h2 { color: var(--ink); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; }
+.tlist-n { color: var(--ink); background: var(--surface); }
+.tlist-foot { color: var(--muted); }
+.tcard { background: var(--surface); color: var(--ink); border-radius: 14px; box-shadow: none; }
+.tcard:hover, .tcard:focus-visible { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.tnext { color: var(--accent); }
+:root[data-theme="dark"] .tnext { color: var(--gold); }
+.tlabel { border-radius: 999px; color: var(--ink); }
+.tlabel.fmt { background: var(--surface-2); color: var(--muted); }
+.tlabel.ia { background: var(--accent-soft); color: var(--accent); }
+.tbadge { border-radius: 999px; padding: 1px 7px; }
+.tbadges { color: var(--muted); }
+.tadd-ta, .tadd-sel { background: var(--surface); }
+:root[data-theme="dark"] .tlabel:not(.fmt):not(.ia):not([class*="sc-"]) { background: color-mix(in srgb, var(--lc) 30%, #211E1D); color: #F4EFEA; }
+@media (prefers-color-scheme: dark) { :root[data-theme="auto"] .tlabel:not(.fmt):not(.ia):not([class*="sc-"]) { background: color-mix(in srgb, var(--lc) 30%, #211E1D); color: #F4EFEA; } :root[data-theme="auto"] .tnext { color: var(--gold); } }
+
+/* Calendário: feriado com marca própria */
+.cal-date.holiday, .cal-strip.holiday { color: var(--s-ok); background: var(--s-ok-bg); }
+
+/* pílulas de status e etiquetas um pouco mais arredondadas */
+.pill { padding: 3px 10px; }
+.tab { text-decoration: none; }
+.tadd-btn { color: var(--muted); }
+.tadd-btn:hover { background: var(--surface); color: var(--ink); }
+.home-mark .brand-logo { width: 100%; height: 100%; }
+@media (max-width: 640px) { .eyebrow::after { display: none; } .home-mark { width: 56px; height: 56px; } }

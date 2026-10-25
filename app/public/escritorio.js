@@ -596,13 +596,13 @@ function render(){
     const [bx,by] = P(a.x,a.y,a.seated ? .3 : 0);
     const x = bx*S + ox, y = (by-33)*S + oy;
     if (x < -80 || x > game.width + 80 || y < -40 || y > game.height + 60) continue;
-    c.font = `600 ${11*dpr*ls}px Poppins, "Helvetica Neue", Arial, sans-serif`;
+    c.font = `600 ${11*dpr*ls}px Montserrat, "Helvetica Neue", Arial, sans-serif`;
     const name = a.r.pessoa, w = c.measureText(name).width + 12*dpr*ls, h = 16*dpr*ls;
     rr(c, x - w/2, y - h, w, h, h/2, a.id === sel ? "#D6BC6A" : "rgba(35,35,32,.84)");
     c.fillStyle = a.id === sel ? "#232320" : "#F7F6F2"; c.textAlign = "center";
     c.fillText(name, x, y - h/2 + .5*dpr);
     if (a.bubble && t < a.bubbleUntil){
-      c.font = `500 ${11.5*dpr*ls}px Poppins, "Helvetica Neue", Arial, sans-serif`;
+      c.font = `500 ${11.5*dpr*ls}px Montserrat, "Helvetica Neue", Arial, sans-serif`;
       const bw = c.measureText(a.bubble).width + 16*dpr*ls, bh = 22*dpr*ls, base = y - h - 6*dpr;
       const bx2 = Math.max(4*dpr, Math.min(game.width - bw - 4*dpr, x - bw/2));
       c.save(); c.shadowColor = "rgba(0,0,0,.18)"; c.shadowBlur = 6*dpr; c.shadowOffsetY = 2*dpr;
