@@ -9,7 +9,8 @@ import { NICHES, datesBetween, dateAlerts, relevantFor, daysBetween } from '/dat
 import { officeCard, AGENTS } from '/escritorio.js';
 import { weekMissions, weekLevel, isDone, missionXp } from '/missoes.js';
 import { h, api, toast, fmtDate, fmtTime, dayKey, zonedToISO, partsInTz, prepareImage, copyText, waLink, mailLink, blobToDataUrl, STATUS_LABEL, brl, brlRaw, isMoneyHidden, setMoneyHidden, monthLabel, fileSize, videoInfo, videoFrame, uploadVideo, MEDIA_LABEL, compressVideo, VIDEO_MAX } from '/shared.js';
-import { S, clientName, confirmButton, drawer, render } from './core.js';
+import { S, can, clientName, confirmButton, drawer, render, savePref, savedPref } from './core.js';
+import { connectionDead, needsConnect, openConnectShare } from './clientes.js';
 import { settingsDevice } from './inicio.js';
 import { fmtDay, settingsOnboarding } from './pasta.js';
 import { settingsDiag, settingsPrivacy } from './vendas.js';
@@ -34,8 +35,8 @@ function viewSettings() {
   const codeBox = (text, label, shown = text) => h('div', { style: 'display:grid;gap:8px' },
     h('pre', { class: 'mono notranslate', translate: 'no', style: 'margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;max-height:260px;overflow:auto' }, shown),
     h('button', { class: 'btn sm', style: 'justify-self:start', onclick: () => copyText(text, `${label} copiado.`) }, `Copiar ${label}`));
-  return [
-    h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Instalação'), h('h1', {}, 'Ajustes'))),
+  const sistema = [
+    statusOverview(st, ago),
     st.migration_sql ? h('article', { class: 'card', style: 'border-color:var(--s-wait)' },
       h('div', { class: 'eyebrow' }, 'Atualização necessária'),
       h('h3', {}, 'Atualizar o banco de dados'),
@@ -90,17 +91,56 @@ function viewSettings() {
           : h('span', { class: 'muted' }, 'Aparece aqui depois que o banco de dados estiver configurado.'),
         h('button', { class: 'btn sm', style: 'justify-self:start', onclick: async () => { const s = await api('/api/session'); S.setup = s.setup; render(); toast('Atualizado.'); } }, 'Verificar de novo')),
     ),
-    ...settingsPrivacy(),
-    ...settingsDiag(),
-    ...settingsOnboarding(),
-    ...settingsDevice(),
-    ...settingsSecurity(),
-    ...settingsMail(),
-    ...settingsBackup(),
-    ...settingsTeam(),
-    ...settingsPix(),
-    ...settingsContract(),
   ];
+  const sections = [
+    ['sistema', 'Sistema e publicação', sistema],
+    ['conexoes', 'Conexões do Instagram', settingsConnections()],
+    ['equipe', 'Equipe e acessos', settingsTeam()],
+    ['agencia', 'Agência e contrato', settingsContract()],
+    ['cobranca', 'Cobrança e Pix', settingsPix()],
+    ['vendas', 'Diagnóstico e boas-vindas', [...settingsDiag(), ...settingsOnboarding()]],
+    ['avisos', 'Notificações e e-mails', [...settingsDevice(), ...settingsMail()]],
+    ['seguranca', 'Segurança, privacidade e backup', [...settingsSecurity(), ...settingsPrivacy(), ...settingsBackup()]],
+  ].map(([id, label, items]) => [id, label, (items || []).filter(Boolean)]).filter(([, , items]) => items.length);
+  if (S.setTab === undefined) S.setTab = savedPref('mc_set_tab', 'sistema');
+  const cur = sections.find(([id]) => id === S.setTab) || sections[0];
+  const pick = (id) => { S.setTab = id; savePref('mc_set_tab', id); render(); scrollTo({ top: 0 }); };
+  return [
+    h('div', { class: 'page-head' }, h('div', {}, h('div', { class: 'eyebrow' }, 'Agência'), h('h1', {}, 'Ajustes'))),
+    h('div', { class: 'set-layout' },
+      h('nav', { class: 'set-nav', 'aria-label': 'Seções dos ajustes' },
+        ...sections.map(([id, label]) => h('button', { type: 'button', class: 'set-link', 'aria-current': id === cur[0] ? 'page' : null, onclick: () => pick(id) }, label))),
+      h('div', { class: 'set-body' }, h('h2', { class: 'set-title' }, cur[1]), ...cur[2])),
+  ];
+}
+
+// Topo de Ajustes: o estado do sistema em três cartões
+function statusOverview(st, ago) {
+  const dead = S.clients.filter(connectionDead).length;
+  const conn = S.clients.filter((c) => c.ig_connected && !connectionDead(c)).length;
+  const tile = (tone, label, big, sub) => h('div', { class: `set-stat ${tone}` }, h('span', { class: 'set-stat-l' }, label), h('b', {}, big), h('span', { class: 'muted' }, sub));
+  return h('div', { class: 'set-stats' },
+    st.publisher_last_run ? tile(ago <= 15 ? 'ok' : 'bad', 'Publicação automática', ago <= 15 ? 'Funcionando' : 'Parada', `Última rodada há ${ago} min`) : tile('warn', 'Publicação automática', 'Não configurada', 'Veja a etapa 4 abaixo'),
+    tile(dead ? 'bad' : 'ok', 'Conexões do Instagram', dead ? `${dead} caiu` : `${conn} funcionando`, dead ? 'Envie o link para reconectar' : 'Testadas automaticamente'),
+    tile(st.ig_ready ? 'ok' : 'warn', 'App da Meta', st.ig_ready ? 'Configurado' : 'Falta configurar', 'IG_APP_ID e IG_APP_SECRET'));
+}
+
+// Ajustes → conexões: todas as contas, quando foram testadas e o link para o cliente reconectar
+function settingsConnections() {
+  const list = S.clients.filter((c) => !c.own || c.ig_connected);
+  if (!list.length) return [];
+  const row = (c) => {
+    const dead = connectionDead(c);
+    const state = c.production_only && !c.ig_connected ? ['', 'Só produção · o cliente posta'] : dead ? ['bad', 'Caiu · senha trocada ou acesso removido'] : c.ig_connected ? ['ok', c.ig_health?.at ? `Funcionando · testada ${fmtDate(c.ig_health.at, S.tz)} ${fmtTime(c.ig_health.at, S.tz)}` : 'Conectado'] : ['warn', 'Sem Instagram conectado'];
+    return h('div', { class: 'conn-row' },
+      h('span', { class: `dot ${state[0] === 'ok' ? 'good' : state[0]}` }),
+      h('span', { class: 'conn-main' }, h('b', {}, c.ig_username ? `@${c.ig_username}` : c.name), h('span', { class: 'muted' }, `${c.ig_username ? `${c.name} · ` : ''}${state[1]}`)),
+      can('clientes') && c.connect_url && needsConnect(c) ? h('button', { class: 'btn primary sm', type: 'button', onclick: () => openConnectShare(c) }, dead ? 'Enviar link para reconectar' : 'Enviar link de conexão') : null);
+  };
+  return [h('article', { class: 'card' },
+    h('span', { class: 'muted', style: 'font-size:14px' }, 'O app testa todas as conexões toda manhã e a cada 6 horas. Se alguma cair, você recebe um aviso no celular. O mais seguro é o próprio cliente conectar pelo celular dele, com o link.'),
+    h('div', { class: 'conn-list' }, ...list.map(row)),
+    can('clientes') ? h('button', { class: 'btn sm', style: 'justify-self:start', type: 'button', onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Testando…'; try { const r = await api('/api/clients', { method: 'PUT' }); S.clients = await api('/api/clients'); render(); toast(r.dead?.length ? `Conexão caiu: ${r.dead.join(', ')}.` : 'Todas as conexões funcionando.', Boolean(r.dead?.length)); } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Testar agora'; } } }, 'Testar agora') : null)];
 }
 
 // Ajustes → dados da agência e modelo de contrato
