@@ -50,7 +50,7 @@ test('fluxo completo', async () => {
   assert.equal(viaClient.status, 302);
   const st2 = new URL(viaClient.headers.get('location')).searchParams.get('state');
   const cb2 = await call(`/api/ig/callback?code=abc&state=${encodeURIComponent(st2)}`, { auth: false });
-  assert.match(cb2.headers.get('location'), /^\/aprovar\?t=[0-9a-f]+&ig=ok/);
+  assert.match(cb2.headers.get('location'), /^\/conectar\?t=[0-9a-f]+&ig=ok/);
   assert.equal((await call(`/api/ig/connect?client=${c.id}`, { auth: false })).status, 401, 'sem login não conecta por id');
   const forged = await call(`/api/ig/callback?code=abc&state=${encodeURIComponent('x.y')}`, { auth: false });
   assert.match(forged.headers.get('location'), /ig=erro/);

@@ -9,7 +9,7 @@ import { db } from '../lib/db.js';
 import { appUrl } from '../lib/env.js';
 import { getState } from '../lib/appstate.js';
 
-const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico', 'privacidade', 'exclusao', 'termos', 'sobre'];
+const PAGES = ['aprovar', 'cliente', 'relatorio', 'proposta', 'historico', 'boasvindas', 'diagnostico', 'privacidade', 'exclusao', 'termos', 'sobre', 'conectar'];
 // Páginas legais (exigidas pela Meta): públicas, indexáveis e preenchidas com os dados da agência (Ajustes → Dados da agência).
 const LEGAL = { privacidade: '/privacidade', exclusao: '/exclusao-de-dados', termos: '/termos', sobre: '/sobre' };
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -29,6 +29,7 @@ const DEFAULTS = {
   exclusao: { image: 'boasvindas', title: 'Exclusão de dados · MC DIGITAL', description: 'Como apagar os dados que o MC DIGITAL recebeu do seu Instagram. Data deletion instructions.' },
   sobre: { image: 'painel', title: 'MC Digital · Agência de social media', description: 'Planejamento, criação, aprovação pelo celular e publicação do Instagram da sua empresa, com relatório todo mês.' },
   termos: { image: 'boasvindas', title: 'Termos de Uso · MC DIGITAL', description: 'Termos de uso do MC DIGITAL. Terms of Service.' },
+  conectar: { image: 'cliente', title: 'Conecte seu Instagram', description: 'Autorize a publicação dos posts aprovados. Você entra direto no Instagram; a agência não vê sua senha.' },
   historico: { image: 'historico', title: 'Histórico de aprovações', description: 'Registro de envios, aprovações e publicações com data e hora.' },
 };
 
@@ -42,6 +43,10 @@ async function personalize(p, t) {
       title: pend.length ? `${pend.length} post${pend.length > 1 ? 's' : ''} para aprovar · ${c.name}` : `Aprovação de posts · ${c.name}`,
       description: pend.length ? 'Toque para ver como vão ficar no Instagram e aprovar ou pedir ajuste.' : 'Tudo em dia por aqui. Os próximos posts aparecem neste mesmo link.',
     };
+  }
+  if (p === 'conectar') {
+    const c = await db.one('clients', { select: 'name', approval_token: `eq.${t}` });
+    return c ? { title: `Conecte seu Instagram · ${c.name}`, description: 'Uma autorização rápida para os posts aprovados saírem sozinhos. Você entra direto no Instagram; a agência não vê sua senha.' } : {};
   }
   if (p === 'cliente') {
     const c = await db.one('clients', { select: 'name,contract_data', portal_token: `eq.${t}` });

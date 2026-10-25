@@ -8,6 +8,7 @@ import { logEvent } from './events.js';
 import { notify } from './push.js';
 import { signMedia } from './media.js';
 import { productionList } from './production.js';
+import { isDeadToken, markDead } from './ighealth.js';
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -137,6 +138,7 @@ async function finish(p, c, log, now) {
 
 async function handleError(p, e, log) {
   const attempts = p.attempts || 1;
+  if (isDeadToken(e)) await markDead(p.client_id, e.message).catch(() => {}); // o painel passa a mostrar "conexão caiu"
   if (e.transient && attempts < MAX_ATTEMPTS) return backToQueue(p, e.message, log);
   return fail(p, e.message, log);
 }

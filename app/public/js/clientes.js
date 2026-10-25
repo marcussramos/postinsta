@@ -18,6 +18,7 @@ function viewClients() {
   const out = [h('div', { class: 'page-head' },
     h('div', {}, h('div', { class: 'eyebrow' }, `${S.clients.length} de 10 clientes`), h('h1', {}, 'Clientes')),
     h('div', { class: 'spacer' }),
+    can('clientes') && S.clients.some((c) => c.ig_connected) ? h('button', { class: 'btn', onclick: (e) => testConnections(e.currentTarget) }, 'Testar conexões') : null,
     can('clientes') && !S.limitClients ? h('button', { class: 'btn primary', onclick: () => openClient() }, '+ Novo cliente') : null)];
   if (!S.clients.length) {
     out.push(h('div', { class: 'empty' }, h('h3', {}, 'Nenhum cliente ainda'),
@@ -33,8 +34,10 @@ function cardClient(c) {
   const pend = S.posts.filter((p) => p.client_id === c.id && p.status === 'pending_approval').length;
   const exp = c.ig_token_expires_at ? Math.round((new Date(c.ig_token_expires_at) - Date.now()) / 86400e3) : null;
   const expired = exp !== null && exp <= 0;
+  const dead = connectionDead(c);
   const ig = c.production_only && !c.ig_connected ? h('span', { class: 'ig-ok' }, '📦 Só produção · o cliente posta')
     : !c.ig_connected ? h('span', { class: 'ig-off' }, 'Não conectado')
+    : dead ? h('span', { class: 'ig-off', title: c.ig_health?.error || '' }, `@${c.ig_username} · conexão caiu`)
     : expired ? h('span', { class: 'ig-off' }, `@${c.ig_username} · conexão expirou`)
     : h('span', { class: exp !== null && exp < 5 ? 'ig-warn' : 'ig-ok' }, `@${c.ig_username || 'conectado'}`);
   return h('article', { class: 'card' },
@@ -52,7 +55,8 @@ function cardClient(c) {
     h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Link fixo de aprovação'),
       h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.approval_url), h('button', { class: 'btn sm', onclick: () => copyText(c.approval_url, 'Link copiado.') }, 'Copiar'))),
     h('div', { class: 'actions' },
-      c.ig_connected && !expired || !can('clientes') ? null : h('a', { class: 'btn primary sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar Instagram' : 'Conectar Instagram'),
+      needsConnect(c) && c.connect_url && can('clientes') ? h('button', { class: 'btn primary sm', onclick: () => openConnectShare(c) }, dead ? 'Enviar link para reconectar' : 'Enviar link de conexão') : null,
+      c.ig_connected && !expired && !dead || !can('clientes') ? null : h('a', { class: 'btn sm', href: `/api/ig/connect?client=${c.id}`, title: 'Conectar por aqui (exige o login do cliente neste aparelho)' }, c.ig_connected ? 'Reconectar aqui' : 'Conectar aqui'),
       c.contact_whatsapp ? h('a', { class: 'btn wa sm', href: waLink(c.contact_whatsapp, approvalMessage(c)), target: '_blank', rel: 'noopener' }, 'WhatsApp') : null,
       c.contact_email ? h('a', { class: 'btn sm', href: mailLink(c.contact_email, approvalSubject(c), approvalMessage(c)) }, 'E-mail') : null,
       folderTabsFor().length ? h('a', { class: 'btn sm', href: `#pasta/${c.id}` }, can('financeiro') ? '🔒 Pasta' : 'Marca e pedidos') : null,
@@ -76,9 +80,11 @@ function openClient(c = null) {
   ];
   if (c) {
     body.push(h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Instagram'),
-      c.ig_connected ? h('span', {}, `Conectado como @${c.ig_username}. A conexão é renovada sozinha a cada 50 dias.`) : h('span', { class: 'muted' }, 'Ainda não conectado.'),
+      c.ig_connected ? (connectionDead(c) ? h('span', { style: 'color:var(--s-fail);font-weight:600' }, `A conexão de @${c.ig_username} caiu (senha trocada ou acesso removido). Envie o link para o cliente reconectar.`) : h('span', {}, `Conectado como @${c.ig_username}. A conexão é renovada sozinha a cada 50 dias${c.ig_health?.at ? ` · testada ${fmtDate(c.ig_health.at, S.tz)}` : ''}.`)) : h('span', { class: 'muted' }, 'Ainda não conectado.'),
+      h('span', { class: 'hint' }, 'O mais seguro é o próprio cliente conectar pelo celular dele, com o link: a Meta não estranha o login e ninguém da agência precisa da senha.'),
       h('div', { class: 'actions' },
-        h('a', { class: 'btn sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar' : 'Conectar Instagram'),
+        c.connect_url ? h('button', { class: 'btn primary sm', type: 'button', onclick: () => openConnectShare(c) }, 'Enviar link para o cliente') : null,
+        h('a', { class: 'btn sm', href: `/api/ig/connect?client=${c.id}` }, c.ig_connected ? 'Reconectar aqui' : 'Conectar aqui'),
         c.ig_connected ? confirmButton('Desconectar', 'Confirmar', async () => { await saveClient({ disconnect_instagram: true }); }, 'btn ghost sm') : null)));
     body.push(h('div', { class: 'card', style: 'gap:10px;padding:14px' }, h('b', {}, 'Link de aprovação'),
       h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Se o link vazou ou mudou quem aprova, gere um novo. O antigo para de funcionar.'),
@@ -106,4 +112,38 @@ function openClient(c = null) {
   name.focus();
 }
 
-export { viewClients, cardClient, openClient };
+// ── Conexão do Instagram pelo próprio cliente (link que ele abre no celular)
+const connectionDead = (c) => Boolean(c.ig_connected && c.ig_health && c.ig_health.ok === false);
+const needsConnect = (c) => !c.production_only && !c.own && (!c.ig_connected || connectionDead(c));
+function connectMessage(c) {
+  const first = String(c.contract_data?.representante || c.name || '').trim().split(/\s+/)[0];
+  return connectionDead(c)
+    ? `Oi, ${first}! A conexão do seu Instagram com o nosso sistema de publicação caiu (isso acontece quando a senha é trocada). Pode reconectar pelo seu celular? Leva 1 minuto e eu não vejo sua senha: ${c.connect_url}`
+    : `Oi, ${first}! Para os posts que você aprova saírem sozinhos no seu Instagram, preciso que você autorize uma vez, pelo seu celular. Leva 1 minuto e eu não vejo sua senha: ${c.connect_url}`;
+}
+function openConnectShare(c) {
+  const msg = connectMessage(c);
+  const close = drawer(connectionDead(c) ? `Reconectar · ${c.name}` : `Conectar Instagram · ${c.name}`, [
+    h('p', { style: 'margin:0' }, 'Mande este link para o cliente abrir no celular dele, onde ele já usa o Instagram. Ele toca em "Conectar", confere o perfil e toca em "Permitir". Você recebe um aviso quando ele terminar.'),
+    h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Link de conexão'),
+      h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, c.connect_url), h('button', { class: 'btn sm', type: 'button', onclick: () => copyText(c.connect_url, 'Link copiado.') }, 'Copiar'))),
+    h('div', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Mensagem'), h('div', { class: 'card', style: 'background:var(--surface-2);font-size:14px;white-space:pre-wrap' }, msg)),
+    h('p', { class: 'hint', style: 'margin:0' }, 'Enquanto a Meta não aprovar o app, o perfil do cliente precisa estar como testador (Meta → Funções do app) para a conexão funcionar.'),
+  ], [
+    h('button', { class: 'btn', type: 'button', onclick: () => copyText(msg, 'Mensagem copiada.') }, 'Copiar mensagem'),
+    h('span', { class: 'spacer' }),
+    c.contact_whatsapp ? h('a', { class: 'btn wa', href: waLink(c.contact_whatsapp, msg), target: '_blank', rel: 'noopener', onclick: () => setTimeout(close, 300) }, 'Enviar no WhatsApp') : h('span', { class: 'muted', style: 'font-size:13px' }, 'Cadastre o WhatsApp do cliente para enviar direto.'),
+  ]);
+}
+async function testConnections(btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Testando…';
+  try {
+    const r = await api('/api/clients', { method: 'PUT' });
+    S.clients = await api('/api/clients');
+    render();
+    toast(r.dead?.length ? `Conexão caiu: ${r.dead.join(', ')}.` : `${r.ok?.length || 0} conexão(ões) funcionando.`, Boolean(r.dead?.length));
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+
+export { viewClients, cardClient, openClient, openConnectShare, connectionDead, needsConnect };

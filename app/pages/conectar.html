@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Conecte seu Instagram · MC DIGITAL</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400&family=Yellowtail&display=swap">
+<style>
+  :root { --bg: #ECEAE7; --surface: #FFFFFF; --surface-2: #F7F5F2; --ink: #1D1A1A; --muted: #5F5955; --line: #DDD8D3;
+    --accent: #7B1F31; --accent-ink: #F4EFEA; --accent-soft: #F4E3E6; --ok: #1E5A35; --ok-bg: #E6F0E9; --bad: #B4232F; --bad-bg: #FBE3E5; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "Montserrat", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 520px; margin: 0 auto; padding: 28px 18px 48px; display: grid; gap: 16px; }
+  .top { display: flex; align-items: center; gap: 10px; }
+  .top img { width: 44px; height: 44px; }
+  .top b { font-size: 12px; letter-spacing: .24em; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow::after { content: ""; width: 56px; height: 1px; background: currentColor; opacity: .7; }
+  h1 { margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: -.02em; }
+  h1 .light { font-weight: 300; font-style: italic; display: block; }
+  h1 .bold { font-weight: 800; text-transform: uppercase; }
+  .script { font-family: "Yellowtail", cursive; font-weight: 400; color: var(--accent); }
+  .card { background: var(--surface); border-radius: 20px; padding: 18px; display: grid; gap: 10px; }
+  .card.ok { background: var(--ok-bg); color: var(--ok); }
+  .card.bad { background: var(--bad-bg); color: var(--bad); }
+  .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; counter-reset: s; }
+  .steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; counter-increment: s; }
+  .steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+  .steps b { display: block; }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .btn { display: flex; align-items: center; justify-content: center; min-height: 54px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; text-decoration: none; border: 0; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); min-height: 48px; font-size: 14px; }
+  .lock { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+  footer { text-align: center; font-size: 11px; letter-spacing: .2em; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Carregando…</p></main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get('t') || '';
+  var app = document.getElementById('app');
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
+    [].concat(kids || []).forEach(function (c) { if (c != null) e.append(c instanceof Node ? c : document.createTextNode(String(c))); });
+    return e;
+  }
+  var connectHref = '/api/ig/connect?t=' + encodeURIComponent(t);
+  function render(D) {
+    var first = String((D && D.client && D.client.name) || '').split(' ')[0];
+    var handle = D && D.client && D.client.ig_username ? '@' + D.client.ig_username : '';
+    var status = q.get('ig');
+    var parts = [
+      el('div', { class: 'top' }, [el('img', { src: '/brand/logo.png', alt: '' }), el('b', {}, 'MC DIGITAL')]),
+      el('div', { class: 'eyebrow' }, 'Conexão do Instagram'),
+      el('h1', {}, [el('span', { class: 'light' }, first ? ['Olá, ', el('span', { class: 'script' }, first)] : 'Olá!'), el('span', { class: 'bold' }, status === 'ok' ? 'Tudo certo' : 'Conecte seu Instagram')])
+    ];
+    if (status === 'ok') {
+      parts.push(el('div', { class: 'card ok' }, [el('b', {}, '✓ ' + (q.get('msg') || 'Instagram conectado.')),
+        el('span', {}, 'Os posts que você aprovar vão sair sozinhos no horário combinado. Pode fechar esta página.')]));
+    } else {
+      if (status === 'erro' || status === 'cancelado') parts.push(el('div', { class: 'card bad' }, [el('b', {}, status === 'cancelado' ? 'A conexão foi cancelada.' : 'Não deu para conectar.'), el('span', {}, q.get('msg') || 'Tente de novo.')]));
+      if (D && D.client && D.client.ig_connected && status !== 'erro') {
+        parts.push(el('div', { class: 'card ok' }, [el('b', {}, '✓ Seu Instagram ' + handle + ' já está conectado'), el('span', {}, 'Só reconecte se a agência pedir (por exemplo, depois de trocar a senha do Instagram).')]));
+        parts.push(el('a', { class: 'btn ghost', href: connectHref }, 'Reconectar'));
+      } else {
+        parts.push(el('p', { class: 'muted', style: 'margin:0;font-size:15px' }, 'Uma autorização rápida para os posts que você aprova saírem sozinhos no seu perfil, no horário certo.'));
+        parts.push(el('div', { class: 'card' }, el('ol', { class: 'steps' }, [
+          el('li', {}, el('span', {}, [el('b', {}, 'Abra este link no seu celular'), 'O mesmo em que você já usa o Instagram. Se pedir para entrar, use seu login normal.'])),
+          el('li', {}, el('span', {}, [el('b', {}, 'Sua conta precisa ser profissional'), 'Comercial ou Criador de conteúdo (Instagram → Configurações → Tipo de conta).'])),
+          el('li', {}, el('span', {}, [el('b', {}, 'Toque em "Conectar" e depois em "Permitir"'), 'Confira se aparece o seu perfil antes de permitir.']))
+        ])));
+        parts.push(el('a', { class: 'btn', href: connectHref }, 'Conectar meu Instagram'));
+      }
+      parts.push(el('div', { class: 'lock' }, [el('span', { 'aria-hidden': 'true' }, '🔒'), el('span', {}, 'Você entra direto no Instagram: a agência nunca vê sua senha. Dá para remover o acesso quando quiser em Instagram → Configurações → Apps e sites.')]));
+    }
+    parts.push(el('footer', {}, 'MC DIGITAL · GESTÃO DE CONTEÚDO'));
+    app.replaceChildren.apply(app, parts);
+  }
+  if (!/^[a-f0-9]{32,64}$/.test(t)) { app.replaceChildren(el('div', { class: 'card bad' }, 'Link inválido. Peça um novo para a agência.')); return; }
+  fetch('/api/approval?t=' + encodeURIComponent(t)).then(function (r) { return r.ok ? r.json() : null; }).then(function (D) {
+    if (!D) { app.replaceChildren(el('div', { class: 'card bad' }, 'Este link não está mais ativo. Peça um novo para a agência.')); return; }
+    render(D);
+  }).catch(function () { render(null); });
+})();
+</script>
+</body>
+</html>
