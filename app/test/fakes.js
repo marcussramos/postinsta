@@ -152,6 +152,7 @@ export function installFakes({ supabaseUrl = 'https://fake.supabase.co', igFail 
     if (u.host === 'api.instagram.com') return json(200, { data: [{ access_token: 'short-tok', user_id: '178400001', permissions: 'instagram_business_basic,instagram_business_content_publish' }] });
     if (u.pathname === '/access_token') return json(200, { access_token: 'long-tok', token_type: 'bearer', expires_in: 5184000 });
     if (u.pathname === '/refresh_access_token') return json(200, { access_token: 'long-tok-2', token_type: 'bearer', expires_in: 5184000 });
+    if (u.searchParams.get('access_token') === 'dead-tok') return json(400, { error: { message: 'Error validating access token: The session has been invalidated because the user changed their password.', type: 'OAuthException', code: 190 } });
     if (u.pathname.endsWith('/me')) return json(200, { user_id: '178400001', username: 'frasesdefunkwow', followers_count: ig.followers, media_count: 10 });
     const deny = () => json(403, { error: { message: '(#10) Application does not have permission for this action', code: 10 } });
     if (u.pathname.endsWith('/media') && method === 'GET') {

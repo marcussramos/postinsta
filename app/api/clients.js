@@ -6,6 +6,7 @@ import { appUrl } from '../lib/env.js';
 import { publicClient } from '../lib/posts.js';
 import { getState, setState } from '../lib/appstate.js';
 import { productionList, setProductionOnly } from '../lib/production.js';
+import { healthMap, checkConnections, clearHealth } from '../lib/ighealth.js';
 
 // Conta própria da agência (ex.: o perfil da MC DIGITAL): continua com posts, mas fica fora de receita, cobranças e contagem de clientes
 const ownList = async () => { const v = await getState('own_accounts', []); return Array.isArray(v) ? v : []; };
@@ -97,12 +98,20 @@ function teamClient(c, url) {
 }
 
 export default route({
+  // PUT ?check=1: testa agora todas as conexões do Instagram (botão "Testar conexões")
+  PUT: async (req, res) => {
+    await requirePerm(req, 'clientes');
+    send(res, 200, await checkConnections({ force: true }));
+  },
+
   GET: async (req, res) => {
     const u = await requireStaff(req);
     const rows = (await db.select('clients', { select: '*', order: 'name.asc' })).filter((c) => seesClient(u, c.id));
     const own = new Set(await ownList());
     const prod = new Set(await productionList());
-    send(res, 200, rows.map((c) => ({ ...(can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl())), own: own.has(c.id), production_only: prod.has(c.id) })));
+    const health = (await healthMap()).clients || {};
+    send(res, 200, rows.map((c) => ({ ...(can(u, 'financeiro') ? publicClient(c, appUrl()) : teamClient(c, appUrl())), own: own.has(c.id), production_only: prod.has(c.id),
+      ig_health: c.ig_token ? (health[c.id] || null) : null, connect_url: c.approval_token ? `${appUrl()}/conectar?t=${c.approval_token}` : null })));
   },
 
   POST: async (req, res) => {
@@ -130,7 +139,7 @@ export default route({
       const cur = await db.one('clients', { select: 'portal_token', id: `eq.${id}` });
       if (body.portal === 'regenerate' || !cur?.portal_token) patch.portal_token = randomToken();
     } else if (body.portal === 'disable') patch.portal_token = null;
-    if (body.disconnect_instagram) Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null });
+    if (body.disconnect_instagram) { Object.assign(patch, { ig_token: null, ig_token_expires_at: null, ig_user_id: null, ig_username: null, ig_connected_at: null }); await clearHealth(id).catch(() => {}); }
     const [row] = Object.keys(patch).length ? await db.update('clients', { id: `eq.${id}` }, patch) : await db.select('clients', { select: '*', id: `eq.${id}` });
     need(row, 404, 'Cliente não encontrado.');
     let own = new Set(await ownList());

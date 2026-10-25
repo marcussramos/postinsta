@@ -43,7 +43,7 @@
       ]
     },
     {
-      "source": "/(aprovar|relatorio|contrato|cliente|historico|proposta|boasvindas)",
+      "source": "/(aprovar|relatorio|contrato|cliente|historico|proposta|boasvindas|conectar)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -122,6 +122,10 @@
     {
       "source": "/exclusao",
       "destination": "/api/page?p=exclusao"
+    },
+    {
+      "source": "/conectar",
+      "destination": "/api/page?p=conectar"
     },
     {
       "source": "/termos",
