@@ -77,11 +77,6 @@ function viewHome() {
   }
   const nowCard = h('section', { class: 'card' }, h('h3', {}, 'Precisa da sua atenção'),
     alerts.length ? h('div', { class: 'alerts' }, ...alerts) : h('p', { class: 'muted', style: 'margin:0' }, 'Nada travado por aqui ✓'));
-  const todayCard = todays.length ? h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, 'Sai hoje'), h('a', { href: '#agenda', class: 'muted' }, 'Agenda →')),
-    h('div', { class: 'home-today' }, ...todays.map((p) => h('button', { class: 'ht', onclick: () => openPost(p) },
-      thumb(p, 'ht-img'), h('span', { class: 'mono' }, fmtTime(p.scheduled_at, S.tz)),
-      h('span', { class: 'ht-main' }, h('b', {}, clientName(p.client_id)), ' ', typeBadge(p), h('span', { class: 'muted ht-cap' }, p.title || p.caption || '')),
-      h('span', { class: `pill st-${p.status}` }, STATUS_LABEL[p.status]))))) : null;
 
   // ── 2. SEMANA: o que sai nos próximos 7 dias e o que falta planejar
   const opsTiles = [
@@ -143,14 +138,83 @@ function viewHome() {
   if (!S.clients.length) return [hero, noClients()];
   const team = teamSection(today, month, newReqs);
   return [hero, pushPrompt(),
+    todays.length ? homeHead('Hoje', `${todays.length} post${todays.length > 1 ? 's' : ''} marcado${todays.length > 1 ? 's' : ''} para hoje`) : null,
+    todays.length ? todayStrip(todays) : null,
     homeHead('Resolva agora', 'O que trava publicação, cliente esperando e cobrança'),
-    homeRow([nowCard, todayCard], [approvalReminders(), requestsInbox(), chargesCard()]),
+    homeRow([nowCard], [approvalReminders(), requestsInbox(), chargesCard()]),
+    homeHead('Saúde dos clientes', 'Conexão, entregas do mês, aprovações e mensalidade'),
+    healthGrid(clients, month),
     homeHead('Semana', 'O que sai e o que falta planejar'),
     h('div', { class: 'home-kpis' }, ...opsTiles),
     homeRow([weekCard], [planCard, upcomingDatesCard()]),
     team,
     ...(monthBlock || [])].filter(Boolean);
 }
+// ── Faixa "Hoje": capas grandes dos posts do dia, com o que vai acontecer com cada um
+function postFate(p) {
+  const c = S.clients.find((x) => x.id === p.client_id) || {};
+  if (p.status === 'published') return ['ok', c.production_only ? 'Entregue' : 'No ar ✓'];
+  if (p.status === 'publishing') return ['ok', 'Publicando…'];
+  if (p.status === 'failed') return ['bad', 'Não publicou'];
+  if (p.status === 'approved') {
+    if (c.production_only) return ['', 'Entregar ao cliente'];
+    if (!c.ig_connected || connectionDead(c)) return ['warn', 'Postar à mão'];
+    return ['ok', 'Sai sozinho'];
+  }
+  if (p.status === 'pending_approval') return ['accent', 'Falta aprovar'];
+  if (p.status === 'changes_requested') return ['bad', 'Ajuste pedido'];
+  return ['bad', 'Em produção'];
+}
+function coverUrl(p) {
+  if (p.image_url) return p.image_url;
+  const m = (p.media || []).find((x) => x.kind !== 'video');
+  return m ? m.url : null;
+}
+function todayStrip(list) {
+  return h('div', { class: 'today-strip' }, ...list.map((p) => {
+    const [tone, label] = postFate(p);
+    const src = coverUrl(p);
+    return h('button', { class: 'today-card', type: 'button', onclick: () => openPost(p) },
+      src ? h('img', { class: 'today-cover', src, alt: '', loading: 'lazy' }) : h('span', { class: 'today-cover today-empty', 'aria-hidden': 'true' }, p.title || 'Sem arte'),
+      h('span', { class: 'today-info' },
+        h('span', { class: 'today-top' }, h('b', {}, clientName(p.client_id)), h('span', { class: 'today-time' }, fmtTime(p.scheduled_at, S.tz))),
+        h('span', { class: 'today-title' }, p.title || p.caption || 'Post'),
+        h('span', { class: 'today-meta' }, typeBadge(p), h('span', { class: `fate ${tone}` }, label))));
+  }));
+}
+
+// ── Saúde dos clientes: um cartão por cliente com o que importa naquele momento
+function healthGrid(clients, month) {
+  if (!clients.length) return null;
+  const cards = clients.map((c) => {
+    const posts = S.posts.filter((p) => p.client_id === c.id);
+    const waiting = posts.filter((p) => p.status === 'pending_approval').length;
+    const changes = posts.filter((p) => p.status === 'changes_requested').length;
+    const failed = posts.filter((p) => p.status === 'failed').length;
+    const d = S.deliv?.[c.id];
+    const parts = d ? [d.posts, d.reels, d.stories].filter((x) => x && (x.quota || x.planned)) : [];
+    const planned = parts.reduce((a, x) => a + (x.planned || 0), 0), quota = parts.reduce((a, x) => a + (x.quota || 0), 0), live = parts.reduce((a, x) => a + (x.published || 0), 0);
+    const bill = can('financeiro') ? billingMonths(c).find((m) => m.month === month) : null;
+    const lateBill = can('financeiro') && billingMonths(c).some((m) => m.status === 'late');
+    const dead = connectionDead(c);
+    const conn = c.production_only ? ['', 'Só produção'] : dead ? ['bad', 'Conexão caiu'] : c.ig_connected ? ['ok', 'Conectado'] : ['warn', 'Sem Instagram'];
+    const note = dead ? ['bad', 'Reconectar o Instagram']
+      : failed ? ['bad', `${failed} não publicou`]
+      : lateBill ? ['bad', 'Mensalidade em atraso']
+      : changes ? ['warn', `${changes} ajuste${changes > 1 ? 's' : ''} pedido${changes > 1 ? 's' : ''}`]
+      : waiting ? ['warn', `${waiting} para aprovar`]
+      : quota && planned < quota ? ['warn', `Faltam ${quota - planned} no plano`]
+      : ['ok', bill && bill.status === 'paid' ? 'Tudo em dia · pago' : 'Tudo em dia'];
+    const pct = quota ? Math.min(100, Math.round((planned / quota) * 100)) : 0;
+    return h('a', { class: 'hc', href: `#pasta/${c.id}` },
+      h('span', { class: 'hc-top' }, h('b', {}, c.name), h('span', { class: `hc-conn ${conn[0]}` }, conn[1])),
+      quota ? h('span', { class: 'hc-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })) : null,
+      h('span', { class: 'hc-line' }, quota ? `${planned} de ${quota} no plano · ${live} no ar` : planned ? `${planned} post${planned > 1 ? 's' : ''} no mês · ${live} no ar · sem plano definido` : 'Nada planejado no mês'),
+      h('span', { class: `fate ${note[0]}` }, note[1]));
+  });
+  return h('div', { class: 'health-grid' }, ...cards);
+}
+
 // Duas colunas que terminam na mesma altura (o último quadro de cada coluna estica);
 // se um lado não tiver nada, o outro ocupa a largura toda.
 function homeRow(left, right) {

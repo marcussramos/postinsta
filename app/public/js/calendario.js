@@ -67,7 +67,7 @@ function viewCalendar() {
       can('ia') ? h('button', { class: 'btn ai sm', onclick: () => openPlan({ month: m }) }, '✨ Planejar o mês') : null,
       can('conteudo') ? h('button', { class: 'btn sm', onclick: () => openDuplicate() }, 'Duplicar semana') : null,
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Modo de exibição' },
-        ...[['thumbs', 'Miniaturas'], ['list', 'Lista']].map(([k, l]) => h('button', { class: 'seg-btn', 'aria-pressed': String(S.cal.mode === k),
+        ...[['thumbs', 'Miniaturas'], ['list', 'Lista'], ['feed', 'Feed do mês']].map(([k, l]) => h('button', { class: 'seg-btn', 'aria-pressed': String(S.cal.mode === k),
           onclick: () => { S.cal.mode = k; savePref('mc_cal_mode', k); render(); } }, l))),
       h('button', { class: 'btn sm', onclick: () => go(-1), 'aria-label': 'Mês anterior' }, '‹'),
       h('button', { class: 'btn sm', onclick: () => go(0) }, 'Hoje'),
@@ -100,7 +100,9 @@ function viewCalendar() {
     onclick: (e) => { e.stopPropagation(); openPost(null, { date: d, client: S.fClient || undefined }); } }, big ? '+ Criar post neste dia' : '+') : null);
 
   let body;
-  if (S.cal.mode === 'list') {
+  if (S.cal.mode === 'feed') {
+    body = feedView(m, label);
+  } else if (S.cal.mode === 'list') {
     // ── D: agenda por dia (faixa da cor do cliente, foto, horário, formato e status)
     const days = gridDays.filter((d) => d.slice(0, 7) === m);
     const wdName = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
@@ -159,10 +161,10 @@ function viewCalendar() {
   }
 
   const out = [head, chips, body,
-    h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, S.cal.mode === 'list'
+    S.cal.mode === 'feed' ? null : h('p', { class: 'muted', style: 'margin:0;font-size:13.5px' }, S.cal.mode === 'list'
       ? 'Toque num post para abrir. Arraste um post para outro dia para remarcar. A barra colorida é a cor do cliente.'
       : 'Clique num dia para ver os horários. Use o + para criar um post naquele dia e arraste um post para outro dia para remarcar. A moldura é a cor do cliente; a bolinha no canto, o status.')];
-  if (S.cal.day && S.cal.mode !== 'list') {
+  if (S.cal.day && S.cal.mode === 'thumbs') {
     const list = byDay.get(S.cal.day) || [];
     out.push(h('section', { class: 'day' },
       h('div', { class: 'day-head' }, h('h2', {}, fmtDate(zonedToISO(S.cal.day, '12:00', S.tz), S.tz, true)), h('span', { class: 'rule' }),
@@ -170,6 +172,42 @@ function viewCalendar() {
       ...(list.length ? list.map(rowPost) : [h('p', { class: 'muted', style: 'margin:0' }, 'Nenhum post neste dia.')])));
   }
   return out;
+}
+
+// ── Feed do mês: como o perfil do cliente vai ficar (posts do mês por cima do feed real)
+const feedCache = new Map();
+function feedView(m, label) {
+  if (!S.fClient) {
+    return h('div', { class: 'card feed-pick' }, h('h3', {}, 'Escolha um cliente acima'),
+      h('p', { class: 'muted', style: 'margin:0' }, 'O Feed do mês mostra a grade do perfil como vai ficar: os posts planejados do mês aparecem por cima dos que já estão no ar, na ordem em que vão sair. Ótimo para conferir a harmonia das cores e dos formatos antes de aprovar.'));
+  }
+  const c = clientById(S.fClient);
+  const planned = S.cal.posts.filter((p) => p.client_id === S.fClient && p.scheduled_at && p.media_type !== 'STORY' && p.status !== 'published' && dayKey(p.scheduled_at, S.tz).slice(0, 7) >= m && dayKey(p.scheduled_at, S.tz).slice(0, 7) <= m)
+    .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+  const cached = feedCache.get(S.fClient);
+  if (!cached && c?.ig_connected) {
+    feedCache.set(S.fClient, 'loading');
+    api(`/api/pasta?r=feed&client=${S.fClient}`).then((f) => { feedCache.set(c.id, Array.isArray(f) ? f : []); if (S.view === 'calendario' && S.cal.mode === 'feed') render(); })
+      .catch(() => { feedCache.set(c.id, []); });
+  }
+  const live = Array.isArray(cached) ? cached : [];
+  const cover = (p) => p.image_url || (p.media || []).find((x) => x.kind !== 'video')?.url || null;
+  const tiles = [
+    ...planned.map((p) => h('button', { class: `feed-tile planned st-${p.status}`, type: 'button', onclick: () => openPost(p), title: postLabel(p) },
+      cover(p) ? h('img', { src: cover(p), alt: '', loading: 'lazy' }) : h('span', { class: 'feed-empty' }, p.title || 'Sem arte'),
+      h('span', { class: 'feed-tag' }, `${fmtDay(dayKey(p.scheduled_at, S.tz)).slice(0, 5)} · ${STATUS_LABEL[p.status] || ''}`),
+      p.media_type === 'REELS' ? h('span', { class: 'feed-fmt', 'aria-label': 'Reels' }, '▶') : p.media_type === 'CAROUSEL' ? h('span', { class: 'feed-fmt', 'aria-label': 'Carrossel' }, '❐') : null)),
+    ...live.slice(0, Math.max(6, 18 - planned.length)).map((f) => h('a', { class: 'feed-tile live', href: f.permalink || '#', target: '_blank', rel: 'noopener' },
+      f.thumb ? h('img', { src: f.thumb, alt: '', loading: 'lazy' }) : h('span', { class: 'feed-empty' }, 'Post'),
+      f.type === 'REELS' ? h('span', { class: 'feed-fmt' }, '▶') : f.type === 'CAROUSEL' ? h('span', { class: 'feed-fmt' }, '❐') : null)),
+  ];
+  return h('section', { class: 'feed-wrap' },
+    h('div', { class: 'feed-phone' },
+      h('div', { class: 'feed-head' }, h('b', {}, c?.ig_username ? `@${c.ig_username}` : c?.name || ''), h('span', { class: 'muted' }, `${planned.length} planejado${planned.length === 1 ? '' : 's'} em ${label.toLowerCase()}`)),
+      tiles.length ? h('div', { class: 'feed-grid' }, ...tiles) : h('p', { class: 'muted', style: 'padding:16px' }, 'Nenhum post de feed neste mês ainda.'),
+      cached === 'loading' ? h('p', { class: 'muted', style: 'padding:8px 12px;margin:0;font-size:12.5px' }, 'Buscando os posts que já estão no ar…') : null,
+      !c?.ig_connected ? h('p', { class: 'muted', style: 'padding:8px 12px;margin:0;font-size:12.5px' }, 'Com o Instagram conectado, os posts que já estão no ar aparecem embaixo.') : null),
+    h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Com moldura: planejados do mês (o mais recente em cima, como no Instagram). Sem moldura: o que já está no ar. Stories não entram na grade.'));
 }
 
 // Cores fixas dos clientes: aparecem no calendário, no Fluxo e nos filtros.
