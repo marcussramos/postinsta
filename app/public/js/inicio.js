@@ -21,7 +21,8 @@ function viewHome() {
   const today = todayLocal();
   const hour = Number(partsInTz(new Date().toISOString(), S.tz).time.slice(0, 2));
   const hello = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
-  const who = S.userName && S.userName !== 'Dono' ? S.userName.split(' ')[0] : (S.settings?.agency?.representante || '').split(' ')[0];
+  const who0 = S.userName && S.userName !== 'Dono' ? S.userName.split(' ')[0] : (S.settings?.agency?.representante || '').split(' ')[0];
+  const who = who0 ? who0.charAt(0).toUpperCase() + who0.slice(1).toLowerCase() : '';
   const ld = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: S.tz }).format(new Date());
   const longDate = ld.charAt(0).toUpperCase() + ld.slice(1);
   const month = today.slice(0, 7);
