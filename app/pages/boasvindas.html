@@ -6,15 +6,15 @@
 <title>Bem-vindo à MC Digital</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#EBEBE6">
+<meta name="theme-color" content="#ECEAE7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400&family=Yellowtail&display=swap">
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <style>
   /* Manual de boas-vindas da MC Digital: cada seção é um "slide" do manual, na identidade da marca. */
-  :root { --bg: #EBEBE6; --ink: #2B2B2B; --muted: #5E5D57; --gold: #7A6200; --line: #D3D1C6; --card: #F4F4F0; --ok: #2B2B2B;
-    --head: "Helvetica Neue", Helvetica, Arial, sans-serif; --body: "Poppins", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
+  :root { --bg: #ECEAE7; --ink: #1D1A1A; --muted: #5F5955; --gold: #7B1F31; --line: #DDD8D3; --card: #FFFFFF; --ok: #1D1A1A;
+    --head: "Montserrat", "Helvetica Neue", Arial, sans-serif; --body: "Montserrat", "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
@@ -159,7 +159,7 @@ async function load() {
 const chevrons = () => {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 440 240'); svg.setAttribute('class', 'chev'); svg.setAttribute('aria-hidden', 'true');
-  for (const x of [0, 144, 288]) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', `M${x} 2 L${x + 150} 120 L${x} 238 L${x} 168 L${x + 76} 120 L${x} 72 Z`); p.setAttribute('fill', 'none'); p.setAttribute('stroke', '#7A6200'); p.setAttribute('stroke-width', '2.4'); svg.append(p); }
+  for (const x of [0, 144, 288]) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', `M${x} 2 L${x + 150} 120 L${x} 238 L${x} 168 L${x + 76} 120 L${x} 72 Z`); p.setAttribute('fill', 'none'); p.setAttribute('stroke', '#7B1F31'); p.setAttribute('stroke-width', '2.4'); svg.append(p); }
   return svg;
 };
 
@@ -175,7 +175,7 @@ function stepsArc(list) {
   const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('class', 'arc-line'); svg.setAttribute('aria-hidden', 'true');
   const e = document.createElementNS(ns, 'ellipse');
   e.setAttribute('cx', cx); e.setAttribute('cy', cy + 60); e.setAttribute('rx', Rx); e.setAttribute('ry', Ry);
-  e.setAttribute('fill', 'none'); e.setAttribute('stroke', '#7A6200'); e.setAttribute('stroke-width', '1');
+  e.setAttribute('fill', 'none'); e.setAttribute('stroke', '#7B1F31'); e.setAttribute('stroke-width', '1');
   svg.append(e); ul.prepend(svg);
   return ul;
 }
