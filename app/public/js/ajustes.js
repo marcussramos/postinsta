@@ -99,7 +99,7 @@ function viewSettings() {
     ['agencia', 'Agência e contrato', settingsContract()],
     ['cobranca', 'Cobrança e Pix', settingsPix()],
     ['vendas', 'Diagnóstico e boas-vindas', [...settingsDiag(), ...settingsOnboarding()]],
-    ['avisos', 'Notificações e e-mails', [...settingsDevice(), ...settingsMail()]],
+    ['avisos', 'Notificações e lembretes', [settingsReminders(), ...settingsDevice(), ...settingsMail()]],
     ['seguranca', 'Segurança, privacidade e backup', [...settingsSecurity(), ...settingsPrivacy(), ...settingsBackup()]],
   ].map(([id, label, items]) => [id, label, (items || []).filter(Boolean)]).filter(([, , items]) => items.length);
   if (S.setTab === undefined) S.setTab = savedPref('mc_set_tab', 'sistema');
@@ -112,6 +112,30 @@ function viewSettings() {
         ...sections.map(([id, label]) => h('button', { type: 'button', class: 'set-link', 'aria-current': id === cur[0] ? 'page' : null, onclick: () => pick(id) }, label))),
       h('div', { class: 'set-body' }, h('h2', { class: 'set-title' }, cur[1]), ...cur[2])),
   ];
+}
+
+// Ajustes → lembretes recorrentes no celular
+const WDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+function settingsReminders() {
+  if (S.reminders === undefined) { S.reminders = null; api('/api/pasta?r=reminders').then((r) => { S.reminders = r; if (S.view === 'ajustes') render(); }).catch(() => { S.reminders = false; }); }
+  const r = S.reminders;
+  if (!r) return h('article', { class: 'card' }, h('h3', {}, 'Lembretes'), h('span', { class: 'muted' }, r === false ? 'Não foi possível carregar.' : 'Carregando…'));
+  const admin = S.role === 'admin';
+  const save = async (patch) => { const next = { stories: { ...r.stories, ...(patch.stories || {}) }, reports: { ...r.reports, ...(patch.reports || {}) } }; try { S.reminders = await api('/api/pasta?r=reminders', { method: 'PUT', body: next }); render(); toast('Lembrete salvo.'); } catch (e) { toast(e.message, true); } };
+  const hours = [...Array(24)].map((_, i) => i);
+  const sel = (value, opts, onchange) => h('select', { disabled: !admin, onchange: (e) => onchange(Number(e.target.value)), style: 'width:auto;min-height:40px' }, ...opts.map(([v, l]) => h('option', { value: v, selected: v === value }, l)));
+  const row = (on, title, desc, controls, key) => h('div', { class: 'rem-row' },
+    h('label', { class: 'check-row', style: 'margin:0' }, h('input', { type: 'checkbox', checked: on, disabled: !admin, onchange: (e) => save({ [key]: { on: e.target.checked } }) }), h('span', {}, h('b', {}, title), h('span', { class: 'hint', style: 'display:block' }, desc))),
+    on ? h('div', { class: 'rem-ctl' }, ...controls) : null);
+  return h('article', { class: 'card' },
+    h('div', { class: 'eyebrow' }, 'No celular, todo período'), h('h3', {}, 'Lembretes'),
+    row(r.stories.on, 'Cronograma de stories', 'Avisa quais clientes ainda estão sem stories planejados para a semana seguinte.', [
+      h('span', {}, 'Toda'), sel(r.stories.weekday, WDAYS.map((d, i) => [i, d]), (v) => save({ stories: { weekday: v } })),
+      h('span', {}, 'às'), sel(r.stories.hour, hours.map((x) => [x, `${x}h`]), (v) => save({ stories: { hour: v } }))], 'stories'),
+    row(r.reports.on, 'Relatórios de métricas', 'Avisa quantos relatórios do mês que fechou estão prontos para revisar e enviar (e quais faltam gerar).', [
+      h('span', {}, 'Todo dia'), sel(r.reports.day, [...Array(28)].map((_, i) => [i + 1, String(i + 1)]), (v) => save({ reports: { day: v } })),
+      h('span', {}, 'às'), sel(r.reports.hour, hours.map((x) => [x, `${x}h`]), (v) => save({ reports: { hour: v } }))], 'reports'),
+    h('span', { class: 'hint' }, 'Os relatórios são gerados sozinhos a partir do dia 3: o Instagram só fecha os números do mês uns 2 dias depois. Para receber, ative as notificações neste aparelho (logo abaixo).'));
 }
 
 // Topo de Ajustes: o estado do sistema em três cartões

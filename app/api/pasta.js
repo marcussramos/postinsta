@@ -11,7 +11,7 @@ import proposals, { publicProposal } from '../lib/pasta/proposals.js';
 import pix, { asaasWebhook } from '../lib/pasta/pix.js';
 import { deliveriesRoute, historyRoute, brandRoute, requestsRoute, feedRoute, besttimeRoute } from '../lib/pasta/extras.js';
 import { planRoute, snippetsRoute, mediaRoute, duplicateRoute } from '../lib/pasta/tools.js';
-import { backupRoute, pushRoute, securityRoute, mailcfgRoute, nfRoute, privacyRoute } from '../lib/pasta/system.js';
+import { backupRoute, pushRoute, securityRoute, mailcfgRoute, nfRoute, privacyRoute, remindersRoute } from '../lib/pasta/system.js';
 import { onboardingRoute, onbcfgRoute } from '../lib/pasta/onboarding.js';
 import { leadsRoute, diagnosticoRoute, diagcfgRoute } from '../lib/pasta/leads.js';
 import { reviewRoute } from '../lib/pasta/review.js';
@@ -24,7 +24,7 @@ const ROUTES = {
   files, payments, settings, contract, reports, report: publicReport, portal, users, proposals, proposal: publicProposal, pix, asaas: asaasWebhook,
   deliveries: deliveriesRoute, history: historyRoute, brand: brandRoute, requests: requestsRoute, feed: feedRoute, besttime: besttimeRoute,
   plan: planRoute, snippets: snippetsRoute, media: mediaRoute, duplicate: duplicateRoute,
-  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute, portaledit: portalEditRoute,
+  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute, portaledit: portalEditRoute, reminders: remindersRoute,
 };
 
 export default function handler(req, res) {

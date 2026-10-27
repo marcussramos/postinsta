@@ -9,6 +9,7 @@ import { getState } from '../lib/appstate.js';
 import { notify } from '../lib/push.js';
 import { runMailer } from '../lib/mail.js';
 import { checkConnections } from '../lib/ighealth.js';
+import { runReminders } from '../lib/reminders.js';
 
 function authorized(req) {
   const given = Buffer.from(String(req.headers.authorization || ''));
@@ -37,6 +38,7 @@ async function run(req, res) {
     try { log.followers_snapshot = await snapshotFollowers(); } catch (e) { log.followers_snapshot_error = e.message; }
     try { log.auto_report = await autoReports(); } catch (e) { log.auto_report_error = e.message; }
   }
+  try { log.reminders = await runReminders(); } catch (e) { log.reminders_error = e.message; }
   if (Date.now() - started < 25000) { try { log.ig_health = await checkConnections({ force: req.method === 'GET' }); } catch (e) { log.ig_health_error = e.message; } }
   if (Date.now() - started < 25000) { try { log.backup = await weeklyBackup(); } catch (e) { log.backup_error = e.message; } }
   if (req.method === 'GET' && Date.now() - started < 30000) { // uma vez por semana, confere se o último backup abre e está inteiro
