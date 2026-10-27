@@ -1110,3 +1110,5 @@ input:not([type]), input[type=number], input[type=month], input[type=text], inpu
 .set-body > *, .set-body .card { min-width: 0; }
 .set-layout, .set-nav { min-width: 0; }
 @media (max-width: 640px) { .today-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .today-cover { max-height: 200px; } .today-info { padding: 10px; } }
+.rem-row { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.rem-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 30px; font-size: 14px; }

@@ -10,6 +10,8 @@ import { requireAdmin, requireStaff } from '../auth.js';
 import { db, docs, storage } from '../db.js';
 import { setMediaPrivateCache } from '../media.js';
 import { listBackups, runBackup, verifyLatestBackup } from '../backup.js';
+import { reminderSettings, cleanReminderSettings } from '../reminders.js';
+import { setState as _setReminderState } from '../appstate.js';
 import { vapidKeys, notify } from '../push.js';
 import { newSecret, otpauthUrl, verifyTotp, activeSecret, saveSecret, twoFactorOff } from '../totp.js';
 import { getState, setState } from '../appstate.js';
@@ -159,5 +161,16 @@ export const privacyRoute = route({
     if (on) { await setState('media_private', true); setMediaPrivateCache(true); await storage.setPublic(false); }
     else { await storage.setPublic(true); await setState('media_private', false); setMediaPrivateCache(false); }
     send(res, 200, { media_private: on });
+  },
+});
+
+// Ajustes → lembretes recorrentes (stories da semana, relatórios do mês)
+export const remindersRoute = route({
+  GET: async (req, res) => { await requireStaff(req); send(res, 200, await reminderSettings()); },
+  PUT: async (req, res) => {
+    await requireAdmin(req);
+    const v = cleanReminderSettings(await readJson(req));
+    await _setReminderState('reminders', v);
+    send(res, 200, v);
   },
 });
