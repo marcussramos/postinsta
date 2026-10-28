@@ -4,8 +4,13 @@
   "private": true,
   "description": "Agendamento, aprovação de clientes e publicação automática no Instagram",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }
