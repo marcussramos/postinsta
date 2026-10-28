@@ -25,6 +25,9 @@ summary::-webkit-details-marker{display:none}
 .mc-faixa:hover .mc-faixa-trilho{animation-play-state:paused}
 .mc-logos-trilho{display:flex;width:max-content;animation:mc-faixa 45s linear infinite}
 .mc-logos:hover .mc-logos-trilho{animation-play-state:paused}
+.mc-logos-trilho{will-change:transform}
+.mc-logos-grupo img{flex-shrink:0;object-fit:contain}
+@media (max-width: 640px){.mc-logos-grupo{gap:44px!important;padding-right:44px!important}.mc-logos-grupo img{height:44px!important;width:auto!important}.mc-logos-trilho{animation-duration:32s}}
 @media (prefers-reduced-motion: reduce){.mc-faixa-trilho,.mc-logos-trilho{animation:none}}
 </style>
 </head>
@@ -218,41 +221,41 @@ summary::-webkit-details-marker{display:none}
     <div class="mc-logos" style="margin-top: 48px; overflow: hidden">
       <p style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0">Eat! Cookies, Solução Cosméticos, Laís Guimarães, My Pet, Mavix, Maria Clara Mantelli Fogaça, Beauty Fair, Paiaguás, Clínica Formighieri, Mágica dos Sabores, Maison K., Auré Concept, Fazenda São Bento, Júlia de Oliveira, João Ribeiro, Cor Finance</p>
       <div class="mc-logos-trilho" aria-hidden="true">
-        <div style="display: flex; flex-shrink: 0; align-items: center; gap: 72px; padding-right: 72px">
-          <img loading="lazy" src="/site/logo-eat-cookies.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-solucao-cosmeticos.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-lais-guimaraes.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-my-pet.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-mavix.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-maria-clara.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-beauty-fair.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-paiaguas.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-formighieri.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-magica-dos-sabores.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-maison-k.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-aure.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-fazenda-sao-bento.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-julia-oliveira.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-joao-ribeiro.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-cor-finance.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+        <div class="mc-logos-grupo" style="display: flex; flex-shrink: 0; align-items: center; gap: 72px; padding-right: 72px">
+          <img src="/site/logo-eat-cookies.png" width="85" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-solucao-cosmeticos.png" width="122" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-lais-guimaraes.png" width="206" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-my-pet.png" width="64" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-mavix.png" width="185" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-maria-clara.png" width="63" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-beauty-fair.png" width="209" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-paiaguas.png" width="280" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-formighieri.png" width="239" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-magica-dos-sabores.png" width="166" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-maison-k.png" width="73" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-aure.png" width="132" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-fazenda-sao-bento.png" width="146" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-julia-oliveira.png" width="129" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-joao-ribeiro.png" width="74" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-cor-finance.png" width="167" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
         </div>
-        <div style="display: flex; flex-shrink: 0; align-items: center; gap: 72px; padding-right: 72px">
-          <img loading="lazy" src="/site/logo-eat-cookies.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-solucao-cosmeticos.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-lais-guimaraes.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-my-pet.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-mavix.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-maria-clara.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-beauty-fair.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-paiaguas.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-formighieri.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-magica-dos-sabores.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-maison-k.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-aure.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-fazenda-sao-bento.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-julia-oliveira.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-joao-ribeiro.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
-          <img loading="lazy" src="/site/logo-cor-finance.png" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+        <div class="mc-logos-grupo" style="display: flex; flex-shrink: 0; align-items: center; gap: 72px; padding-right: 72px">
+          <img src="/site/logo-eat-cookies.png" width="85" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-solucao-cosmeticos.png" width="122" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-lais-guimaraes.png" width="206" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-my-pet.png" width="64" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-mavix.png" width="185" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-maria-clara.png" width="63" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-beauty-fair.png" width="209" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-paiaguas.png" width="280" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-formighieri.png" width="239" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-magica-dos-sabores.png" width="166" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-maison-k.png" width="73" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-aure.png" width="132" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-fazenda-sao-bento.png" width="146" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-julia-oliveira.png" width="129" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-joao-ribeiro.png" width="74" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
+          <img src="/site/logo-cor-finance.png" width="167" height="64" decoding="async" alt="" style="height: 64px; width: auto; display: block; flex-shrink: 0">
         </div>
       </div>
     </div>
