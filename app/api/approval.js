@@ -114,8 +114,8 @@ export default route({
     await logEvent(row, body.decision === 'approve' ? 'approved' : 'changes_requested', [audio ? '🎤 áudio' : null, feedback || null].filter(Boolean).join(' · ') || null);
     const what = row.title || (row.caption || '').split('\n')[0].slice(0, 80) || 'post';
     await notify(body.decision === 'approve'
-      ? { title: `✅ ${c.name} aprovou`, body: `${what}${feedback ? ` — “${feedback.slice(0, 100)}”` : ''}`, url: '/#agenda', tag: `post-${row.id}` }
-      : { title: `✏️ ${c.name} pediu ajuste${audio ? ' por áudio 🎤' : ''}`, body: feedback ? `${what}: “${feedback.slice(0, 140)}”` : `${what}: ouça o áudio no post.`, url: '/#fluxo', tag: `post-${row.id}` });
+      ? { title: `✅ ${c.name} aprovou`, body: `${what}${feedback ? ` — “${feedback.slice(0, 100)}”` : ''}`, url: '/equipe#agenda', tag: `post-${row.id}` }
+      : { title: `✏️ ${c.name} pediu ajuste${audio ? ' por áudio 🎤' : ''}`, body: feedback ? `${what}: “${feedback.slice(0, 140)}”` : `${what}: ouça o áudio no post.`, url: '/equipe#fluxo', tag: `post-${row.id}` });
     send(res, 200, { id: row.id, status: row.status, client_feedback: row.client_feedback, feedback_audio: row.feedback_audio || null, decided_at: row.decided_at });
   },
 });

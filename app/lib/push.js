@@ -75,7 +75,7 @@ export async function notify(message, { adminOnly = false } = {}) {
   let subs;
   try { subs = await db.select('push_subs', { select: '*', ...(adminOnly ? { role: 'eq.admin' } : {}), limit: 50 }); }
   catch { return 0; }
-  const msg = { title: 'MC DIGITAL', url: '/#inicio', ...message };
+  const msg = { title: 'MC DIGITAL', url: '/equipe#inicio', ...message };
   const results = await Promise.all(subs.map(async (s) => {
     const status = await sendPush(s, msg);
     if (status === 404 || status === 410) await db.remove('push_subs', { id: `eq.${s.id}` }).catch(() => {});

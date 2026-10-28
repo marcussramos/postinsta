@@ -58,7 +58,7 @@ export async function checkConnections({ force = true, now = Date.now() } = {}) 
   h.at = new Date(now).toISOString();
   await setState(KEY, h);
   for (const c of out.newlyDead) {
-    await notify({ title: `⚠️ Instagram de ${c.name} desconectou`, body: 'Os posts desse cliente não vão sair sozinhos. Mande o link de conexão para o cliente reconectar pelo celular.', url: '/#clientes', tag: `ig-dead-${c.id}` }).catch(() => {});
+    await notify({ title: `⚠️ Instagram de ${c.name} desconectou`, body: 'Os posts desse cliente não vão sair sozinhos. Mande o link de conexão para o cliente reconectar pelo celular.', url: '/equipe#clientes', tag: `ig-dead-${c.id}` }).catch(() => {});
   }
   out.newlyDead = out.newlyDead.map((c) => c.name);
   return out;

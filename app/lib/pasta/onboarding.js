@@ -43,7 +43,7 @@ export const onboardingRoute = route({
     // as 4 perguntas do digital também viram campos da Marca (a agência pode editar depois)
     kit.inspirations = answers.inspiracoes; kit.avoid = answers.evitar; kit.competitors = answers.concorrentes; kit.perception = answers.percepcao;
     await db.update('clients', { id: `eq.${c.id}` }, { brand_kit: kit });
-    await notify({ title: `📋 ${c.name} ${first ? 'respondeu' : 'atualizou'} o onboarding`, body: 'As respostas já estão na aba Marca da pasta do cliente.', url: `/#pasta/${c.id}` });
+    await notify({ title: `📋 ${c.name} ${first ? 'respondeu' : 'atualizou'} o onboarding`, body: 'As respostas já estão na aba Marca da pasta do cliente.', url: `/equipe#pasta/${c.id}` });
     send(res, 200, { ok: true, submitted_at: kit.onboarding.submitted_at });
   },
 });

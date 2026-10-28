@@ -37,7 +37,7 @@ export async function startServer(port = 4321) {
       if (!buf) { res.statusCode = 404; return res.end(); }
       res.setHeader('Content-Type', 'image/jpeg'); return res.end(Buffer.from(buf));
     }
-    let p = u.pathname === '/' ? '/index.html' : u.pathname;
+    let p = u.pathname === '/' ? '/equipe.html' : u.pathname;
     if (!path.extname(p)) p += '.html'; // cleanUrls
     try {
       const data = await fs.readFile(path.join(ROOT, 'public', p));

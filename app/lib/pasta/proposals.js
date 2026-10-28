@@ -160,7 +160,7 @@ export const publicProposal = route({
     });
     await db.update('proposals', { id: `eq.${p.id}` }, { client_id: client.id });
     await db.update('leads', { proposal_id: `eq.${p.id}` }, { stage: 'fechado', client_id: client.id, next_action: null, next_action_at: null, updated_at: new Date().toISOString() }).catch(() => {});
-    await notify({ title: `🎉 ${p.client_name} aceitou a proposta`, body: `${(p.monthly_fee_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · início ${a.inicio.split('-').reverse().join('/')}. Cadastro e pasta já criados.`, url: `/#pasta/${client.id}` }, { adminOnly: true });
+    await notify({ title: `🎉 ${p.client_name} aceitou a proposta`, body: `${(p.monthly_fee_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · início ${a.inicio.split('-').reverse().join('/')}. Cadastro e pasta já criados.`, url: `/equipe#pasta/${client.id}` }, { adminOnly: true });
     send(res, 200, { status: 'accepted', portal_url: `${appUrl()}/cliente?t=${client.portal_token}`, onboarding_url: `${appUrl()}/boasvindas?t=${client.portal_token}` });
   },
 });

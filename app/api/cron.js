@@ -28,7 +28,7 @@ async function run(req, res) {
     const idle = prev?.at ? Date.now() - new Date(prev.at).getTime() : null;
     if (idle == null || idle > 2 * 3600e3) {
       watchdog = idle == null ? 'agendador nunca rodou' : `agendador parado há ${Math.round(idle / 3600e3)} h`;
-      await notify({ title: '⚠️ Agendador automático parado', body: `${watchdog[0].toUpperCase()}${watchdog.slice(1)}: posts aprovados não estão saindo. Veja em Ajustes.`, url: '/#ajustes', tag: 'watchdog' }).catch(() => {});
+      await notify({ title: '⚠️ Agendador automático parado', body: `${watchdog[0].toUpperCase()}${watchdog.slice(1)}: posts aprovados não estão saindo. Veja em Ajustes.`, url: '/equipe#ajustes', tag: 'watchdog' }).catch(() => {});
     }
   }
   const log = await runPublisher();
@@ -44,7 +44,7 @@ async function run(req, res) {
   if (req.method === 'GET' && Date.now() - started < 30000) { // uma vez por semana, confere se o último backup abre e está inteiro
     try {
       log.backup_check = await weeklyBackupCheck();
-      if (log.backup_check && !log.backup_check.ok) await notify({ title: '⚠️ Backup com problema', body: log.backup_check.problems.join(' ').slice(0, 160), url: '/#ajustes', tag: 'backup-check' }).catch(() => {});
+      if (log.backup_check && !log.backup_check.ok) await notify({ title: '⚠️ Backup com problema', body: log.backup_check.problems.join(' ').slice(0, 160), url: '/equipe#ajustes', tag: 'backup-check' }).catch(() => {});
     } catch (e) { log.backup_check_error = e.message; }
   }
   if (Date.now() - started < 30000) { try { log.mail = await runMailer({ budgetMs: 45000 - (Date.now() - started) }); } catch (e) { log.mail_error = e.message; } }

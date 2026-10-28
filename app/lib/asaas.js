@@ -107,7 +107,7 @@ export async function handleWebhook(evt) {
       amount_cents: Math.round(Number(p.value) * 100), asaas_id: p.id, receipt_url: p.transactionReceiptUrl || null,
       note: 'Pix automático (Asaas)', updated_at: new Date().toISOString(),
     });
-    await notify({ title: `💰 Pix recebido · ${c?.name || 'cliente'}`, body: `${(Number(p.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · parcela de ${ref.ref_month.slice(5)}/${ref.ref_month.slice(0, 4)} baixada sozinha.`, url: `/#pasta/${ref.client_id}`, tag: `pix-${p.id}` }, { adminOnly: true });
+    await notify({ title: `💰 Pix recebido · ${c?.name || 'cliente'}`, body: `${(Number(p.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · parcela de ${ref.ref_month.slice(5)}/${ref.ref_month.slice(0, 4)} baixada sozinha.`, url: `/equipe#pasta/${ref.client_id}`, tag: `pix-${p.id}` }, { adminOnly: true });
     const nf = await issueInvoice(ref, p).catch((e) => ({ error: e.message }));
     return { paid: ref, nf };
   }
@@ -157,7 +157,7 @@ export async function issueInvoice(ref, payment, { force = false } = {}) {
     return { scheduled: inv.id };
   } catch (e) {
     await db.update('payments', { client_id: `eq.${ref.client_id}`, ref_month: `eq.${ref.ref_month}`, installment: `eq.${ref.installment}` }, { nf_status: 'error' }).catch(() => {});
-    await notify({ title: '⚠️ Nota fiscal não emitida', body: e.message.slice(0, 180), url: `/#pasta/${ref.client_id}` }, { adminOnly: true });
+    await notify({ title: '⚠️ Nota fiscal não emitida', body: e.message.slice(0, 180), url: `/equipe#pasta/${ref.client_id}` }, { adminOnly: true });
     throw e;
   }
 }
@@ -188,7 +188,7 @@ async function handleInvoice(evt) {
   }
   if (evt.event === 'INVOICE_ERROR') {
     await db.update('payments', where, { nf_status: 'error' }).catch(() => {});
-    await notify({ title: '⚠️ A prefeitura recusou a nota fiscal', body: String(inv.statusDescription || 'Veja os detalhes em Notas fiscais no Asaas.').slice(0, 180), url: `/#pasta/${ref.client_id}` }, { adminOnly: true });
+    await notify({ title: '⚠️ A prefeitura recusou a nota fiscal', body: String(inv.statusDescription || 'Veja os detalhes em Notas fiscais no Asaas.').slice(0, 180), url: `/equipe#pasta/${ref.client_id}` }, { adminOnly: true });
     return { invoice: 'error' };
   }
   if (evt.event === 'INVOICE_CANCELED') { await db.update('payments', where, { nf_status: 'canceled' }).catch(() => {}); return { invoice: 'canceled' }; }
