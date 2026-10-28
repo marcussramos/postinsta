@@ -6,8 +6,9 @@
 <meta name="theme-color" content="#1D1A1A">
 <script>
 /* Links antigos do painel (notificações, app instalado, favoritos) apontavam para /#aba. O painel agora fica em /equipe. */
-(function(){var h=location.hash.slice(1),s=location.search;var v=['inicio','agenda','calendario','fluxo','clientes','vendas','propostas','ajustes'];
-if(v.indexOf(h)>-1||h.indexOf('pasta/')===0||/[?&]ig=/.test(s)){location.replace('/equipe'+s+location.hash);}})();
+(function(){var v=['inicio','agenda','calendario','fluxo','clientes','vendas','propostas','ajustes'];
+function go(){var h=location.hash.slice(1),s=location.search;if(v.indexOf(h)>-1||h.indexOf('pasta/')===0||/[?&]ig=/.test(s)){location.replace('/equipe'+s+location.hash);}}
+go();window.addEventListener('hashchange',go);})();
 </script>
 <title>MC Digital · Agência de social media</title>
 <link rel="icon" href="/icons/icon-192.png">
