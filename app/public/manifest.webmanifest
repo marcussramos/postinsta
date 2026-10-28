@@ -3,7 +3,7 @@
   "short_name": "MC DIGITAL",
   "description": "Planejar, aprovar e publicar no Instagram, com relatórios e área do cliente.",
   "lang": "pt-BR",
-  "start_url": "/#inicio",
+  "start_url": "/equipe#inicio",
   "scope": "/",
   "display": "standalone",
   "background_color": "#EBEBE6",

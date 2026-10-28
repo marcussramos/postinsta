@@ -76,6 +76,10 @@
   ],
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/api/page?p=inicio"
+    },
+    {
       "source": "/aprovar",
       "destination": "/api/page?p=aprovar"
     },
@@ -138,6 +142,10 @@
     {
       "source": "/sobre",
       "destination": "/api/page?p=sobre"
+    },
+    {
+      "source": "/inicio",
+      "destination": "/api/page?p=inicio"
     }
   ]
 }

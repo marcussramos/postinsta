@@ -87,7 +87,7 @@
 <body>
 <div class="bar"><div class="bar-in">
   <h1 id="t">Contrato</h1>
-  <a class="btn" id="back" href="/#clientes">Voltar ao painel</a>
+  <a class="btn" id="back" href="/equipe#clientes">Voltar ao painel</a>
   <button class="btn primary" id="pdf" type="button" disabled>Salvar PDF</button>
 </div></div>
 <div class="note" id="note" hidden><div></div></div>
@@ -97,7 +97,7 @@ const id = new URLSearchParams(location.search).get('client');
 const doc = document.getElementById('doc');
 const btn = document.getElementById('pdf');
 const msg = (t, link) => { doc.innerHTML = ''; const p = Object.assign(document.createElement('p'), { className: 'msg', textContent: t }); if (link) { p.append(document.createElement('br'), document.createElement('br'), Object.assign(document.createElement('a'), { className: 'btn primary', href: '/', textContent: 'Entrar no painel' })); } doc.append(p); };
-if (id) document.getElementById('back').href = `/#pasta/${encodeURIComponent(id)}`;
+if (id) document.getElementById('back').href = `/equipe#pasta/${encodeURIComponent(id)}`;
 btn.onclick = () => window.print();
 try {
   if (!id) throw Object.assign(new Error('Abra o contrato pela pasta do cliente.'), { status: 400 });

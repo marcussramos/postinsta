@@ -68,7 +68,7 @@ export async function runReminders({ now = Date.now(), tz = TIMEZONE() } = {}) {
     await notify({
       title: '📱 Cronograma de stories da semana que vem',
       body: missing.length ? `${range}: sem stories planejados para ${missing.join(', ')}.${total ? ` Já há ${total} no total.` : ''}` : `${range}: todos os clientes têm stories planejados (${total} no total). Confira o cronograma.`,
-      url: '/#calendario', tag: `rem-stories-${L.date}`,
+      url: '/equipe#calendario', tag: `rem-stories-${L.date}`,
     }).catch(() => 0);
     sent.stories = L.date; out.stories = { missing, total };
   }
@@ -86,7 +86,7 @@ export async function runReminders({ now = Date.now(), tz = TIMEZONE() } = {}) {
       title: `📊 Relatórios de ${mName}`,
       body: [ready.length ? `${ready.length} pronto${ready.length > 1 ? 's' : ''} para revisar e enviar: ${ready.join(', ')}.` : 'Nenhum relatório gerado ainda.',
         pending.length ? ` Falta gerar: ${pending.join(', ')}.` : ''].join(''),
-      url: '/#clientes', tag: `rem-reports-${L.month}`,
+      url: '/equipe#clientes', tag: `rem-reports-${L.month}`,
     }).catch(() => 0);
     sent.reports = L.month; out.reports = { month, ready, pending };
   }

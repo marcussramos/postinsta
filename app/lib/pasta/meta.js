@@ -58,7 +58,7 @@ export const igDeauthRoute = route({
   POST: async (req, res) => {
     const data = await signedBody(req);
     const names = await wipe(data.user_id);
-    if (names.length) await notify({ title: '⚠️ Instagram desconectado', body: `${names.join(', ')} removeu o acesso do app no Instagram. Peça para conectar de novo.`, url: '/#clientes' }, { adminOnly: true }).catch(() => {});
+    if (names.length) await notify({ title: '⚠️ Instagram desconectado', body: `${names.join(', ')} removeu o acesso do app no Instagram. Peça para conectar de novo.`, url: '/equipe#clientes' }, { adminOnly: true }).catch(() => {});
     send(res, 200, { ok: true });
   },
 });
@@ -72,7 +72,7 @@ export const igDeleteRoute = route({
     log[code] = { at: new Date().toISOString(), clients: names.length };
     const keep = Object.entries(log).sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, 300);
     await setState('ig_deletions', Object.fromEntries(keep));
-    await notify({ title: '🗑️ Pedido de exclusão de dados', body: `${names.length ? names.join(', ') : 'Uma conta do Instagram'} pediu exclusão dos dados pela Meta (código ${code}). O token já foi apagado; apague o restante em até 30 dias se o contrato terminou.`, url: '/#clientes' }, { adminOnly: true }).catch(() => {});
+    await notify({ title: '🗑️ Pedido de exclusão de dados', body: `${names.length ? names.join(', ') : 'Uma conta do Instagram'} pediu exclusão dos dados pela Meta (código ${code}). O token já foi apagado; apague o restante em até 30 dias se o contrato terminou.`, url: '/equipe#clientes' }, { adminOnly: true }).catch(() => {});
     send(res, 200, { url: `${appUrl()}/exclusao-de-dados?code=${code}`, confirmation_code: code });
   },
 });

@@ -16,7 +16,7 @@ export default route({
         ? 'A conexão com o Instagram ainda não foi liberada pela agência. Tente mais tarde.'
         : 'Falta configurar o app da Meta (IG_APP_ID e IG_APP_SECRET na Vercel). Veja a aba Ajustes.';
       const p = new URLSearchParams({ ig: 'erro', msg });
-      return redirect(res, q.t ? `/conectar?t=${encodeURIComponent(q.t)}&${p}` : `/?${p}#ajustes`);
+      return redirect(res, q.t ? `/conectar?t=${encodeURIComponent(q.t)}&${p}` : `/equipe?${p}#ajustes`);
     }
     let client, back = 'panel';
     if (q.t) {

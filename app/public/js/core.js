@@ -42,7 +42,7 @@ async function boot() {
   const p = new URLSearchParams(location.search);
   if (p.get('ig')) {
     toast(p.get('msg') || 'Pronto.', p.get('ig') !== 'ok');
-    history.replaceState(null, '', `/${location.hash || '#clientes'}`);
+    history.replaceState(null, '', `${location.pathname}${location.hash || '#clientes'}`);
   }
   S.view = viewFromHash();
   try {
@@ -177,7 +177,7 @@ function render() {
   root.replaceChildren(top, page);
 }
 
-async function logout() { await api('/api/session', { method: 'DELETE' }).catch(() => {}); location.href = '/'; }
+async function logout() { await api('/api/session', { method: 'DELETE' }).catch(() => {}); location.href = '/equipe'; }
 
 const clientById = (id) => S.clients.find((c) => c.id === id);
 const clientName = (id) => clientById(id)?.name || '—';

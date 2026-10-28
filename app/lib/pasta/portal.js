@@ -136,7 +136,7 @@ export default route({
         const [row] = await db.update('posts', { id: `eq.${p.id}`, client_id: `eq.${c.id}` }, { scheduled_at: at });
         const note = `de ${dayLabel(p.scheduled_at, tz)} para ${dayLabel(at, tz)}`;
         await logEvent(row, 'client_moved', note);
-        await notify({ title: `📅 ${c.name} mudou um post de dia`, body: `${row.title || 'Post'}: ${note}`, url: '/#fluxo', tag: `move-${row.id}` }).catch(() => {});
+        await notify({ title: `📅 ${c.name} mudou um post de dia`, body: `${row.title || 'Post'}: ${note}`, url: '/equipe#fluxo', tag: `move-${row.id}` }).catch(() => {});
         return send(res, 200, { id: row.id, scheduled_at: row.scheduled_at });
       }
       const title = String(b.title || '').trim().slice(0, 120);
@@ -151,7 +151,7 @@ export default route({
       const row = await db.insert('posts', { client_id: c.id, status: 'idea', title, media_type, scheduled_at: at, caption: '',
         notes: `${CLIENT_IDEA} em ${today} pela área do cliente.${details ? `\n${details}` : ''}` });
       await logEvent(row, 'client_idea', details || null);
-      await notify({ title: `💡 ${c.name} sugeriu uma ideia`, body: `${title} · ${dayLabel(at, tz)}`, url: '/#fluxo', tag: `idea-${row.id}` }).catch(() => {});
+      await notify({ title: `💡 ${c.name} sugeriu uma ideia`, body: `${title} · ${dayLabel(at, tz)}`, url: '/equipe#fluxo', tag: `idea-${row.id}` }).catch(() => {});
       return send(res, 201, { id: row.id });
     }
     if (q.pix) { // o cliente pede o Pix de uma parcela em aberto
@@ -189,7 +189,7 @@ export default route({
     const open = await db.select('requests', { select: 'id', client_id: `eq.${c.id}`, status: 'neq.done' });
     need(open.length < 50, 429, 'Você tem muitos pedidos em aberto. Aguarde a agência responder.');
     const row = await db.insert('requests', { client_id: c.id, text, wanted_date: b.wanted_date || null, file_ids: ids, status: 'open' });
-    await notify({ title: `📩 Pedido novo de ${c.name}`, body: text.slice(0, 160), url: `/#pasta/${c.id}`, tag: `req-${row.id}` });
+    await notify({ title: `📩 Pedido novo de ${c.name}`, body: text.slice(0, 160), url: `/equipe#pasta/${c.id}`, tag: `req-${row.id}` });
     send(res, 201, { id: row.id, text: row.text, wanted_date: row.wanted_date, status: row.status, created_at: row.created_at });
   },
 

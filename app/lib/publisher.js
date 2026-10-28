@@ -158,6 +158,6 @@ async function fail(p, message, log, keepTrying = false) {
   if (patch.status === 'failed') {
     await logEvent(p, 'failed', message);
     const c = await db.one('clients', { select: 'name', id: `eq.${p.client_id}` }).catch(() => null);
-    await notify({ title: `⚠️ Post de ${c?.name || 'cliente'} não publicou`, body: String(message).slice(0, 160), url: '/#agenda', tag: `fail-${p.id}` });
+    await notify({ title: `⚠️ Post de ${c?.name || 'cliente'} não publicou`, body: String(message).slice(0, 160), url: '/equipe#agenda', tag: `fail-${p.id}` });
   }
 }

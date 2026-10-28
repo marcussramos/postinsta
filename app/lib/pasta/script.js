@@ -166,7 +166,7 @@ export async function decideScript(c, body, audio) {
   await logEvent(row, ok ? 'script_approved' : 'script_changes', [audio ? '🎤 áudio' : null, feedback || null].filter(Boolean).join(' · ') || null);
   const what = row.title || 'roteiro';
   await notify(ok
-    ? { title: `🎬 ${c.name} aprovou o roteiro`, body: `${what} — pode gravar.`, url: '/#fluxo', tag: `script-${row.id}` }
-    : { title: `🎬 ${c.name} pediu ajuste no roteiro${audio ? ' por áudio 🎤' : ''}`, body: feedback ? `${what}: “${feedback.slice(0, 140)}”` : `${what}: ouça o áudio.`, url: '/#fluxo', tag: `script-${row.id}` });
+    ? { title: `🎬 ${c.name} aprovou o roteiro`, body: `${what} — pode gravar.`, url: '/equipe#fluxo', tag: `script-${row.id}` }
+    : { title: `🎬 ${c.name} pediu ajuste no roteiro${audio ? ' por áudio 🎤' : ''}`, body: feedback ? `${what}: “${feedback.slice(0, 140)}”` : `${what}: ouça o áudio.`, url: '/equipe#fluxo', tag: `script-${row.id}` });
   return row;
 }

@@ -47,7 +47,7 @@ export const pushRoute = route({
   POST: async (req, res) => {
     const u = await requireStaff(req);
     if (query(req).test) {
-      const n = await notify({ title: '🔔 Notificações ligadas', body: 'É assim que o MC DIGITAL vai te avisar de aprovações, pedidos, pagamentos e falhas.', url: '/#inicio' });
+      const n = await notify({ title: '🔔 Notificações ligadas', body: 'É assim que o MC DIGITAL vai te avisar de aprovações, pedidos, pagamentos e falhas.', url: '/equipe#inicio' });
       return send(res, 200, { delivered: n });
     }
     const b = await readJson(req);

@@ -69,7 +69,7 @@ export const diagnosticoRoute = route({
     if (query(req).want) { // "quero ajuda": marca o lead como quente
       need(b.id && b.key && b.key === keyOf(b.id), 404, 'Diagnóstico não encontrado.');
       const [row] = await db.update('leads', { id: `eq.${b.id}` }, { wants_contact: true, next_action: 'Pediu conversa pelo diagnóstico', next_action_at: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() });
-      if (row) await notify({ title: `🔥 ${row.name} quer conversar`, body: `@${row.instagram} pediu ajuda depois do diagnóstico. Chame no WhatsApp!`, url: '/#vendas' }, { adminOnly: true });
+      if (row) await notify({ title: `🔥 ${row.name} quer conversar`, body: `@${row.instagram} pediu ajuda depois do diagnóstico. Chame no WhatsApp!`, url: '/equipe#vendas' }, { adminOnly: true });
       return send(res, 200, { ok: true });
     }
     const cfg = await diagSettings();
@@ -94,7 +94,7 @@ export const diagnosticoRoute = route({
     const old = await db.one('leads', { select: 'id,stage', instagram: `eq.${handle}`, source: 'eq.diagnostico' });
     const row = old ? (await db.update('leads', { id: `eq.${old.id}` }, base))[0]
       : await db.insert('leads', { ...base, source: 'diagnostico', stage: 'novo', ip_hash, next_action: 'Chamar no WhatsApp e comentar o diagnóstico', next_action_at: new Date().toISOString().slice(0, 10) });
-    await notify({ title: `🎯 Novo lead: @${handle}`, body: `${name} fez o diagnóstico (nota ${result.score}/100). Está no funil de vendas.`, url: '/#vendas' }, { adminOnly: true });
+    await notify({ title: `🎯 Novo lead: @${handle}`, body: `${name} fez o diagnóstico (nota ${result.score}/100). Está no funil de vendas.`, url: '/equipe#vendas' }, { adminOnly: true });
     send(res, 200, { id: row.id, key: keyOf(row.id), result, whatsapp: cfg.whatsapp || null, cta: cfg.cta });
   },
 });
