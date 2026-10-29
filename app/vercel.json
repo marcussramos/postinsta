@@ -77,7 +77,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/api/page?p=inicio"
+      "destination": "/equipe.html"
     },
     {
       "source": "/aprovar",
