@@ -77,7 +77,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/equipe.html"
+      "destination": "/equipe"
     },
     {
       "source": "/aprovar",
