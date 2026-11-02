@@ -47,7 +47,7 @@ function briefCard(s, clients) {
   const go = h('button', { class: 'btn primary studio-go', type: 'button', disabled: s.busy || !can('ia'), onclick: generate }, s.busy ? 'Escrevendo…' : s.res ? '✨ Gerar de novo' : '✨ Criar com IA');
   return h('section', { class: 'card studio-brief' },
     h('h3', {}, 'Briefing'),
-    h('div', { class: 'field' }, h('label', { for: 'st-client' }, 'Cliente'), sel),
+    h('div', { class: 'field' }, h('label', { for: 'st-client' }, 'Cliente'), sel, voiceHint(clients.find((c) => c.id === s.client))),
     seg('Formato', FORMATS, s.format, (k) => { s.format = k; rerender(); }),
     seg('Objetivo', GOALS, s.goal, (k) => { s.goal = k; rerender(); }),
     h('div', { class: 'field' }, h('label', { for: 'st-topic' }, 'Tema'), topic),
@@ -56,6 +56,13 @@ function briefCard(s, clients) {
     go,
     can('ia') ? h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'A IA usa o tom de voz, o kit da marca, as regras do nicho e os ganchos que já funcionaram para este cliente.')
       : h('p', { class: 'hint muted', style: 'margin:0' }, 'Sem permissão para usar a IA.'));
+}
+
+// sem tom de voz cadastrado a IA não tem de onde tirar o jeito do cliente falar
+function voiceHint(c) {
+  if (!c || String(c.brand_voice || '').trim()) return null;
+  return h('p', { class: 'studio-voice-warn' }, 'Este cliente não tem tom de voz cadastrado. A IA vai se basear só nas legendas já aprovadas dele. ',
+    h('a', { href: `#pasta/${c.id}` }, 'Cadastrar o tom na pasta →'));
 }
 
 async function generate() {
@@ -88,14 +95,17 @@ function resultArea(s) {
   }, h('span', { class: 'studio-hook-n' }, ['Curiosidade', 'Dor', 'Direto'][i] || `Opção ${i + 1}`), h('span', {}, t))));
   const hookEdit = h('input', { class: 'studio-hook-edit', value: p.hooks[s.hook] || '', 'aria-label': 'Editar gancho escolhido', oninput: (e) => { p.hooks[s.hook] = e.target.value; document.querySelectorAll('.studio-cover-hook, .studio-hook[aria-pressed="true"] span:last-child').forEach((el) => { el.textContent = e.target.value; }); } });
 
+  const v = s.res.voice;
   const parts = [
+    v && !v.described && !v.samples ? h('p', { class: 'studio-voice-warn' }, '⚠️ Este texto saiu no tom genérico: o cliente não tem tom de voz cadastrado nem legendas aprovadas no app. Cadastre o tom (ou cole 2 ou 3 legendas que ele gosta no "Pedido extra") e gere de novo.')
+      : v ? h('p', { class: 'studio-ok' }, `✓ Escrito no tom ${v.described ? 'cadastrado' : ''}${v.described && v.samples ? ' e ' : ''}${v.samples ? `de ${v.samples} legenda${v.samples > 1 ? 's' : ''} já aprovada${v.samples > 1 ? 's' : ''}` : ''} do cliente.`) : null,
     h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, '1 · Gancho'), h('span', { class: 'muted' }, 'A frase que para o scroll')), hookBox, hookEdit),
   ];
   if (p.format === 'CAROUSEL') parts.push(slidesCard(s, p));
   if (p.format === 'IMAGE') parts.push(imageCard(p));
   if (p.format === 'REELS') parts.push(reelsCard(p));
   parts.push(captionCard(p), checksCard(s, c), actionsCard(s, p, c));
-  return h('div', { class: 'studio-result' }, ...parts);
+  return h('div', { class: 'studio-result' }, ...parts.filter(Boolean));
 }
 
 function slidesCard(s, p) {

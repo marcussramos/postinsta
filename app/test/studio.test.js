@@ -34,6 +34,20 @@ test('carrossel: 3 ganchos, capa recebe o gancho, CTA pelo objetivo e regras do 
   assert.match(prompt, /chamar no direct/);
   assert.match(prompt, /CFO/);
   assert.match(prompt, /Tom de voz: acolhedor/);
+  assert.deepEqual(r.data.voice, { described: true, samples: 0 });
+});
+
+test('usa as legendas aprovadas do cliente como exemplo de voz', async () => {
+  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  const c = (await call('/api/clients', { method: 'POST', body: { name: 'Videomaker' } })).data;
+  const cap = 'Bora gravar? Aqui a gente não complica: você chega, a gente organiza e o vídeo sai com a sua cara. 🎬 Me chama que eu te explico tudo direitinho. #video #cuiaba';
+  await call('/api/posts', { method: 'POST', body: { client_id: c.id, image_url: 'https://fake.supabase.co/v.jpg', caption: cap, scheduled_at: new Date(Date.now() + 864e5).toISOString(), approved: true } });
+  const r = await call('/api/pasta?r=studio', { method: 'POST', body: { client_id: c.id, topic: 'Por que o vídeo não sai' } });
+  assert.deepEqual(r.data.voice, { described: false, samples: 1 });
+  const prompt = S.fakes.ig.aiCalls.at(-1).messages[0].content[0].text;
+  assert.match(prompt, /COMO ESTE CLIENTE ESCREVE/);
+  assert.match(prompt, /Bora gravar\? Aqui a gente não complica/);
+  assert.doesNotMatch(prompt, /#cuiaba/, 'exemplos vão sem hashtags');
 });
 
 test('sem a chave da IA avisa; formato inválido vira carrossel; Reels normaliza o roteiro', async () => {

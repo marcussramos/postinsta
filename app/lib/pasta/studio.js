@@ -61,7 +61,19 @@ const asScript = (p) => ({
 });
 export const checkPiece = (p, niche) => checkScript(asScript(p), niche);
 
-function prompt({ c, b, bank }) {
+// Como o cliente escreve de verdade: legendas recentes (aprovadas ou publicadas), sem hashtags.
+// É o sinal de tom mais forte que existe — mais que a descrição do tom de voz.
+export async function voiceSamples(clientId, n = 6) {
+  const rows = await db.select('posts', { select: 'caption,status,media_type', client_id: `eq.${clientId}`, status: 'in.(published,approved,pending_approval)', order: 'scheduled_at.desc.nullslast', limit: 40 }).catch(() => []);
+  const seen = new Set();
+  return rows.map((p) => String(p.caption || '').replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\n{3,}/g, '\n\n').trim())
+    .filter((t) => t.length >= 80 && !seen.has(t.slice(0, 60)) && seen.add(t.slice(0, 60)))
+    .slice(0, n).map((t) => t.slice(0, 700));
+}
+
+const kitText = (v) => (Array.isArray(v) ? v.join(', ') : typeof v === 'object' && v ? Object.values(v).join(', ') : String(v || '')).slice(0, 600);
+
+function prompt({ c, b, bank, samples }) {
   const k = c.brand_kit || {};
   const rules = NICHE_RULES[k.niche];
   const goal = GOALS[b.goal];
@@ -91,17 +103,18 @@ Você é redator(a) e diretor(a) de criação sênior de uma agência brasileira
 
 Cliente: ${c.name}${c.ig_username ? ` (@${c.ig_username})` : ''}
 Tom de voz: ${c.brand_voice || 'não definido — natural e próximo'}
-${k.niche ? `Nicho: ${k.niche}\n` : ''}${k.style ? `Estilo/posicionamento: ${k.style}\n` : ''}${k.dos ? `Sempre: ${k.dos}\n` : ''}${k.donts ? `Nunca: ${k.donts}\n` : ''}${k.avoid ? `Não associar à marca: ${k.avoid}\n` : ''}${k.notes ? `Observações: ${k.notes}\n` : ''}${brandBrief(c) ? `${brandBrief(c)}\n` : ''}
+${k.niche ? `Nicho: ${k.niche}\n` : ''}${k.style ? `Estilo/posicionamento: ${k.style}\n` : ''}${k.perception ? `Como a marca quer ser percebida: ${kitText(k.perception)}\n` : ''}${k.references ? `Referências: ${kitText(k.references)}\n` : ''}${k.inspirations ? `Inspirações: ${kitText(k.inspirations)}\n` : ''}${k.dos ? `Sempre: ${k.dos}\n` : ''}${k.donts ? `Nunca: ${k.donts}\n` : ''}${k.avoid ? `Não associar à marca: ${k.avoid}\n` : ''}${k.notes ? `Observações: ${k.notes}\n` : ''}${brandBrief(c) ? `${brandBrief(c)}\n` : ''}
 Tema: ${b.topic}
 Objetivo: ${goal.label} → o CTA deve levar a ${goal.cta}.
 ${b.extra ? `Pedido extra: ${b.extra}\n` : ''}
 Formato: ${shape}
-${worked.length ? `\nGanchos deste cliente que já funcionaram (referência de estilo, não copie):\n${worked.map((x) => `- "${x.hook}" (${x.views != null ? `${x.views} visualizações` : `${x.reach} de alcance`})`).join('\n')}\n` : ''}${rules ? `\nREGRAS OBRIGATÓRIAS — ${rules.name} (${rules.summary}):\n${rules.rules.map((r) => `- ${r}`).join('\n')}\nSe o tema pedir algo proibido, adapte para uma versão permitida e explique em "warnings".\n` : ''}
+${samples.length ? `\nCOMO ESTE CLIENTE ESCREVE — legendas reais já aprovadas. Imite a voz: pessoa do discurso (eu/nós/a marca), vocabulário, tamanho das frases, uso de emojis, nível de formalidade e jeito de chamar o público. O texto novo precisa parecer escrito pela mesma pessoa:\n${samples.map((t, i) => `--- exemplo ${i + 1} ---\n${t}`).join('\n')}\n---\n` : ''}${worked.length ? `\nGanchos deste cliente que já funcionaram (referência de estilo, não copie):\n${worked.map((x) => `- "${x.hook}" (${x.views != null ? `${x.views} visualizações` : `${x.reach} de alcance`})`).join('\n')}\n` : ''}${rules ? `\nREGRAS OBRIGATÓRIAS — ${rules.name} (${rules.summary}):\n${rules.rules.map((r) => `- ${r}`).join('\n')}\nSe o tema pedir algo proibido, adapte para uma versão permitida e explique em "warnings".\n` : ''}
 Como escrever:
 - 3 GANCHOS bem diferentes (até 12 palavras cada): um de curiosidade, um de dor/problema do público, um direto ou contraintuitivo. É a frase que para o scroll.
 - "cta": uma frase de chamada clara e permitida, coerente com o objetivo.
 - "caption": legenda de 3 a 6 parágrafos curtos, a 1ª linha forte (não repita o gancho igual), termina com o CTA. Sem hashtags dentro dela.
 - "hashtags": de 5 a 10, específicas do nicho e da cidade quando fizer sentido (sem #fyp, #viral).
+- O TOM DO CLIENTE MANDA: se o tom de voz ou os exemplos acima pedirem outra coisa (mais formal, mais técnico, mais divertido, 1ª pessoa), siga o cliente e não um estilo genérico de agência.
 - Português do Brasil, frases curtas. Nada de clichês de IA ("descubra", "mergulhe", "jornada", "eleve", "transforme"). Não invente dados, números, preços, estudos ou depoimentos.
 
 Responda SOMENTE com JSON válido:
@@ -118,12 +131,13 @@ export const studioRoute = route({
     need(b.topic.length >= 3, 400, 'Escreva o tema da peça.');
     const c = await db.one('clients', { select: '*', id: `eq.${body.client_id}` });
     need(c, 404, 'Cliente não encontrado.');
-    const bank = await hookBank(c.id, 10).catch(() => []);
-    const r = jsonFrom(await askClaude([{ type: 'text', text: prompt({ c, b, bank }) }], { maxTokens: 5000 }));
+    const [bank, samples] = await Promise.all([hookBank(c.id, 10).catch(() => []), voiceSamples(c.id)]);
+    const r = jsonFrom(await askClaude([{ type: 'text', text: prompt({ c, b, bank, samples }) }], { maxTokens: 5000 }));
     const piece = cleanPiece(r, b.format);
     if (b.format === 'CAROUSEL' && piece.slides?.length) piece.slides[0].title = ''; // a capa recebe o gancho escolhido
     need(piece.hooks.length && (piece.slides?.length || piece.headline || piece.scenes?.length), 502, 'A IA não montou a peça direito. Tente de novo.');
     const warnings = (Array.isArray(r.warnings) ? r.warnings : []).map((w) => String(w).slice(0, 300)).filter(Boolean).slice(0, 5);
-    send(res, 200, { piece, input: b, warnings, checks: checkPiece(piece, c.brand_kit?.niche) });
+    const voice = { described: Boolean(String(c.brand_voice || '').trim()), samples: samples.length };
+    send(res, 200, { piece, input: b, warnings, voice, checks: checkPiece(piece, c.brand_kit?.niche) });
   },
 });

@@ -1185,3 +1185,5 @@ input:not([type]), input[type=number], input[type=month], input[type=text], inpu
   .studio { grid-template-columns: minmax(0, 1fr); }
   .studio-brief { position: static; }
 }
+.studio-voice-warn { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--s-wait-bg); color: var(--s-wait); font-weight: 600; font-size: 13px; line-height: 1.45; }
+.studio-voice-warn a { color: inherit; }
