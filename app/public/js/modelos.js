@@ -50,9 +50,36 @@ export const MODELOS = [
     receita: 'Retrato em tela cheia; nome da marca empilhado no canto; chamada curta minúscula; manchete sem serifa pesadíssima e apertada, com a palavra-chave em itálico serifado; botão pequeno colorido "arrasta →".',
     serve: 'Beleza, moda, estética e lançamentos com fotos de impacto (Maison K., Annielly).',
   },
+  {
+    key: 'noticia', nome: 'Notícia', origem: '@marcelokimuradesign',
+    receita: 'Foto no topo; bloco de cor sólida embaixo com manchete sem serifa forte alinhada à esquerda; linha fina e rodapé discreto.',
+    serve: 'Novidades, curiosidades, mitos e opinião. Lê como manchete de portal.',
+  },
+  {
+    key: 'lista', nome: 'Lista', origem: '@thiagojapyassu',
+    receita: 'Barra fina no topo (tema | etiqueta | nº); imagem com etiquetas flutuantes; título em caixa alta com a segunda parte na cor de destaque; rodapé com autor e barra de progresso.',
+    serve: '"5 dicas", "3 erros", "7 cuidados". O formato que mais gera salvamento.',
+  },
+  {
+    key: 'antesdepois', nome: 'Antes e depois', origem: '@ajuliagomesdsgn / @gabriel.juste',
+    receita: 'Duas fotos lado a lado com etiquetas ANTES / DEPOIS (ou as duas palavras de um título "isso x aquilo"); "X" no encontro; manchete embaixo.',
+    serve: 'Resultados de tratamento, transformação, comparativos ("café x água"). Use fotos em pares no banco.',
+  },
+  {
+    key: 'colagem', nome: 'Colagem', origem: '@bymariibarbosa',
+    receita: 'Cor quente sólida; palavra gigante em sílabas sangrando da página; foto em polaroide com fita; selo estrelado; etiquetas inclinadas; textura de papel.',
+    serve: 'Marcas jovens, criativas e descontraídas (pet, comida, moda casual). Muito personalidade.',
+  },
+  {
+    key: 'mosaico', nome: 'Mosaico', origem: '@ajuliagomesdsgn',
+    receita: 'Grade com 6 fotos do cliente; faixa escura no centro com manchete em caixa alta e palavra em itálico serifado.',
+    serve: 'Portfólio, bastidores, "resultados do mês", novidades da loja.',
+  },
 ];
 // Perfis estudados que não viraram modelo próprio (a receita já está coberta por outro):
 //   @maarcelodsgn — pessoa recortada sobre cor sólida + título 3D/metálico + faixa com o nome → coberto pelo Pôster
 //     (o recorte da pessoa exige remover o fundo da foto, que o gerador ainda não faz).
+//   @leobeckerdesign — tipografia gigante cortada + foto em retícula (halftone): próximo da Colagem/Pôster; a retícula fica para uma versão futura.
+//   @caio_viinicius — manipulação de foto de produto (sem texto): não é modelo de carrossel; serve de referência de tratamento de foto.
 //   @kevynieduardo — também usa frase serifada branca sobre foto + paleta de cores em círculos (coberto pelo Editorial).
 export const MODELO_PADRAO = 'editorial';
