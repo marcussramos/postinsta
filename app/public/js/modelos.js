@@ -75,6 +75,11 @@ export const MODELOS = [
     receita: 'Grade com 6 fotos do cliente; faixa escura no centro com manchete em caixa alta e palavra em itálico serifado.',
     serve: 'Portfólio, bastidores, "resultados do mês", novidades da loja.',
   },
+  {
+    key: 'viral', nome: 'Viral', origem: '@feedautentico',
+    receita: 'Foto de rotina em tela cheia levemente escurecida; chamada manuscrita branca; manchete em sans arredondada pesada com palavra-chave em cor viva; etiqueta rosa; adesivos de flor e brilho; aspas grandes nas lâminas.',
+    serve: 'Criadoras, beleza, moda, rotina e dicas leves. Linguagem de "criadora de conteúdo".',
+  },
 ];
 // Perfis estudados que não viraram modelo próprio (a receita já está coberta por outro):
 //   @maarcelodsgn — pessoa recortada sobre cor sólida + título 3D/metálico + faixa com o nome → coberto pelo Pôster
