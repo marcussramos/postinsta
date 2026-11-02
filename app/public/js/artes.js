@@ -138,10 +138,12 @@ function paragraph(ctx, text, x, y, maxW, maxH, family, from, to, color, lh = 1.
 }
 
 // ───────────────────────── imagem
-function cover(ctx, img, x, y, w, h, focusY = 0.35) {
+function cover(ctx, img, x, y, w, h, focusY = 0.35) { // preenche a caixa e corta o que sobra (nunca vaza)
   const r = Math.max(w / img.width, h / img.height);
   const iw = img.width * r, ih = img.height * r;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) * focusY, iw, ih);
+  ctx.restore();
 }
 function clipped(ctx, path, fn) { ctx.save(); ctx.beginPath(); path(); ctx.clip(); fn(); ctx.restore(); }
 const arch = (ctx, x, y, w, h) => { const r = w / 2; ctx.moveTo(x, y + h); ctx.lineTo(x, y + r); ctx.arc(x + r, y + r, r, Math.PI, 0); ctx.lineTo(x + w, y + h); ctx.closePath(); };
@@ -809,7 +811,228 @@ const CR = {
   },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA], tweet: ['Post de rede', TW], capa: ['Capa de revista', CR] };
+// ───────────────────────── direção 10: NOTÍCIA (referência: posts em formato de manchete de portal)
+// Receita: foto ocupando o topo; bloco de cor sólida embaixo com manchete sem serifa forte, alinhada à esquerda;
+// linha fina e microtexto de rodapé. Parece notícia: ótimo para novidade, curiosidade e opinião.
+const NO = {
+  sans: (F) => (['Inter', 'Montserrat', 'Poppins', 'DM Sans', 'Lato'].includes(F.body) ? F.body : 'Inter'),
+  block(B, n) { return n % 2 ? '#FFFFFF' : B.paper; },
+  layout(ctx, d, text, sub, n, ratio = 0.56) {
+    const { B, F, photo } = d; const sans = NO.sans(F);
+    const ph = photo ? Math.round(H * ratio) : 0;
+    ctx.fillStyle = photo ? NO.block(B, n) : B.deep; ctx.fillRect(0, 0, W, H);
+    if (photo) cover(ctx, photo, 0, 0, W, ph, 0.3);
+    const ink = photo ? B.ink : '#FFFFFF';
+    const top = photo ? ph + 70 : 260;
+    const tf = fitRich(ctx, tokens(text), (s2, em) => `800 ${s2}px "${sans}"`, W - 160, photo ? H - top - 230 : 600, photo ? 76 : 110, 46, 1.08);
+    let y = drawRich(ctx, tf, 80, top + tf.size * 0.85, (s2) => `800 ${s2}px "${sans}"`, ink, photo ? B.emph : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF'), 1.08);
+    if (sub) y = paragraph(ctx, sub, 80, y + 6, W - 160, H - y - 190, sans, 34, 26, rgba(ink, 0.75), 1.38, 400);
+    ctx.fillStyle = rgba(ink, 0.35); ctx.fillRect(80, H - 120, W - 160, 2);
+    ctx.fillStyle = rgba(ink, 0.7); ctx.font = `600 20px "${sans}"`;
+    if (d.handle) spaced(ctx, d.handle.toUpperCase(), 80, H - 76, 3);
+    if (d.total > 1) spaced(ctx, d.n === 1 ? 'ARRASTA →' : `${d.n}/${d.total}`, W - 80, H - 76, 3, 'right');
+  },
+  cover(ctx, d) { NO.layout(ctx, d, d.hook, d.sub, 1); },
+  inner(ctx, d) { NO.layout(ctx, d, d.title, d.text, d.n, 0.5); },
+  cta(ctx, d) {
+    NO.layout(ctx, { ...d, photo: null }, d.title, d.text, 0);
+    pill(ctx, d.button || 'Salve este post', 80, H - 280, `800 30px "${NO.sans(d.F)}"`, '#FFFFFF', d.B.deep, 40, 84);
+  },
+};
+
+// ───────────────────────── direção 11: LISTA (referência: carrosséis de dicas com grade e etiquetas)
+// Receita: barra fina no topo (tema | etiqueta | nº); área de imagem com etiquetas flutuantes; título em caixa
+// alta com a segunda parte na cor de destaque; texto curto; rodapé de autor com barra de progresso.
+const LI = {
+  sans: NO.sans,
+  top(ctx, d, label) {
+    const { B } = d; const sans = LI.sans(d.F);
+    ctx.fillStyle = rgba(B.ink, 0.55); ctx.font = `600 20px "${sans}"`;
+    spaced(ctx, (d.eyebrow || 'DICAS').toUpperCase(), 70, 74, 3);
+    ctx.fillStyle = B.emph; spaced(ctx, label.toUpperCase(), W / 2, 74, 3, 'center');
+    ctx.fillStyle = rgba(B.ink, 0.55); spaced(ctx, `${String(d.n).padStart(2, '0')}/${String(d.total).padStart(2, '0')}`, W - 70, 74, 3, 'right');
+    ctx.fillStyle = rgba(B.ink, 0.15); ctx.fillRect(70, 96, W - 140, 2);
+  },
+  chip(ctx, d, text, x, y, dark) {
+    const sans = LI.sans(d.F); const font = `700 24px "${sans}"`; ctx.font = font;
+    const w = ctx.measureText(text).width + 44;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+    ctx.fillStyle = dark ? '#16181D' : '#FFFFFF'; ctx.beginPath(); rounded(ctx, x, y, w, 58, 14); ctx.fill(); ctx.restore();
+    ctx.fillStyle = d.B.emph; ctx.beginPath(); circle(ctx, x + 22, y + 29, 6); ctx.fill();
+    ctx.fillStyle = dark ? '#FFFFFF' : '#16181D'; ctx.font = font; ctx.fillText(text, x + 36, y + 37);
+  },
+  title(ctx, d, text, y, maxH, from) {
+    const { B } = d; const sans = LI.sans(d.F);
+    const t = String(plain(text)).toUpperCase(); const words = t.split(/\s+/);
+    const cut = Math.max(1, Math.ceil(words.length / 2));
+    const marked = text.includes('*') ? text.toUpperCase() : `${words.slice(0, cut).join(' ')} *${words.slice(cut).join(' ')}*`;
+    const tf = fitRich(ctx, tokens(marked), (s2) => `900 ${s2}px "${sans}"`, W - 140, maxH, from, 44, 1.0);
+    return drawRich(ctx, tf, 70, y + tf.size * 0.85, (s2) => `900 ${s2}px "${sans}"`, B.ink, B.emph, 1.0);
+  },
+  author(ctx, d) {
+    const { B } = d; const sans = LI.sans(d.F);
+    if (d.avatar) clipped(ctx, () => circle(ctx, 100, H - 92, 30), () => cover(ctx, d.avatar, 70, H - 122, 60, 60, 0.2));
+    ctx.fillStyle = B.ink; ctx.font = `700 24px "${sans}"`; ctx.fillText(d.name || '', d.avatar ? 146 : 70, H - 98);
+    ctx.fillStyle = rgba(B.ink, 0.55); ctx.font = `400 20px "${sans}"`; ctx.fillText(d.handle || '', d.avatar ? 146 : 70, H - 70);
+    const bw = 300, bx = W - 70 - bw; ctx.fillStyle = rgba(B.ink, 0.12); ctx.fillRect(bx, H - 92, bw, 6);
+    ctx.fillStyle = B.emph; ctx.fillRect(bx, H - 92, bw * (d.n / d.total), 6);
+  },
+  page(ctx, d, text, sub, label, chips) {
+    const { B, photo } = d;
+    ctx.fillStyle = B.paper; ctx.fillRect(0, 0, W, H);
+    LI.top(ctx, d, label);
+    let y = 130;
+    if (photo) {
+      const ih = 560;
+      clipped(ctx, () => rounded(ctx, 70, y, W - 140, ih, 28), () => cover(ctx, photo, 70, y, W - 140, ih, 0.3));
+      chips.slice(0, 2).forEach((c, i) => LI.chip(ctx, d, c, i ? W - 70 - 40 - Math.min(380, c.length * 15 + 44) : 110, i ? y + ih - 100 : y + 40, i === 1));
+      y += ih + 60;
+    } else y += 120;
+    y = LI.title(ctx, d, text, y, photo ? 260 : 520, photo ? 84 : 120);
+    if (sub) paragraph(ctx, sub, 70, y + 14, W - 140, H - y - 200, LI.sans(d.F), 34, 26, rgba(B.ink, 0.75), 1.38, 400);
+    LI.author(ctx, d);
+  },
+  cover(ctx, d) { LI.page(ctx, d, d.hook, d.sub, 'GUIA', [d.eyebrow || 'Salve para depois', 'Arrasta →']); },
+  inner(ctx, d) { LI.page(ctx, d, d.title, d.text, `ITEM ${String(d.n - 1).padStart(2, '0')}`, [`#${d.n - 1}`, plain(d.title).split(/\s+/).slice(0, 3).join(' ')]); },
+  cta(ctx, d) {
+    LI.page(ctx, { ...d, photo: null }, d.title, d.text, 'FIM', []);
+    pill(ctx, d.button || 'SALVE ESTE POST', 70, H - 330, `900 30px "${LI.sans(d.F)}"`, d.B.emph, '#FFFFFF', 44, 88);
+  },
+};
+
+// ───────────────────────── direção 12: ANTES E DEPOIS (referência: comparativos "isso X aquilo")
+// Receita: duas fotos lado a lado (ou em cima/embaixo) com etiquetas ANTES / DEPOIS; um "X" ou seta grande no
+// encontro; faixa com o título. Se o título tiver " x " (ex.: "Café x Água"), as etiquetas viram as duas palavras.
+const AD = {
+  sans: NO.sans,
+  labels(title) {
+    const m = plain(title).split(/\s+x\s+|\s+vs\.?\s+/i);
+    return m.length === 2 ? [m[0], m[1]] : ['ANTES', 'DEPOIS'];
+  },
+  tag(ctx, d, text, x, y, light) {
+    const font = `900 30px "${AD.sans(d.F)}"`; ctx.font = font; const w = ctx.measureText(text.toUpperCase()).width + 50;
+    ctx.fillStyle = light ? '#FFFFFF' : d.B.emph; ctx.beginPath(); rounded(ctx, x, y, w, 64, 32); ctx.fill();
+    ctx.fillStyle = light ? '#16181D' : '#FFFFFF'; ctx.fillText(text.toUpperCase(), x + 25, y + 43);
+  },
+  split(ctx, d, a, b, labels) {
+    const { B } = d; const half = W / 2;
+    ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    if (a) cover(ctx, a, 0, 0, half, H, 0.3);
+    if (b) { ctx.save(); ctx.beginPath(); ctx.rect(half, 0, half, H); ctx.clip(); cover(ctx, b, half, 0, half, H, 0.3); ctx.restore(); }
+    if (!b && a) { ctx.save(); ctx.beginPath(); ctx.rect(half, 0, half, H); ctx.clip(); ctx.filter = 'grayscale(1) brightness(.7)'; cover(ctx, a, 0, 0, W, H, 0.3); ctx.filter = 'none'; ctx.restore(); }
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(half - 3, 0, 6, H);
+    const g = ctx.createLinearGradient(0, H * 0.55, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.8)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    AD.tag(ctx, d, labels[0], 50, 70, true); ctx.font = `900 30px "${AD.sans(d.F)}"`;
+    const w2 = ctx.measureText(labels[1].toUpperCase()).width + 50; AD.tag(ctx, d, labels[1], W - 50 - w2, 70, false);
+    // "X" no encontro
+    ctx.fillStyle = B.emph; ctx.beginPath(); circle(ctx, half, H * 0.42, 62); ctx.fill();
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = '#FFFFFF'; ctx.font = `900 60px "${AD.sans(d.F)}"`; const xw = ctx.measureText('X').width; ctx.fillText('X', half - xw / 2, H * 0.42 + 22);
+  },
+  caption(ctx, d, text, sub) {
+    const sans = AD.sans(d.F);
+    const tf = fitRich(ctx, tokens(text.replace(/\s+x\s+/i, ' *x* ')), (s2, em) => `${em ? 'italic 600' : 900} ${s2}px "${em ? 'Playfair Display' : sans}"`, W - 140, 260, 96, 52, 1.0);
+    const subH = sub ? 120 : 0; let y = H - 110 - subH - tf.lines.length * tf.size;
+    y = drawRich(ctx, tf, W / 2, y + tf.size * 0.85, (s2, em) => `${em ? 'italic 600' : 900} ${s2}px "${em ? 'Playfair Display' : sans}"`, '#FFFFFF', lum(d.B.deco) > 0.2 ? d.B.deco : '#FFFFFF', 1.0, { align: 'center' });
+    if (sub) { const f = fitRich(ctx, tokens(sub), (s2) => `500 ${s2}px "${sans}"`, W - 200, 100, 32, 26, 1.3); drawRich(ctx, f, W / 2, y + 20 + f.size, (s2) => `500 ${s2}px "${sans}"`, '#FFFFFF', '#FFFFFF', 1.3, { align: 'center' }); }
+  },
+  cover(ctx, d) { AD.split(ctx, d, d.photos[0], d.photos[1], AD.labels(d.hook)); AD.caption(ctx, d, plain(d.hook), d.sub); },
+  inner(ctx, d) { const i = (d.n - 1) * 2; AD.split(ctx, d, d.photos[i % (d.photos.length || 1)], d.photos[(i + 1) % (d.photos.length || 1)] || null, AD.labels(d.title)); AD.caption(ctx, d, plain(d.title), d.text); footer(ctx, d.B, d.F, '', d.n, d.total, '#FFFFFF', 0.7); },
+  cta(ctx, d) { ED.cta(ctx, d); },
+};
+
+// ───────────────────────── direção 13: COLAGEM (referência: perfis com estética de recorte e adesivos)
+// Receita: fundo de cor quente sólida; uma palavra gigante quebrada em sílabas que sangra da página; foto em
+// polaroide inclinada; selo estrelado com texto; etiquetas inclinadas; textura de papel.
+const CO = {
+  font: (s) => `900 ${s}px "Montserrat"`,
+  bg(ctx, B, alt) { ctx.fillStyle = alt ? B.paper : (contrast(B.deco, '#FFFFFF') >= 2 ? B.deco : B.emph); ctx.fillRect(0, 0, W, H); grain(ctx, 0.12); },
+  star(ctx, cx, cy, r, color, text, F) {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(0.2); ctx.fillStyle = color; ctx.beginPath();
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; const rr = i % 2 ? r * 0.78 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fill();
+    const lines = String(text).toUpperCase().split(' ').slice(0, 3);
+    let fs = Math.round(r * 0.3); ctx.font = `900 ${fs}px "Montserrat"`;
+    while (fs > 14 && Math.max(...lines.map((l) => ctx.measureText(l).width)) > r * 1.35) { fs -= 2; ctx.font = `900 ${fs}px "Montserrat"`; }
+    ctx.fillStyle = '#FFFFFF';
+    lines.forEach((l, i) => { const w = ctx.measureText(l).width; ctx.fillText(l, -w / 2, (i - (lines.length - 1) / 2) * r * 0.32 + r * 0.1); });
+    ctx.restore();
+  },
+  polaroid(ctx, photo, x, y, w, h, rot) {
+    ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(rot);
+    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 18;
+    ctx.fillStyle = '#FBF8F2'; ctx.fillRect(-w / 2, -h / 2, w, h + 70); ctx.shadowColor = 'transparent';
+    if (photo) clipped(ctx, () => ctx.rect(-w / 2 + 22, -h / 2 + 22, w - 44, h - 30), () => cover(ctx, photo, -w / 2 + 22, -h / 2 + 22, w - 44, h - 30, 0.25));
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-60, -h / 2 - 22, 120, 44); // fita
+    ctx.restore();
+  },
+  label(ctx, text, x, y, rot, bg, fg) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.font = `800 34px "Montserrat"`; const w = ctx.measureText(text).width + 40;
+    ctx.fillStyle = bg; ctx.fillRect(0, -44, w, 60); ctx.fillStyle = fg; ctx.fillText(text, 20, 0); ctx.restore();
+  },
+  giant(ctx, word, ink) { // palavra gigante em sílabas, sangrando para fora
+    const w = plain(word).toUpperCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const parts = w.length > 6 ? [w.slice(0, Math.ceil(w.length / 2)), w.slice(Math.ceil(w.length / 2))] : [w];
+    ctx.fillStyle = ink; ctx.font = CO.font(330);
+    parts.forEach((p, i) => ctx.fillText(p, -20, 330 + i * 300));
+  },
+  cover(ctx, d) {
+    const { B } = d; CO.bg(ctx, B);
+    const words = tokens(d.hook, true).filter((t) => !t.br);
+    const key = (words.find((t) => t.em) || words[words.length - 1] || { w: '' }).w;
+    CO.giant(ctx, key, B.paper);
+    CO.polaroid(ctx, d.photo, W - 520, 520, 420, 520, 0.06);
+    const rest = words.map((t) => t.w).join(' ');
+    CO.label(ctx, rest.length > 32 ? `${rest.slice(0, 30)}…` : rest, 70, H - 200, -0.04, '#16181D', '#FFFFFF');
+    if (d.sub) CO.label(ctx, plain(d.sub).slice(0, 34), 110, H - 110, 0.03, B.paper, B.ink);
+    CO.star(ctx, 230, 840, 120, B.ink, d.eyebrow || 'novo', d.F);
+  },
+  inner(ctx, d) {
+    const { B } = d; CO.bg(ctx, B, true);
+    ctx.fillStyle = B.emph; ctx.font = CO.font(260); ctx.fillText(String(d.n - 1).padStart(2, '0'), W - 400, 300);
+    const tf = fitRich(ctx, tokens(d.title), (s2) => CO.font(s2), W - 160, 330, 96, 52, 1.0);
+    let y = drawRich(ctx, tf, 80, 400 + tf.size, (s2) => CO.font(s2), B.ink, B.emph, 1.0, { mark: rgba(B.deco, 0.4) });
+    if (d.text) y = paragraph(ctx, d.text, 80, y + 30, W - 160, d.photo ? 230 : 500, 'Montserrat', 38, 28, rgba(B.ink, 0.85), 1.4, 500);
+    if (d.photo) CO.polaroid(ctx, d.photo, W - 470, Math.max(y + 40, 860), 360, 330, -0.05);
+    footer(ctx, B, { body: 'Montserrat' }, d.handle, d.n, d.total, B.ink, 0.6);
+  },
+  cta(ctx, d) {
+    const { B } = d; CO.bg(ctx, B);
+    const tf = fitRich(ctx, tokens(d.title, true), (s2) => CO.font(s2), W - 160, 480, 120, 60, 1.0);
+    let y = drawRich(ctx, tf, 80, 300 + tf.size, (s2) => CO.font(s2), B.paper, '#16181D', 1.0);
+    if (d.text) y = paragraph(ctx, d.text, 80, y + 30, W - 160, 200, 'Montserrat', 38, 28, B.paper, 1.4, 600);
+    CO.label(ctx, (d.button || 'salva esse post!'), 80, y + 120, -0.05, '#16181D', '#FFFFFF');
+    CO.star(ctx, W - 230, H - 260, 140, B.ink, 'até o próximo', d.F);
+  },
+};
+
+// ───────────────────────── direção 14: MOSAICO (referência: capas com grade de fotos e manchete no meio)
+// Receita: grade de 6 fotos do cliente (2×3) com respiro fino; faixa de cor no centro com manchete
+// contrastando sem serifa + itálico serifado. Ótimo para portfólio, bastidores e "resultados do mês".
+const MO = {
+  grid(ctx, d, photos) {
+    const { B } = d; ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    const g = 8, cw = (W - g) / 2, ch = (H - 2 * g) / 3;
+    for (let i = 0; i < 6; i++) { const p = photos.length ? photos[i % photos.length] : null; const x = (i % 2) * (cw + g), y = Math.floor(i / 2) * (ch + g); if (p) cover(ctx, p, x, y, cw, ch, 0.3); else { ctx.fillStyle = rgba(B.paper, 0.1 + (i % 3) * 0.05); ctx.fillRect(x, y, cw, ch); } }
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, W, H);
+  },
+  band(ctx, d, text, sub) {
+    const { B, F } = d; const sans = 'Montserrat'; const serif = SERIFS.includes(F.title) ? F.title : 'Playfair Display';
+    const font = (s2, em) => (em ? `italic 500 ${Math.round(s2 * 1.05)}px "${serif}"` : `900 ${s2}px "${sans}"`);
+    const tf = fitRich(ctx, tokens(String(text).toUpperCase().replace(/\*([^*]+)\*/g, (m, x) => `*${x.toLowerCase()}*`), true), font, W - 200, 360, 104, 56, 1.0);
+    const bh = tf.lines.length * tf.size * 1.0 + (sub ? 100 : 0) + 110; const by = (H - bh) / 2;
+    ctx.fillStyle = rgba(B.deep, 0.92); ctx.fillRect(0, by, W, bh);
+    ctx.fillStyle = lum(B.deco) > 0.2 ? B.deco : B.paper; ctx.fillRect(0, by, W, 6); ctx.fillRect(0, by + bh - 6, W, 6);
+    let y = drawRich(ctx, tf, W / 2, by + 55 + tf.size * 0.85, font, B.paper, lum(B.deco) > 0.2 ? B.deco : B.paper, 1.0, { align: 'center' });
+    if (sub) { const f = fitRich(ctx, tokens(sub), (s2) => `500 ${s2}px "${sans}"`, W - 240, 80, 32, 24, 1.3); drawRich(ctx, f, W / 2, y + 16 + f.size, (s2) => `500 ${s2}px "${sans}"`, rgba(B.paper, 0.85), B.paper, 1.3, { align: 'center' }); }
+  },
+  cover(ctx, d) { MO.grid(ctx, d, d.photos); MO.band(ctx, d, d.hook, d.sub); },
+  inner(ctx, d) { ED.inner(ctx, d); },
+  cta(ctx, d) { MO.grid(ctx, d, d.photos.slice().reverse()); MO.band(ctx, d, d.title, d.text); pill(ctx, d.button || 'SALVE ESTE POST', W / 2 - 200, H - 190, `800 30px "Montserrat"`, d.B.paper, d.B.deep, 50, 86); },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA], tweet: ['Post de rede', TW], capa: ['Capa de revista', CR], noticia: ['Notícia', NO], lista: ['Lista', LI], antesdepois: ['Antes e depois', AD], colagem: ['Colagem', CO], mosaico: ['Mosaico', MO] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -829,7 +1052,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const B = brandColors(client?.brand_kit?.colors);
   const F = brandFonts(client?.brand_kit?.fonts);
   const R = (STYLES[style] || STYLES.editorial)[1];
-  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR].includes(R) ? 'Inter' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
+  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR, NO, LI, AD].includes(R) ? 'Inter' : null, [CO, MO].includes(R) ? 'Montserrat' : null, [AD, MO].includes(R) ? 'Playfair Display' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
   const pages = piece.format === 'IMAGE'
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
@@ -841,7 +1064,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   for (const [i, p] of pages.entries()) {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); ctx.textBaseline = 'alphabetic';
-    const d = { B, F, handle, name: client?.name || '', avatar: photos[0] || null, total, n: i + 1, eyebrow, button: piece.button || '' };
+    const d = { B, F, handle, name: client?.name || '', avatar: photos[0] || null, photos, total, n: i + 1, eyebrow, button: piece.button || '' };
     if (p.kind === 'cover') R.cover(ctx, { ...d, hook: p.hook, sub: p.sub, photo: pick(0) });
     else if (p.kind === 'cta') R.cta(ctx, { ...d, title: p.title, text: p.text, photo: pick(0) });
     else R.inner(ctx, { ...d, title: p.title, text: p.text, photo: photos.length > 1 ? pick(k++) : (style === 'editorial' && i % 2 ? null : pick(0)) });
