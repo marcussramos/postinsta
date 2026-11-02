@@ -74,14 +74,17 @@ function tokens(text, autoEmph = false) {
   const out = [];
   let em = false;
   for (const part of s.split('*')) {
-    for (const w of part.split(/\s+/).filter(Boolean)) {
-      if (/^[.,;:!?…)]+$/.test(w) && out.length) out[out.length - 1].w += w; else out.push({ w, em });
-    }
+    part.split('\n').forEach((ln, li) => {
+      if (li > 0) out.push({ br: true });
+      for (const w of ln.split(/\s+/).filter(Boolean)) {
+        const prev = out[out.length - 1];
+        if (/^[.,;:!?…)]+$/.test(w) && prev && !prev.br) prev.w += w; else out.push({ w, em });
+      }
+    });
     em = !em;
   }
-  if (autoEmph && !s.includes('*') && out.length > 3) { // sem marcação: destaca as 2 últimas palavras
-    out.slice(-2).forEach((t) => { t.em = true; });
-  }
+  const words = out.filter((t) => !t.br);
+  if (autoEmph && !s.includes('*') && words.length > 3) words.slice(-2).forEach((t) => { t.em = true; }); // sem marcação: destaca as 2 últimas
   return out;
 }
 const plain = (text) => String(text || '').replace(/\*/g, '');
@@ -89,6 +92,7 @@ function wrapRich(ctx, toks, maxW, font) {
   const lines = [[]]; let w = 0;
   ctx.font = font(false); const space = ctx.measureText(' ').width;
   for (const t of toks) {
+    if (t.br) { lines.push([]); w = 0; continue; } // quebra de parágrafo (linha vazia vira espaço)
     ctx.font = font(t.em); const tw = ctx.measureText(t.w).width;
     const cur = lines[lines.length - 1];
     if (cur.length && w + space + tw > maxW) { lines.push([{ ...t, width: tw }]); w = tw; } else { cur.push({ ...t, width: tw }); w += (cur.length > 1 ? space : 0) + tw; }
@@ -627,7 +631,7 @@ const MA = {
   isSmall: (t) => !t.em && t.w.replace(/[^\p{L}]/gu, '').length <= 3,
   layout(ctx, F, toks, size, maxW) {
     const lines = [[]]; let w = 0; const gap = size * 0.12;
-    for (const t of toks) {
+    for (const t of toks.filter((x) => !x.br)) {
       const sm = MA.isSmall(t); ctx.font = sm ? MA.small(F, size) : MA.big(size);
       const word = sm ? t.w.toLowerCase() : t.w.toUpperCase();
       const tw = ctx.measureText(word).width;
@@ -742,6 +746,7 @@ const TW = {
     let y = TW.body(ctx, d, `*${plain(d.title)}*${d.text ? `\n\n${d.text}` : ''}`, 210, 600, 60);
     const f = TW.font(d.F);
     pill(ctx, d.button ? d.button : 'Salvar este post', 90, y + 60, `700 30px "${f}"`, '#0F1419', '#FFFFFF', 44, 88);
+    TW.photo(ctx, d.photo, y + 200, H - y - 340);
     TW.foot(ctx, d);
   },
 };
