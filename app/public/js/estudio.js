@@ -7,6 +7,7 @@ import { h, api, toast, copyText, zonedToISO } from '/shared.js';
 import { TEMPLATES, DURATIONS, checkScript } from '/roteiro.js';
 import { S, can, clientById, render } from './core.js';
 import { openPost, upsert } from './post.js';
+import { renderPiece, brandFonts } from './artes.js';
 
 const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels' };
 const GOALS = { educar: 'Educar', engajar: 'Engajar', autoridade: 'Autoridade', vender: 'Vender' };
@@ -71,7 +72,7 @@ async function generate() {
   s.busy = true; render();
   try {
     s.res = await api('/api/pasta?r=studio', { method: 'POST', body: { client_id: s.client, format: s.format, goal: s.goal, topic: s.topic, slides: s.slides, duration: s.duration, template: s.template, extra: s.extra } });
-    s.res.client_id = s.client; s.hook = 0;
+    s.res.client_id = s.client; s.hook = 0; s.arts = null;
   } catch (e) { toast(e.message, true); }
   s.busy = false; render();
 }
@@ -104,6 +105,7 @@ function resultArea(s) {
   if (p.format === 'CAROUSEL') parts.push(slidesCard(s, p));
   if (p.format === 'IMAGE') parts.push(imageCard(p));
   if (p.format === 'REELS') parts.push(reelsCard(p));
+  if (p.format !== 'REELS') parts.push(artsCard(s, p, c));
   parts.push(captionCard(p), checksCard(s, c), actionsCard(s, p, c));
   return h('div', { class: 'studio-result' }, ...parts.filter(Boolean));
 }
@@ -196,14 +198,55 @@ function actionsCard(s, p, c) {
     create.disabled = true;
     try { await createPost(s, p, c); } catch (e) { toast(e.message, true); }
     create.disabled = false;
-  } }, 'Criar post no Fluxo');
-  return h('section', { class: 'card studio-actions' }, h('h3', {}, '4 · Levar para o Canva e para o Fluxo'),
+  } }, s.arts?.length && p.format !== 'REELS' ? `Criar post no Fluxo com as ${s.arts.length} arte${s.arts.length > 1 ? 's' : ''}` : 'Criar post no Fluxo');
+  return h('section', { class: 'card studio-actions' }, h('h3', {}, 'Levar para o Fluxo'),
+    h('div', { class: 'studio-when' }, h('span', { class: 'label' }, 'Data (opcional)'), date, time),
+    create,
+    h('details', { class: 'studio-canva' }, h('summary', {}, 'Prefere montar no seu modelo do Canva?'),
     h('div', { class: 'actions' },
       h('button', { class: 'btn', type: 'button', onclick: () => copyText(canvaText(s, p), 'Texto copiado. Cole no seu modelo do Canva.') }, '📋 Copiar para o Canva'),
       h('button', { class: 'btn', type: 'button', onclick: () => downloadCsv(s, p, c) }, '⬇ CSV para o Canva')),
-    h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'O CSV usa os nomes de campo gancho, titulo_2, texto_2… cta_titulo. Dê esses nomes às caixas do seu modelo e o "Criar em massa" do Canva preenche tudo de uma vez.'),
-    h('div', { class: 'studio-when' }, h('span', { class: 'label' }, 'Data (opcional)'), date, time),
-    create);
+    h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'O CSV usa os nomes de campo gancho, titulo_2, texto_2… cta_titulo para o "Criar em massa" do Canva.')));
+}
+
+// ───────────────────────── artes prontas (gerador no navegador, com as cores e fontes do cliente)
+function artsCard(s, p, c) {
+  const fonts = brandFonts(c.brand_kit?.fonts);
+  const hasKit = Array.isArray(c.brand_kit?.colors) && c.brand_kit.colors.length >= 2;
+  s.artStyle ||= 'claro';
+  const photoIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const img = new Image(); img.src = URL.createObjectURL(f);
+    await img.decode().catch(() => null);
+    s.artPhoto = img; s.artPhotoName = f.name; s.artStyle = 'foto'; await makeArts(s, p, c);
+  } });
+  const styles = { claro: 'Claro', escuro: 'Escuro', foto: 'Foto na capa' };
+  const styleSeg = h('div', { class: 'seg studio-seg', role: 'group', 'aria-label': 'Estilo das artes' }, ...Object.entries(styles).map(([k, v]) =>
+    h('button', { type: 'button', class: 'seg-btn', 'aria-pressed': String(s.artStyle === k), onclick: async () => {
+      if (k === 'foto' && !s.artPhoto) return photoIn.click();
+      s.artStyle = k; await makeArts(s, p, c);
+    } }, v)));
+  const gen = h('button', { class: 'btn primary', type: 'button', disabled: s.artBusy, onclick: () => makeArts(s, p, c) }, s.artBusy ? 'Montando…' : s.arts?.length ? '↻ Refazer com o texto atual' : '🎨 Gerar artes');
+  const grid = s.arts?.length ? h('div', { class: 'studio-arts' }, ...s.arts.map((a, i) => h('a', { class: 'studio-art', href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg`, title: 'Baixar' },
+    h('img', { src: a.url, alt: `Lâmina ${i + 1}` }), h('span', {}, `${i + 1} ⬇`)))) : null;
+  return h('section', { class: 'card' },
+    h('div', { class: 'home-card-head' }, h('h3', {}, '✦ Artes prontas'), h('span', { class: 'muted' }, `${fonts.title}${fonts.body !== fonts.title ? ` + ${fonts.body}` : ''} · ${hasKit ? 'cores da marca' : 'cores MC DIGITAL'}`)),
+    !hasKit ? h('p', { class: 'studio-voice-warn' }, 'Este cliente não tem cores cadastradas: as artes saem nas cores da MC DIGITAL. Cadastre as cores e fontes na pasta do cliente → Marca.') : null,
+    h('div', { class: 'studio-art-tools' }, styleSeg, photoIn, s.artStyle === 'foto' ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => photoIn.click() }, s.artPhotoName ? 'Trocar foto' : 'Escolher foto') : null, gen),
+    grid,
+    s.arts?.length ? h('div', { class: 'actions' },
+      h('button', { class: 'btn sm', type: 'button', onclick: () => s.arts.forEach((a, i) => setTimeout(() => { const l = h('a', { href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg` }); document.body.append(l); l.click(); l.remove(); }, i * 250)) }, '⬇ Baixar todas'),
+      h('span', { class: 'muted', style: 'font-size:12.5px' }, 'Mudou o texto acima? Toque em Refazer.')) : null);
+}
+
+async function makeArts(s, p, c) {
+  s.artBusy = true; render();
+  try {
+    const { arts } = await renderPiece({ piece: p, hook: p.hooks[s.hook] || '', client: c, style: s.artStyle, photo: s.artPhoto });
+    (s.arts || []).forEach((a) => URL.revokeObjectURL(a.url));
+    s.arts = arts;
+  } catch (e) { toast(`Não deu para montar as artes: ${e.message}`, true); }
+  s.artBusy = false; render();
 }
 
 async function createPost(s, p, c) {
@@ -213,6 +256,16 @@ async function createPost(s, p, c) {
   const notes = [`🎨 Estúdio · ${FORMATS[p.format]}${goal ? ` · ${goal}` : ''}`, `Gancho: ${hook}`, p.format === 'REELS' ? `CTA: ${p.cta || ''}` : canvaText(s, p)].join('\n\n').slice(0, 4000);
   const body = { client_id: c.id || s.client, title: (s.res.input?.topic || hook).slice(0, 140), caption, notes, media_type: p.format, stage: 'draft' };
   if (s.date) body.scheduled_at = zonedToISO(s.date, s.time || '19:00', S.tz);
+  if (p.format !== 'REELS' && s.arts?.length) { // sobe as artes geradas e já anexa ao post
+    const ups = [];
+    for (const [i, a] of s.arts.entries()) {
+      toast(`Enviando arte ${i + 1} de ${s.arts.length}…`);
+      const r = await api(`/api/upload?client=${body.client_id}`, { method: 'POST', raw: a.blob });
+      ups.push({ url: r.image_url, path: r.image_path, kind: 'image' });
+    }
+    Object.assign(body, { image_url: ups[0].url, image_path: ups[0].path });
+    if (p.format === 'CAROUSEL') body.media = ups;
+  }
   const row = await api('/api/posts', { method: 'POST', body });
   let final = row;
   if (p.format === 'REELS') {
@@ -221,7 +274,7 @@ async function createPost(s, p, c) {
     } catch (e) { toast(`Post criado, mas o roteiro não foi anexado: ${e.message}`, true); }
   }
   upsert(final, false);
-  toast('Post criado em produção no Fluxo. Suba a arte do Canva nele.');
+  toast(p.format !== 'REELS' && s.arts?.length ? 'Post criado em produção no Fluxo, com as artes.' : 'Post criado em produção no Fluxo. Suba a arte nele.');
   openPost(final);
 }
 
