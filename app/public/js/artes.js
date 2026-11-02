@@ -270,7 +270,7 @@ const RV = {
     RV.frame(ctx, B);
     const num = String(d.n).padStart(2, '0');
     ctx.fillStyle = rgba(B.deco, 0.13); ctx.font = `${SERIFS.includes(F.title) ? 'italic 400' : '800'} 560px "${F.title}"`;
-    ctx.fillText(num, W - ctx.measureText(num).width - 30, H - 120);
+    ctx.fillText(num, W - ctx.measureText(num).width - 30, photo ? 470 : H - 120);
     ctx.fillStyle = B.emph; ctx.font = `700 22px "${F.body}"`;
     spaced(ctx, `${(d.label || 'PASSO')} ${num}`.toUpperCase(), 96, 180, 7);
     ctx.fillRect(96, 202, 60, 3);
