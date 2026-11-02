@@ -74,7 +74,43 @@
       ]
     },
     {
-      "source": "/(app\\.js|shared\\.js|styles\\.css|js/(.*)|[a-z-]+\\.js)",
+      "source": "/js/:file*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/app.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/shared.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/styles.css",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/:file(billing|dates|revisor|roteiro|permissoes|onboarding-perguntas|escritorio|missoes).js",
       "headers": [
         {
           "key": "Cache-Control",
