@@ -17,6 +17,7 @@ import { fmtDay, openBankPicker, snippetBar, todayLocal, uploadDoc } from './pas
 
 // ───────────────────────── post (novo / editar)
 // opts: { date: 'YYYY-MM-DD', stage: 'idea' }
+import { canAssist, openAssist } from './postar.js';
 function openPost(post = null, opts = {}) {
   if (!S.clients.length) { location.hash = '#clientes'; return toast('Cadastre um cliente primeiro.'); }
   const isNew = !post;
@@ -523,6 +524,7 @@ function openPost(post = null, opts = {}) {
     if (st === 'failed') foot.push(B('Voltar p/ produção', 'ghost', () => action('to_production', 'Voltou para produção.')), B('Tentar de novo', 'primary', () => action('retry', 'Na fila de novo. Sai em até 5 minutos.')));
     if (prodClient(post.client_id) && st === 'approved') { foot = foot.filter((b) => b.textContent !== 'Salvar'); foot.push(B('Salvar', '', () => save('save')), B('Marcar como entregue', 'primary', () => action('deliver', 'Entregue ao cliente.'))); }
     else if (['approved', 'failed', 'pending_approval', 'changes_requested'].includes(st)) foot.splice(2, 0, confirmButton('Já postei manualmente', 'Confirmar: já está no Instagram', () => action('mark_published', 'Marcado como publicado.'), 'btn ghost'));
+    if (canAssist(post)) foot.splice(2, 0, B('📲 Postar agora', 'ghost', () => { close(); openAssist(post); }));
   }
   if (!can('enviar')) foot = foot.filter((b) => !(b instanceof HTMLButtonElement) || !/Enviar para aprovação|Aprovar|reenviar|Tentar de novo/.test(b.textContent));
   if (!can('apagar') && foot[0]?.textContent === 'Apagar') foot = foot.slice(1);

@@ -122,7 +122,7 @@ test('planejamento com IA: prévia do mês e criação das ideias no Fluxo', asy
   assert.deepEqual(plan.items[0].hashtags, ['#diadosanimais', '#pet']);
   const prompt = S.fakes.ig.aiCalls.at(-1).messages[0].content[0].text;
   assert.match(prompt, /Nicho: Pet/);
-  assert.match(prompt, /8 posts de feed/);
+  assert.match(prompt, /[78] posts de feed/); // 7 quando o post do dia 03 já conta na cota do mês corrente
   assert.match(prompt, /foco em banho e tosa/);
   assert.match(prompt, /Black Friday/);
   const rows = (await call('/api/pasta?r=plan', { method: 'POST', body: { client_id: c.id, create: true, items: plan.items } })).data;

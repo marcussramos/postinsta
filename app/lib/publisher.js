@@ -8,7 +8,13 @@ import { logEvent } from './events.js';
 import { notify } from './push.js';
 import { signMedia } from './media.js';
 import { productionList } from './production.js';
-import { isDeadToken, markDead } from './ighealth.js';
+import { isDeadToken, markDead, healthMap } from './ighealth.js';
+
+// Publicação assistida: cliente sem Instagram conectado (ou com a conexão caída) não vira "Falhou".
+// Na hora marcada o post continua aprovado e a equipe recebe um aviso no celular que abre a tela
+// "Postar agora" (legenda copiada, mídias prontas, botão "Postei"). O aviso sai uma vez por post.
+export const ASSIST_MSG = 'O Instagram deste cliente não está conectado: avisamos a equipe para postar à mão com a legenda pronta.';
+const ASSIST_WINDOW_MS = 48 * 3600e3; // posts mais antigos que isso não geram aviso (aparecem em "Ficou para trás" no Início)
 
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 30 * 60 * 1000;     // container processando há mais de 30 min = falha
@@ -18,7 +24,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), wait = sleep } = {}) {
   const started = now();
   const timeLeft = () => budgetMs - (now() - started);
-  const log = { refreshed: [], published: [], failed: [], retrying: [], waiting: [] };
+  const log = { refreshed: [], published: [], failed: [], retrying: [], waiting: [], assisted: [] };
 
   const clients = await db.select('clients', { select: 'id,name,ig_user_id,ig_username,ig_token,ig_token_expires_at,ig_connected_at', ig_token: 'not.is.null' });
   const byId = new Map(clients.map((c) => [c.id, c]));
@@ -48,11 +54,19 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
   // 3) Aprovados com horário vencido.
   // clientes "só produção" publicam por conta própria: o app nunca posta por eles
   const prod = await productionList();
+  // sem token ou com a conexão marcada como caída: publicação assistida (a equipe posta)
+  const health = await healthMap().catch(() => ({ clients: {} }));
+  const allClients = await db.select('clients', { select: 'id,name,ig_token' }).catch(() => []);
+  const assisted = allClients.filter((c) => !prod.includes(c.id) && (!c.ig_token || health.clients?.[c.id]?.ok === false));
+  const skip = [...prod, ...assisted.map((c) => c.id)];
   const due = await db.select('posts', {
     select: '*', status: 'eq.approved', scheduled_at: `lte.${new Date(now()).toISOString()}`,
-    ...(prod.length ? { client_id: `not.in.(${prod.join(',')})` } : {}),
+    ...(skip.length ? { client_id: `not.in.(${skip.join(',')})` } : {}),
     order: 'scheduled_at.asc', limit: 15,
   });
+  if (assisted.length) {
+    try { await assistDue(assisted, now, log); } catch (e) { log.assist_error = e.message; }
+  }
   for (const p of due) {
     if (timeLeft() < 10000) break;
     const c = byId.get(p.client_id);
@@ -88,6 +102,28 @@ export async function runPublisher({ budgetMs = 45000, now = () => Date.now(), w
     log.state_error = e.message;
   }
   return log;
+}
+
+async function assistDue(assisted, now, log) {
+  const names = new Map(assisted.map((c) => [c.id, c.name]));
+  const posts = await db.select('posts', {
+    select: 'id,client_id,title,caption,media_type,scheduled_at,last_error', status: 'eq.approved',
+    client_id: `in.(${[...names.keys()].join(',')})`,
+    and: `(scheduled_at.lte.${new Date(now()).toISOString()},scheduled_at.gte.${new Date(now() - ASSIST_WINDOW_MS).toISOString()})`,
+    order: 'scheduled_at.asc', limit: 30,
+  });
+  for (const p of posts.filter((x) => x.last_error !== ASSIST_MSG)) {
+    // marca primeiro (evita aviso em dobro se duas rodadas se cruzarem)
+    const [mine] = await db.update('posts', { id: `eq.${p.id}`, status: 'eq.approved' }, { last_error: ASSIST_MSG });
+    if (!mine) continue;
+    const kind = { REELS: 'Reels', CAROUSEL: 'Carrossel', STORY: 'Story', IMAGE: 'Foto' }[p.media_type] || 'Post';
+    await notify({
+      title: `📲 Hora de postar: ${names.get(p.client_id) || 'cliente'}`,
+      body: `${kind}${p.title ? ` · ${p.title}` : ''}. Toque para abrir com a legenda pronta e as mídias.`.slice(0, 160),
+      url: `/equipe#postar/${p.id}`, tag: `assist-${p.id}`,
+    }).catch(() => 0);
+    log.assisted.push({ id: p.id, client: names.get(p.client_id) });
+  }
 }
 
 async function finish(p, c, log, now) {

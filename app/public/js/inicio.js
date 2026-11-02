@@ -15,6 +15,7 @@ import { approvalReminders, billingMonths, chargesCard, ensureSettings, fmtDay, 
 import { openPost } from './post.js';
 import { openLead, openProposal } from './vendas.js';
 import { openConnectShare, connectionDead } from './clientes.js';
+import { behindCard, canAssist, openAssist } from './postar.js';
 
 // ───────────────────────── INÍCIO: a "entrada" do MC DIGITAL (clique na logo)
 function viewHome() {
@@ -140,6 +141,7 @@ function viewHome() {
   return [hero, pushPrompt(),
     todays.length ? homeHead('Hoje', `${todays.length} post${todays.length > 1 ? 's' : ''} marcado${todays.length > 1 ? 's' : ''} para hoje`) : null,
     todays.length ? todayStrip(todays) : null,
+    behindCard(),
     homeHead('Resolva agora', 'O que trava publicação, cliente esperando e cobrança'),
     homeRow([nowCard], [approvalReminders(), requestsInbox(), chargesCard()]),
     homeHead('Saúde dos clientes', 'Conexão, entregas do mês, aprovações e mensalidade'),
@@ -158,7 +160,7 @@ function postFate(p) {
   if (p.status === 'failed') return ['bad', 'Não publicou'];
   if (p.status === 'approved') {
     if (c.production_only) return ['', 'Entregar ao cliente'];
-    if (!c.ig_connected || connectionDead(c)) return ['warn', 'Postar à mão'];
+    if (!c.ig_connected || connectionDead(c)) return ['warn', new Date(p.scheduled_at) < Date.now() ? '📲 Postar agora' : 'Postar à mão'];
     return ['ok', 'Sai sozinho'];
   }
   if (p.status === 'pending_approval') return ['accent', 'Falta aprovar'];
@@ -174,7 +176,7 @@ function todayStrip(list) {
   return h('div', { class: 'today-strip' }, ...list.map((p) => {
     const [tone, label] = postFate(p);
     const src = coverUrl(p);
-    return h('button', { class: 'today-card', type: 'button', onclick: () => openPost(p) },
+    return h('button', { class: 'today-card', type: 'button', onclick: () => (canAssist(p) ? openAssist(p) : openPost(p)) },
       src ? h('img', { class: 'today-cover', src, alt: '', loading: 'lazy' }) : h('span', { class: 'today-cover today-empty', 'aria-hidden': 'true' }, p.title || 'Sem arte'),
       h('span', { class: 'today-info' },
         h('span', { class: 'today-top' }, h('b', {}, clientName(p.client_id)), h('span', { class: 'today-time' }, fmtTime(p.scheduled_at, S.tz))),
