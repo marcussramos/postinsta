@@ -53,10 +53,10 @@ export function brandColors(list) {
 
 // ───────────────────────── fontes (Google) sob demanda
 const loaded = new Set();
-const FAMILY_AXES = { 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
+const FAMILY_AXES = { 'Anton': '', 'Yellowtail': '', 'Allura': '', 'Great Vibes': '', 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
 async function loadFonts(names) {
   for (const n of names.filter((x) => x && !loaded.has(x))) {
-    const axes = FAMILY_AXES[n] || (SCRIPTS.includes(n) ? '' : 'ital,wght@0,400;0,700;1,400');
+    const axes = n in FAMILY_AXES ? FAMILY_AXES[n] : (SCRIPTS.includes(n) ? '' : 'ital,wght@0,400;0,700;1,400');
     await new Promise((ok) => {
       const l = document.createElement('link');
       l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${n.replace(/ /g, '+')}${axes ? `:${axes}` : ''}&display=swap`;
@@ -349,7 +349,98 @@ const IM = {
   },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM] };
+
+// ───────────────────────── direção 4: PÔSTER (referência: capas cinematográficas de perfis de design)
+// Receita: imagem em tela cheia escurecida + textura; palavra manuscrita grande e inclinada (chamada);
+// título em caixa alta condensada, empilhado e centralizado; palavra-chave em caixa de cor; brilhos ✦;
+// etiqueta com o apoio; microtexto. Não copia nenhuma arte: aplica a estrutura com a marca do cliente.
+const PO = {
+  display: 'Anton',
+  title: (s) => `400 ${s}px "Anton"`,
+  bg(ctx, B, photo, alpha = 1) {
+    ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    if (photo) { ctx.globalAlpha = alpha; cover(ctx, photo, 0, 0, W, H, 0.3); ctx.globalAlpha = 1; }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgba(B.deep, photo ? 0.15 : 0)); g.addColorStop(0.45, rgba(B.deep, photo ? 0.35 : 0)); g.addColorStop(1, rgba(B.deep, photo ? 0.92 : 0));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.85);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.45)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  },
+  hi: (B) => (contrast(B.deco, '#FFFFFF') >= 2.2 ? B.deco : B.emph === B.ink ? '#C8102E' : B.emph),
+  micro(ctx, F, text, y) {
+    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = `600 18px "${F.body}"`;
+    const w = spaced(ctx, text.toUpperCase(), W / 2, y, 6, 'center');
+    ctx.fillRect(W / 2 - w / 2 - 90, y - 7, 60, 2); ctx.fillRect(W / 2 + w / 2 + 30, y - 7, 60, 2);
+    ctx.restore();
+  },
+  sparkle(ctx, x, y, r, color) {
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.quadraticCurveTo(x, y, x, y + r); ctx.quadraticCurveTo(x, y, x - r, y); ctx.quadraticCurveTo(x, y, x, y - r);
+    ctx.fill(); ctx.restore();
+  },
+  stack(ctx, d, text, top, maxH, from) { // título condensado, centralizado, palavra-chave em caixa de cor
+    const { B } = d;
+    const tf = fitRich(ctx, tokens(String(text).toUpperCase(), true), PO.title, W - 200, maxH, from, 70, 0.98);
+    const y = drawRich(ctx, tf, W / 2, top + tf.size * 0.86, PO.title, '#FFFFFF', '#FFFFFF', 0.98, { align: 'center', mark: PO.hi(B) });
+    const lw = Math.max(...tf.lines.map((l) => l.reduce((a, t) => a + t.width, 0) + (l.length - 1) * tf.space));
+    PO.sparkle(ctx, W / 2 - lw / 2 - 46, top + tf.size * 0.35, 20, '#FFFFFF');
+    PO.sparkle(ctx, W / 2 + lw / 2 + 46, y - tf.size * 0.9, 14, '#FFFFFF');
+    return y;
+  },
+  script(ctx, d, text, y, size = 92) {
+    if (!text) return y;
+    const fam = d.F.script || 'Yellowtail';
+    ctx.save(); ctx.translate(W / 2, y); ctx.rotate(-0.06);
+    ctx.font = `400 ${size}px "${fam}"`; ctx.fillStyle = lum(d.B.deco) > 0.2 ? d.B.deco : '#F4E6D0';
+    const w = ctx.measureText(text).width; ctx.fillText(text, -w / 2, 0); ctx.restore();
+    return y + size * 0.35;
+  },
+  label(ctx, d, text, y) {
+    if (!text) return y;
+    const f = fitRich(ctx, tokens(text), (s, em) => `${em ? 800 : 500} ${s}px "${d.F.body}"`, W - 320, 130, 36, 26, 1.25);
+    const lw = Math.max(...f.lines.map((l) => l.reduce((a, t) => a + t.width, 0) + (l.length - 1) * f.space));
+    const h = f.lines.length * f.size * 1.25 + 40;
+    ctx.fillStyle = rgba(PO.hi(d.B), 0.92); ctx.beginPath(); rounded(ctx, W / 2 - lw / 2 - 34, y, lw + 68, h, 14); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.stroke();
+    drawRich(ctx, f, W / 2, y + 20 + f.size * 0.85, (s, em) => `${em ? 800 : 500} ${s}px "${d.F.body}"`, '#FFFFFF', '#FFFFFF', 1.25, { align: 'center' });
+    return y + h;
+  },
+  cover(ctx, d) {
+    PO.bg(ctx, d.B, d.photo);
+    PO.micro(ctx, d.F, d.handle || '', 92);
+    const top = H * 0.5;
+    let y = PO.script(ctx, d, d.eyebrow ? d.eyebrow.toLowerCase() : '', top - 10);
+    y = PO.stack(ctx, d, d.hook, y + 10, 360, 190);
+    y = PO.label(ctx, d, d.sub, y + 34);
+    if (d.total > 1) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `700 22px "${d.F.body}"`; spaced(ctx, 'ARRASTA PRO LADO  →', W / 2, H - 70, 6, 'center'); }
+    grain(ctx, 0.12);
+  },
+  inner(ctx, d) {
+    PO.bg(ctx, d.B, d.photo, 0.55);
+    PO.micro(ctx, d.F, d.handle || '', 92);
+    // etiqueta "PARTE 02" inclinada
+    ctx.save(); ctx.translate(W / 2 + 230, 330); ctx.rotate(-0.08);
+    pill(ctx, `PARTE ${String(d.n).padStart(2, '0')}`, -110, -36, `400 40px "Anton"`, PO.hi(d.B), '#FFFFFF', 30, 72); ctx.restore();
+    let y = PO.stack(ctx, d, d.title, 400, 420, 170);
+    y = PO.label(ctx, d, d.text, y + 50);
+    footer(ctx, d.B, d.F, '', d.n, d.total, '#FFFFFF', 0.7);
+    grain(ctx, 0.12);
+  },
+  cta(ctx, d) {
+    PO.bg(ctx, d.B, d.photo, 0.7);
+    PO.micro(ctx, d.F, d.handle || '', 92);
+    let y = PO.script(ctx, d, 'antes de ir', H * 0.36, 84);
+    y = PO.stack(ctx, d, d.title, y + 10, 400, 170);
+    y = PO.label(ctx, d, d.text, y + 34);
+    const label = d.button || 'SALVE ESTE POST';
+    ctx.font = `400 40px "Anton"`; const bw = ctx.measureText(label).width + 80;
+    pill(ctx, label, W / 2 - bw / 2, y + 50, `400 40px "Anton"`, '#FFFFFF', d.B.deep, 40, 88);
+    grain(ctx, 0.12);
+  },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -369,7 +460,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const B = brandColors(client?.brand_kit?.colors);
   const F = brandFonts(client?.brand_kit?.fonts);
   const R = (STYLES[style] || STYLES.editorial)[1];
-  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null])]);
+  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, R === PO ? 'Anton' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
   const pages = piece.format === 'IMAGE'
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
