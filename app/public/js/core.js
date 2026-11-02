@@ -18,6 +18,7 @@ import { viewHome } from './inicio.js';
 import { approvalReminders, requestsInbox, todayLocal, viewFolder } from './pasta.js';
 import { openPost } from './post.js';
 import { viewProposals, viewSales } from './vendas.js';
+import { openAssistById, loadBehind } from './postar.js';
 
 const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
 const S = {
@@ -30,6 +31,7 @@ function savePref(key, value) { try { localStorage.setItem(key, value); } catch 
 function viewFromHash() {
   const v = location.hash.slice(1);
   if (v.startsWith('pasta/')) { S.folderId = v.slice(6); return 'pasta'; }
+  if (v.startsWith('postar/')) { S.assistId = v.slice(7); return 'inicio'; } // aviso "Hora de postar" no celular
   return VIEWS.includes(v) ? v : 'inicio';
 }
 const root = document.getElementById('app');
@@ -66,9 +68,16 @@ async function loadAll() {
     toast(e.message, true);
   }
   render();
+  maybeAssist();
 }
 
-window.addEventListener('hashchange', () => { S.view = viewFromHash(); render(); });
+function maybeAssist() {
+  if (!S.assistId || !S.staff) return;
+  const id = S.assistId; S.assistId = null;
+  history.replaceState(null, '', `${location.pathname}#inicio`);
+  openAssistById(id);
+}
+window.addEventListener('hashchange', () => { S.view = viewFromHash(); render(); maybeAssist(); });
 
 // Mantém tudo em dia com as decisões dos clientes: atualiza ao voltar para a aba e a cada minuto.
 async function refresh() {
@@ -89,11 +98,12 @@ setInterval(refresh, 60_000);
 async function loadExtras() {
   const sales = can('vendas');
   const [deliv, reqs, proposals, leads] = await Promise.all([
+    loadBehind().then(() => null),
     api(`/api/pasta?r=deliveries&month=${todayLocal().slice(0, 7)}`).catch(() => null),
     api('/api/pasta?r=requests&open=1').catch(() => null),
     sales ? api('/api/pasta?r=proposals').catch(() => null) : null,
     sales ? api('/api/pasta?r=leads').catch(() => null) : null,
-  ]);
+  ]).then(([, ...rest]) => rest);
   S.deliv = deliv || {}; S.requests = reqs || [];
   if (sales) Object.assign(S, { proposals, leads });
 }

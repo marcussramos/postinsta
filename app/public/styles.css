@@ -1112,3 +1112,32 @@ input:not([type]), input[type=number], input[type=month], input[type=text], inpu
 @media (max-width: 640px) { .today-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .today-cover { max-height: 200px; } .today-info { padding: 10px; } }
 .rem-row { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
 .rem-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 30px; font-size: 14px; }
+
+/* ── Publicação assistida ("Postar agora") e "Ficou para trás" */
+.assist-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.assist-head b { font-size: 16px; }
+.assist-title { margin: 0; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; font-size: 14px; }
+.assist-media { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+.assist-media img, .assist-media video { flex: 0 0 auto; width: min(72%, 260px); aspect-ratio: 4 / 5; object-fit: cover; border-radius: 14px; background: var(--surface-2); scroll-snap-align: start; }
+.assist-media:has(> :only-child) img, .assist-media:has(> :only-child) video { width: 100%; max-width: 340px; }
+.assist-cap { background: var(--surface-2); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; }
+.assist-cap-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.assist-cap pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 13.5px; line-height: 1.5; max-height: 220px; overflow: auto; }
+.assist-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 13.5px; }
+.assist-status { margin: 0; font-size: 13px; }
+.assist-share { width: 100%; min-height: 52px; font-size: 15px; }
+.assist-dl { display: flex; flex-wrap: wrap; gap: 6px; }
+.assist-dl:empty { display: none; }
+.behind-card { border-left: 4px solid var(--s-fail); }
+.behind-list { display: grid; gap: 8px; }
+.behind-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; background: var(--surface-2); }
+.behind-thumb { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; display: grid; place-items: center; background: var(--surface); }
+.behind-main { display: grid; min-width: 0; gap: 2px; }
+.behind-main b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.behind-main .muted { font-size: 12.5px; }
+.behind-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .behind-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .behind-thumb { width: 44px; height: 44px; }
+  .behind-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}

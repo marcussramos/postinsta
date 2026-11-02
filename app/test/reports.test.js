@@ -72,7 +72,7 @@ test('mês seguinte compara com o anterior; atualizar mantém link e comentário
   assert.equal(again.summary.reach, 5000);
   const oct = (await call('/api/pasta?r=reports', { method: 'POST', body: { client_id: client.id, ref_month: '2026-10' } })).data;
   assert.equal(oct.summary.posts, 1);
-  assert.equal(oct.partial, true);
+  assert.equal(oct.partial, Date.now() < Date.parse('2026-11-01T04:00:00Z'), 'parcial só enquanto outubro não fechou');
   const pub = (await call(`/api/pasta?r=report&t=${oct.share_url.split('t=')[1]}`, { auth: false })).data;
   assert.equal(pub.data.previous.reach, 5000);
   assert.equal((await call('/api/pasta?r=reports', { method: 'POST', body: { client_id: client.id, ref_month: '2030-01' } })).status, 400);
