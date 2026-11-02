@@ -7,7 +7,8 @@ import { h, api, toast, copyText, zonedToISO } from '/shared.js';
 import { TEMPLATES, DURATIONS, checkScript } from '/roteiro.js';
 import { S, can, clientById, render } from './core.js';
 import { openPost, upsert } from './post.js';
-import { renderPiece, brandFonts } from './artes.js';
+import { renderPiece, brandFonts, loadPhotos } from './artes.js';
+import { MODELOS, MODELO_PADRAO } from './modelos.js';
 
 const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels' };
 const GOALS = { educar: 'Educar', engajar: 'Engajar', autoridade: 'Autoridade', vender: 'Vender' };
@@ -72,7 +73,7 @@ async function generate() {
   s.busy = true; render();
   try {
     s.res = await api('/api/pasta?r=studio', { method: 'POST', body: { client_id: s.client, format: s.format, goal: s.goal, topic: s.topic, slides: s.slides, duration: s.duration, template: s.template, extra: s.extra } });
-    s.res.client_id = s.client; s.hook = 0; s.arts = null;
+    s.res.client_id = s.client; s.hook = 0; s.arts = null; if (s.artPhotosClient !== s.client) { s.artPhotos = null; s.artPhotosClient = null; }
   } catch (e) { toast(e.message, true); }
   s.busy = false; render();
 }
@@ -163,6 +164,9 @@ function checksCard(s, c) {
 
 // ───────────────────────── saídas: Canva e Fluxo
 function canvaText(s, p) {
+  return canvaText0(s, p).replace(/\*/g, '');
+}
+function canvaText0(s, p) {
   const hook = p.hooks[s.hook] || '';
   if (p.format === 'CAROUSEL') return p.slides.map((sl, i) => `LÂMINA ${i + 1}${i === 0 ? ' (CAPA)' : i === p.slides.length - 1 ? ' (CTA)' : ''}\n${[i === 0 ? hook : sl.title, sl.text].filter(Boolean).join('\n')}`).join('\n\n');
   if (p.format === 'IMAGE') return [p.headline || hook, p.support].filter(Boolean).join('\n');
@@ -183,7 +187,7 @@ function canvaFields(s, p) {
   return { capa: p.cover || hook, gancho: hook, cta: p.cta || '' };
 }
 function downloadCsv(s, p, c) {
-  const f = canvaFields(s, p);
+  const f = Object.fromEntries(Object.entries(canvaFields(s, p)).map(([k, v]) => [k, String(v ?? '').replace(/\*/g, '')]));
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = `﻿${Object.keys(f).map(q).join(',')}\n${Object.values(f).map(q).join(',')}\n`;
   const a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: `${(c.name || 'cliente').replace(/\s+/g, '-').toLowerCase()}-${p.format.toLowerCase()}.csv` });
@@ -213,36 +217,55 @@ function actionsCard(s, p, c) {
 function artsCard(s, p, c) {
   const fonts = brandFonts(c.brand_kit?.fonts);
   const hasKit = Array.isArray(c.brand_kit?.colors) && c.brand_kit.colors.length >= 2;
-  s.artStyle ||= 'claro';
-  const photoIn = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const img = new Image(); img.src = URL.createObjectURL(f);
-    await img.decode().catch(() => null);
-    s.artPhoto = img; s.artPhotoName = f.name; s.artStyle = 'foto'; await makeArts(s, p, c);
+  if (!MODELOS.some((m) => m.key === s.artStyle)) s.artStyle = MODELO_PADRAO;
+  const photoIn = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: async (e) => {
+    const files = [...(e.target.files || [])].slice(0, 10); if (!files.length) return;
+    s.artPhotos = (await Promise.all(files.map(async (f) => { const img = new Image(); img.src = URL.createObjectURL(f); await img.decode().catch(() => null); return img; }))).filter((i) => i.width);
+    s.artPhotosFrom = 'escolhidas'; await makeArts(s, p, c);
   } });
-  const styles = { claro: 'Claro', escuro: 'Escuro', foto: 'Foto na capa' };
-  const styleSeg = h('div', { class: 'seg studio-seg', role: 'group', 'aria-label': 'Estilo das artes' }, ...Object.entries(styles).map(([k, v]) =>
-    h('button', { type: 'button', class: 'seg-btn', 'aria-pressed': String(s.artStyle === k), onclick: async () => {
-      if (k === 'foto' && !s.artPhoto) return photoIn.click();
-      s.artStyle = k; await makeArts(s, p, c);
-    } }, v)));
-  const gen = h('button', { class: 'btn primary', type: 'button', disabled: s.artBusy, onclick: () => makeArts(s, p, c) }, s.artBusy ? 'Montando…' : s.arts?.length ? '↻ Refazer com o texto atual' : '🎨 Gerar artes');
+  const cards = h('div', { class: 'studio-models' }, ...MODELOS.map((m) => h('button', {
+    type: 'button', class: 'studio-model', 'aria-pressed': String(s.artStyle === m.key), title: m.receita,
+    onclick: async () => { s.artStyle = m.key; await makeArts(s, p, c); },
+  }, h('b', {}, m.nome), h('span', {}, m.serve), h('i', {}, m.origem === 'MC DIGITAL' ? 'MC DIGITAL' : `ref. ${m.origem}`))));
+  const eyebrow = h('input', { value: s.artEyebrow ?? '', placeholder: 'Chamada (opcional): "coisas que", "guia", "passo a passo"', 'aria-label': 'Chamada da capa', oninput: (e) => { s.artEyebrow = e.target.value; } });
+  const gen = h('button', { class: 'btn primary', type: 'button', disabled: s.artBusy, onclick: () => makeArts(s, p, c) }, s.artBusy ? 'Montando…' : s.arts?.length ? '↻ Refazer' : '🎨 Gerar artes');
   const grid = s.arts?.length ? h('div', { class: 'studio-arts' }, ...s.arts.map((a, i) => h('a', { class: 'studio-art', href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg`, title: 'Baixar' },
     h('img', { src: a.url, alt: `Lâmina ${i + 1}` }), h('span', {}, `${i + 1} ⬇`)))) : null;
+  const nPh = s.artPhotos?.length || 0;
   return h('section', { class: 'card' },
     h('div', { class: 'home-card-head' }, h('h3', {}, '✦ Artes prontas'), h('span', { class: 'muted' }, `${fonts.title}${fonts.body !== fonts.title ? ` + ${fonts.body}` : ''} · ${hasKit ? 'cores da marca' : 'cores MC DIGITAL'}`)),
     !hasKit ? h('p', { class: 'studio-voice-warn' }, 'Este cliente não tem cores cadastradas: as artes saem nas cores da MC DIGITAL. Cadastre as cores e fontes na pasta do cliente → Marca.') : null,
-    h('div', { class: 'studio-art-tools' }, styleSeg, photoIn, s.artStyle === 'foto' ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => photoIn.click() }, s.artPhotoName ? 'Trocar foto' : 'Escolher foto') : null, gen),
+    h('span', { class: 'label' }, 'Modelo'), cards,
+    h('div', { class: 'studio-art-tools' }, eyebrow, photoIn,
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => photoIn.click() }, nPh && s.artPhotosFrom === 'escolhidas' ? `${nPh} foto(s) escolhida(s) · trocar` : 'Escolher fotos'),
+      gen),
+    s.arts?.length && !nPh ? h('p', { class: 'studio-voice-warn' }, 'Não achei fotos deste cliente no banco de mídia: as artes saíram só com tipografia. Suba fotos dele no banco (pasta → Banco de mídia) ou toque em "Escolher fotos".') : null,
     grid,
     s.arts?.length ? h('div', { class: 'actions' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => s.arts.forEach((a, i) => setTimeout(() => { const l = h('a', { href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg` }); document.body.append(l); l.click(); l.remove(); }, i * 250)) }, '⬇ Baixar todas'),
-      h('span', { class: 'muted', style: 'font-size:12.5px' }, 'Mudou o texto acima? Toque em Refazer.')) : null);
+      h('span', { class: 'muted', style: 'font-size:12.5px' }, 'Use *asteriscos* no texto para destacar uma palavra. Mudou algo? Toque em Refazer.')) : null);
+}
+
+// fotos do cliente: banco de mídia + posts aprovados/publicados (carrega uma vez por cliente)
+async function clientPhotos(s, c) {
+  if (s.artPhotosFrom === 'escolhidas' && s.artPhotosClient === c.id) return s.artPhotos;
+  if (s.artPhotosClient === c.id && s.artPhotos) return s.artPhotos;
+  const [bank, posts] = await Promise.all([
+    api(`/api/pasta?r=media&client=${c.id}`).catch(() => []),
+    api(`/api/posts?client=${c.id}&status=published,approved,pending_approval`).catch(() => []),
+  ]);
+  const urls = [...new Set([...bank.map((b) => b.url), ...posts.flatMap((x) => [x.image_url, ...(x.media || []).filter((m) => m.kind !== 'video').map((m) => m.url)])].filter(Boolean))];
+  s.artPhotos = await loadPhotos(urls, 8); s.artPhotosClient = c.id; s.artPhotosFrom = 'banco';
+  return s.artPhotos;
 }
 
 async function makeArts(s, p, c) {
   s.artBusy = true; render();
   try {
-    const { arts } = await renderPiece({ piece: p, hook: p.hooks[s.hook] || '', client: c, style: s.artStyle, photo: s.artPhoto });
+    if (s.artPhotosClient !== c.id) s.artPhotosFrom = null;
+    const photos = await clientPhotos(s, c);
+    s.artPhotosClient = c.id;
+    const { arts } = await renderPiece({ piece: p, hook: p.hooks[s.hook] || '', client: c, style: s.artStyle, photos, eyebrow: s.artEyebrow || '' });
     (s.arts || []).forEach((a) => URL.revokeObjectURL(a.url));
     s.arts = arts;
   } catch (e) { toast(`Não deu para montar as artes: ${e.message}`, true); }
@@ -252,9 +275,9 @@ async function makeArts(s, p, c) {
 async function createPost(s, p, c) {
   const hook = p.hooks[s.hook] || '';
   const goal = GOALS[s.res.input?.goal] || '';
-  const caption = [p.caption, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n').slice(0, 2200);
-  const notes = [`🎨 Estúdio · ${FORMATS[p.format]}${goal ? ` · ${goal}` : ''}`, `Gancho: ${hook}`, p.format === 'REELS' ? `CTA: ${p.cta || ''}` : canvaText(s, p)].join('\n\n').slice(0, 4000);
-  const body = { client_id: c.id || s.client, title: (s.res.input?.topic || hook).slice(0, 140), caption, notes, media_type: p.format, stage: 'draft' };
+  const caption = [String(p.caption || '').replace(/\*/g, ''), (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n').slice(0, 2200);
+  const notes = [`🎨 Estúdio · ${FORMATS[p.format]}${goal ? ` · ${goal}` : ''}`, `Gancho: ${hook.replace(/\*/g, '')}`, p.format === 'REELS' ? `CTA: ${p.cta || ''}` : canvaText(s, p)].join('\n\n').slice(0, 4000);
+  const body = { client_id: c.id || s.client, title: (s.res.input?.topic || hook).replace(/\*/g, '').slice(0, 140), caption, notes, media_type: p.format, stage: 'draft' };
   if (s.date) body.scheduled_at = zonedToISO(s.date, s.time || '19:00', S.tz);
   if (p.format !== 'REELS' && s.arts?.length) { // sobe as artes geradas e já anexa ao post
     const ups = [];

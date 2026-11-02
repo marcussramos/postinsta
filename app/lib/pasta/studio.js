@@ -110,6 +110,7 @@ ${b.extra ? `Pedido extra: ${b.extra}\n` : ''}
 Formato: ${shape}
 ${samples.length ? `\nCOMO ESTE CLIENTE ESCREVE — legendas reais já aprovadas. Imite a voz: pessoa do discurso (eu/nós/a marca), vocabulário, tamanho das frases, uso de emojis, nível de formalidade e jeito de chamar o público. O texto novo precisa parecer escrito pela mesma pessoa:\n${samples.map((t, i) => `--- exemplo ${i + 1} ---\n${t}`).join('\n')}\n---\n` : ''}${worked.length ? `\nGanchos deste cliente que já funcionaram (referência de estilo, não copie):\n${worked.map((x) => `- "${x.hook}" (${x.views != null ? `${x.views} visualizações` : `${x.reach} de alcance`})`).join('\n')}\n` : ''}${rules ? `\nREGRAS OBRIGATÓRIAS — ${rules.name} (${rules.summary}):\n${rules.rules.map((r) => `- ${r}`).join('\n')}\nSe o tema pedir algo proibido, adapte para uma versão permitida e explique em "warnings".\n` : ''}
 Como escrever:
+- DESTAQUE: nos ganchos e nos "title" das lâminas, marque com *asteriscos* a palavra (ou duas) mais forte, a que deve aparecer em destaque na arte. Ex.: "Seu sorriso *amarelou?*". Só uma marcação por frase; nunca na legenda.
 - 3 GANCHOS bem diferentes (até 12 palavras cada): um de curiosidade, um de dor/problema do público, um direto ou contraintuitivo. É a frase que para o scroll.
 - "cta": uma frase de chamada clara e permitida, coerente com o objetivo.
 - "caption": legenda de 3 a 6 parágrafos curtos, a 1ª linha forte (não repita o gancho igual), termina com o CTA. Sem hashtags dentro dela.
