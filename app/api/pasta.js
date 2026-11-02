@@ -16,6 +16,7 @@ import { onboardingRoute, onbcfgRoute } from '../lib/pasta/onboarding.js';
 import { leadsRoute, diagnosticoRoute, diagcfgRoute } from '../lib/pasta/leads.js';
 import { reviewRoute } from '../lib/pasta/review.js';
 import { scriptRoute } from '../lib/pasta/script.js';
+import { studioRoute } from '../lib/pasta/studio.js';
 import { igDeauthRoute, igDeleteRoute } from '../lib/pasta/meta.js';
 import { send } from '../lib/http.js';
 
@@ -24,7 +25,7 @@ const ROUTES = {
   files, payments, settings, contract, reports, report: publicReport, portal, users, proposals, proposal: publicProposal, pix, asaas: asaasWebhook,
   deliveries: deliveriesRoute, history: historyRoute, brand: brandRoute, requests: requestsRoute, feed: feedRoute, besttime: besttimeRoute,
   plan: planRoute, snippets: snippetsRoute, media: mediaRoute, duplicate: duplicateRoute,
-  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute, portaledit: portalEditRoute, reminders: remindersRoute,
+  leads: leadsRoute, diagnostico: diagnosticoRoute, diagcfg: diagcfgRoute, review: reviewRoute, script: scriptRoute, studio: studioRoute, igdeauth: igDeauthRoute, igdelete: igDeleteRoute, onboarding: onboardingRoute, onbcfg: onbcfgRoute, backup: backupRoute, push: pushRoute, security: securityRoute, mailcfg: mailcfgRoute, nf: nfRoute, privacy: privacyRoute, portaledit: portalEditRoute, reminders: remindersRoute,
 };
 
 export default function handler(req, res) {
