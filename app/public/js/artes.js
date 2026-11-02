@@ -824,9 +824,10 @@ const NO = {
     if (photo) cover(ctx, photo, 0, 0, W, ph, 0.3);
     const ink = photo ? B.ink : '#FFFFFF';
     const top = photo ? ph + 70 : 260;
-    const tf = fitRich(ctx, tokens(text), (s2, em) => `800 ${s2}px "${sans}"`, W - 160, photo ? H - top - 230 : 600, photo ? 76 : 110, 46, 1.08);
-    let y = drawRich(ctx, tf, 80, top + tf.size * 0.85, (s2) => `800 ${s2}px "${sans}"`, ink, photo ? B.emph : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF'), 1.08);
-    if (sub) y = paragraph(ctx, sub, 80, y + 6, W - 160, H - y - 190, sans, 34, 26, rgba(ink, 0.75), 1.38, 400);
+    const em = photo ? (contrast(B.deco, NO.block(B, n)) >= 2 ? B.deco : B.emph) : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF');
+    const tf = fitRich(ctx, tokens(text, true), (s2) => `800 ${s2}px "${sans}"`, W - 160, photo ? H - top - 250 : 600, photo ? 96 : 120, 50, 1.06);
+    let y = drawRich(ctx, tf, 80, top + tf.size * 0.85, (s2) => `800 ${s2}px "${sans}"`, ink, em, 1.06);
+    if (sub) y = paragraph(ctx, sub, 80, y + 10, W - 160, H - y - 190, sans, 40, 30, rgba(ink, 0.75), 1.36, 500);
     ctx.fillStyle = rgba(ink, 0.35); ctx.fillRect(80, H - 120, W - 160, 2);
     ctx.fillStyle = rgba(ink, 0.7); ctx.font = `600 20px "${sans}"`;
     if (d.handle) spaced(ctx, d.handle.toUpperCase(), 80, H - 76, 3);
