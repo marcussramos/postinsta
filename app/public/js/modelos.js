@@ -1,4 +1,5 @@
 // MC DIGITAL — Biblioteca de modelos de carrossel do Estúdio.
+// "origem" é só registro interno (não aparece no app).
 // Cada modelo é uma RECEITA de layout (estrutura, hierarquia, elementos), aprendida de perfis de referência
 // e aplicada com as cores, fontes e fotos de cada cliente. Nunca copia a arte, os personagens ou a identidade
 // de quem serviu de referência. Para incluir um modelo novo: estude o perfil, descreva a receita aqui e

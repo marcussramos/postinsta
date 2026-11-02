@@ -226,7 +226,7 @@ function artsCard(s, p, c) {
   const cards = h('div', { class: 'studio-models' }, ...MODELOS.map((m) => h('button', {
     type: 'button', class: 'studio-model', 'aria-pressed': String(s.artStyle === m.key), title: m.receita,
     onclick: async () => { s.artStyle = m.key; await makeArts(s, p, c); },
-  }, h('b', {}, m.nome), h('span', {}, m.serve), h('i', {}, m.origem === 'MC DIGITAL' ? 'MC DIGITAL' : `ref. ${m.origem}`))));
+  }, h('b', {}, m.nome), h('span', {}, m.serve))));
   const eyebrow = h('input', { value: s.artEyebrow ?? '', placeholder: 'Chamada (opcional): "coisas que", "guia", "passo a passo"', 'aria-label': 'Chamada da capa', oninput: (e) => { s.artEyebrow = e.target.value; } });
   const gen = h('button', { class: 'btn primary', type: 'button', disabled: s.artBusy, onclick: () => makeArts(s, p, c) }, s.artBusy ? 'Montando…' : s.arts?.length ? '↻ Refazer' : '🎨 Gerar artes');
   const grid = s.arts?.length ? h('div', { class: 'studio-arts' }, ...s.arts.map((a, i) => h('a', { class: 'studio-art', href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg`, title: 'Baixar' },
