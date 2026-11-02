@@ -53,7 +53,7 @@ export function brandColors(list) {
 
 // ───────────────────────── fontes (Google) sob demanda
 const loaded = new Set();
-const FAMILY_AXES = { 'Inter': 'ital,wght@0,400;0,700;0,800;0,900;1,400', 'Anton': '', 'Yellowtail': '', 'Allura': '', 'Great Vibes': '', 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
+const FAMILY_AXES = { 'Poppins': 'ital,wght@0,400;0,500;0,600;0,700;0,800;1,400', 'Inter': 'ital,wght@0,400;0,700;0,800;0,900;1,400', 'Anton': '', 'Yellowtail': '', 'Allura': '', 'Great Vibes': '', 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
 async function loadFonts(names) {
   for (const n of names.filter((x) => x && !loaded.has(x))) {
     const axes = n in FAMILY_AXES ? FAMILY_AXES[n] : (SCRIPTS.includes(n) ? '' : 'ital,wght@0,400;0,700;1,400');
@@ -824,9 +824,10 @@ const NO = {
     if (photo) cover(ctx, photo, 0, 0, W, ph, 0.3);
     const ink = photo ? B.ink : '#FFFFFF';
     const top = photo ? ph + 70 : 260;
-    const tf = fitRich(ctx, tokens(text), (s2, em) => `800 ${s2}px "${sans}"`, W - 160, photo ? H - top - 230 : 600, photo ? 76 : 110, 46, 1.08);
-    let y = drawRich(ctx, tf, 80, top + tf.size * 0.85, (s2) => `800 ${s2}px "${sans}"`, ink, photo ? B.emph : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF'), 1.08);
-    if (sub) y = paragraph(ctx, sub, 80, y + 6, W - 160, H - y - 190, sans, 34, 26, rgba(ink, 0.75), 1.38, 400);
+    const em = photo ? (contrast(B.deco, NO.block(B, n)) >= 2 ? B.deco : B.emph) : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF');
+    const tf = fitRich(ctx, tokens(text, true), (s2) => `800 ${s2}px "${sans}"`, W - 160, photo ? H - top - 250 : 600, photo ? 96 : 120, 50, 1.06);
+    let y = drawRich(ctx, tf, 80, top + tf.size * 0.85, (s2) => `800 ${s2}px "${sans}"`, ink, em, 1.06);
+    if (sub) y = paragraph(ctx, sub, 80, y + 10, W - 160, H - y - 190, sans, 40, 30, rgba(ink, 0.75), 1.36, 500);
     ctx.fillStyle = rgba(ink, 0.35); ctx.fillRect(80, H - 120, W - 160, 2);
     ctx.fillStyle = rgba(ink, 0.7); ctx.font = `600 20px "${sans}"`;
     if (d.handle) spaced(ctx, d.handle.toUpperCase(), 80, H - 76, 3);
@@ -1032,7 +1033,61 @@ const MO = {
   cta(ctx, d) { MO.grid(ctx, d, d.photos.slice().reverse()); MO.band(ctx, d, d.title, d.text); pill(ctx, d.button || 'SALVE ESTE POST', W / 2 - 200, H - 190, `800 30px "Montserrat"`, d.B.paper, d.B.deep, 50, 86); },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA], tweet: ['Post de rede', TW], capa: ['Capa de revista', CR], noticia: ['Notícia', NO], lista: ['Lista', LI], antesdepois: ['Antes e depois', AD], colagem: ['Colagem', CO], mosaico: ['Mosaico', MO] };
+// ───────────────────────── direção 15: VIRAL (referência: posts "lifestyle" de criadoras de conteúdo)
+// Receita: foto de rotina em tela cheia, levemente escurecida; chamada manuscrita branca; manchete em sans
+// arredondada e pesada com a palavra-chave em cor viva; etiqueta rosa; adesivos de flor e brilho; aspas grandes.
+const VI = {
+  hot: (B) => (lum(B.deco) > 0.35 && sat(B.deco) > 0.3 ? B.deco : '#F2E25C'),
+  pink: '#F06BA8',
+  flower(ctx, x, y, r, color) {
+    ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
+    for (let i = 0; i < 5; i++) { ctx.rotate((Math.PI * 2) / 5); ctx.beginPath(); ctx.ellipse(0, -r * 0.55, r * 0.42, r * 0.6, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#FFE38A'; ctx.beginPath(); circle(ctx, 0, 0, r * 0.28); ctx.fill(); ctx.restore();
+  },
+  base(ctx, d, dim) {
+    const { B, photo } = d; ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    if (photo) cover(ctx, photo, 0, 0, W, H, 0.3);
+    ctx.fillStyle = `rgba(0,0,0,${dim})`; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = `600 20px "Poppins"`;
+    if (d.handle) spaced(ctx, d.handle, W / 2, 70, 2, 'center');
+  },
+  head(ctx, d, text, kicker, cy) {
+    const font = (s2) => `800 ${s2}px "Poppins"`;
+    const tf = fitRich(ctx, tokens(text, true), font, W - 160, 420, 140, 60, 0.98);
+    const total = tf.lines.length * tf.size * 0.98 + (kicker ? 90 : 0);
+    let y = cy - total / 2;
+    if (kicker) { ctx.save(); ctx.fillStyle = '#FFFFFF'; ctx.font = `400 84px "${d.F.script || 'Yellowtail'}"`; ctx.translate(W / 2, y + 60); ctx.rotate(-0.04); const kw = ctx.measureText(kicker).width; ctx.fillText(kicker, -kw / 2, 0); ctx.restore(); y += 90; }
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 26;
+    y = drawRich(ctx, tf, W / 2, y + tf.size * 0.85, font, '#FFFFFF', VI.hot(d.B), 0.98, { align: 'center' });
+    ctx.restore();
+    PO.sparkle(ctx, 120, cy - total / 2 + 40, 26, '#FFFFFF'); PO.sparkle(ctx, W - 130, y - 30, 18, '#FFFFFF');
+    VI.flower(ctx, W - 150, cy - total / 2 - 10, 46, VI.pink);
+    return y;
+  },
+  tag(ctx, text, y) { if (!text) return y; const f = `600 30px "Poppins"`; ctx.font = f; const t = plain(text).slice(0, 48); const w = ctx.measureText(t).width + 56; pill(ctx, t, W / 2 - w / 2, y, f, VI.pink, '#FFFFFF', 28, 66); return y + 66; },
+  cover(ctx, d) {
+    VI.base(ctx, d, 0.32);
+    const y = VI.head(ctx, d, d.hook, d.eyebrow ? d.eyebrow.toLowerCase() : '', H * 0.55);
+    VI.tag(ctx, d.sub, y + 30);
+    VI.flower(ctx, 140, H - 170, 36, '#FFFFFF');
+    if (d.total > 1) { ctx.fillStyle = '#FFFFFF'; ctx.font = `600 24px "Poppins"`; spaced(ctx, 'arrasta →', W - 80, H - 70, 2, 'right'); }
+  },
+  inner(ctx, d) {
+    VI.base(ctx, d, 0.5);
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `800 220px "Poppins"`; ctx.fillText('“', 70, 320);
+    let y = VI.head(ctx, d, d.title, '', H * 0.42);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 500} ${s2}px "Poppins"`, W - 200, H - y - 200, 40, 30, 1.38); drawRich(ctx, f, W / 2, y + 40 + f.size, (s2, em) => `${em ? 700 : 500} ${s2}px "Poppins"`, '#FFFFFF', VI.hot(d.B), 1.38, { align: 'center' }); }
+    footer(ctx, d.B, { body: 'Poppins' }, '', d.n, d.total, '#FFFFFF', 0.75);
+  },
+  cta(ctx, d) {
+    VI.base(ctx, d, 0.5);
+    let y = VI.head(ctx, d, d.title, 'e aí?', H * 0.42);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2) => `500 ${s2}px "Poppins"`, W - 220, 160, 38, 28, 1.38); y = drawRich(ctx, f, W / 2, y + 30 + f.size, (s2) => `500 ${s2}px "Poppins"`, '#FFFFFF', '#FFFFFF', 1.38, { align: 'center' }); }
+    VI.tag(ctx, d.button || 'salva pra não esquecer 💾'.replace(' 💾', ''), y + 50);
+  },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA], tweet: ['Post de rede', TW], capa: ['Capa de revista', CR], noticia: ['Notícia', NO], lista: ['Lista', LI], antesdepois: ['Antes e depois', AD], colagem: ['Colagem', CO], mosaico: ['Mosaico', MO], viral: ['Viral', VI] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -1052,7 +1107,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const B = brandColors(client?.brand_kit?.colors);
   const F = brandFonts(client?.brand_kit?.fonts);
   const R = (STYLES[style] || STYLES.editorial)[1];
-  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR, NO, LI, AD].includes(R) ? 'Inter' : null, [CO, MO].includes(R) ? 'Montserrat' : null, [AD, MO].includes(R) ? 'Playfair Display' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
+  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR, NO, LI, AD].includes(R) ? 'Inter' : null, [CO, MO].includes(R) ? 'Montserrat' : null, R === VI ? 'Poppins' : null, R === VI ? (F.script || 'Yellowtail') : null, [AD, MO].includes(R) ? 'Playfair Display' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
   const pages = piece.format === 'IMAGE'
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
