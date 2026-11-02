@@ -618,7 +618,85 @@ const NE = {
   },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE] };
+// ───────────────────────── direção 7: MANCHETE (referência: capas de foto com tipografia mista)
+// Receita: foto real em tela cheia com tom quente e textura; selo do perfil no topo; manchete em caixa alta
+// condensada e enorme, com as palavras de ligação (que, de, pra, o…) pequenas, em itálico, "penduradas" na linha.
+const MA = {
+  big: (s) => `400 ${s}px "Anton"`,
+  small: (F, s) => `italic ${SERIFS.includes(F.title) ? 500 : 400} ${Math.round(s * 0.34)}px "${SERIFS.includes(F.title) ? F.title : 'Playfair Display'}"`,
+  isSmall: (t) => !t.em && t.w.replace(/[^\p{L}]/gu, '').length <= 3,
+  layout(ctx, F, toks, size, maxW) {
+    const lines = [[]]; let w = 0; const gap = size * 0.12;
+    for (const t of toks) {
+      const sm = MA.isSmall(t); ctx.font = sm ? MA.small(F, size) : MA.big(size);
+      const word = sm ? t.w.toLowerCase() : t.w.toUpperCase();
+      const tw = ctx.measureText(word).width;
+      const cur = lines[lines.length - 1];
+      if (cur.length && w + gap + tw > maxW) { lines.push([{ ...t, word, sm, width: tw }]); w = tw; } else { cur.push({ ...t, word, sm, width: tw }); w += (cur.length > 1 ? gap : 0) + tw; }
+    }
+    return { lines, gap };
+  },
+  draw(ctx, d, text, cy, maxH, from = 200) {
+    const { F, B } = d; const toks = tokens(text);
+    let size = from, L;
+    for (; size >= 70; size -= 4) { L = MA.layout(ctx, F, toks, size, W - 160); if (L.lines.length * size * 0.92 <= maxH) break; }
+    const lh = size * 0.92; let y = cy - (L.lines.length * lh) / 2 + size * 0.8;
+    const accent = lum(B.deco) > 0.2 ? B.deco : '#F4E6D0';
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 6;
+    for (const line of L.lines) {
+      const lw = line.reduce((a, t) => a + t.width, 0) + (line.length - 1) * L.gap;
+      let x = W / 2 - lw / 2;
+      for (const t of line) {
+        ctx.font = t.sm ? MA.small(F, size) : MA.big(size);
+        ctx.fillStyle = t.sm ? accent : t.em ? accent : '#FFFFFF';
+        ctx.fillText(t.word, x, t.sm ? y - size * 0.48 : y);
+        x += t.width + L.gap;
+      }
+      y += lh;
+    }
+    ctx.restore();
+    return y - lh + size * 0.2;
+  },
+  base(ctx, d, dark = 0.25) {
+    const { B, photo } = d;
+    ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    if (photo) cover(ctx, photo, 0, 0, W, H, 0.3);
+    ctx.fillStyle = rgba('#3A2A1A', 0.18); ctx.fillRect(0, 0, W, H); // tom quente de filme
+    ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, W, H);
+    const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    // selo do perfil
+    const { F } = d; const av = d.avatar;
+    ctx.font = `700 22px "${F.body}"`; const nm = (d.name || d.handle || '').slice(0, 28); const tw = ctx.measureText(nm).width;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); rounded(ctx, 60, 60, tw + (av ? 100 : 50), 64, 32); ctx.fill();
+    if (av) clipped(ctx, () => circle(ctx, 92, 92, 24), () => cover(ctx, av, 68, 68, 48, 48, 0.2));
+    ctx.fillStyle = '#FFFFFF'; ctx.fillText(nm, av ? 128 : 85, 100);
+  },
+  cover(ctx, d) {
+    MA.base(ctx, d, 0.2);
+    let y = MA.draw(ctx, d, d.hook, H * 0.52, 640, 210);
+    if (d.sub) { ctx.globalAlpha = 0.92; const f = fitRich(ctx, tokens(d.sub), (s2) => `500 ${s2}px "${d.F.body}"`, W - 260, 110, 32, 24, 1.3); drawRich(ctx, f, W / 2, y + 50 + f.size, (s2) => `500 ${s2}px "${d.F.body}"`, '#FFFFFF', '#FFFFFF', 1.3, { align: 'center' }); ctx.globalAlpha = 1; }
+    if (d.total > 1) { ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.85; ctx.font = `700 22px "${d.F.body}"`; spaced(ctx, 'ARRASTA  →', W / 2, H - 70, 6, 'center'); ctx.globalAlpha = 1; }
+    grain(ctx, 0.14);
+  },
+  inner(ctx, d) {
+    MA.base(ctx, d, d.photo ? 0.5 : 0);
+    let y = MA.draw(ctx, d, d.title, H * 0.4, 460, 170);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 400} ${s2}px "${d.F.body}"`, W - 220, H - y - 230, 40, 28, 1.42); drawRich(ctx, f, W / 2, y + 60 + f.size, (s2, em) => `${em ? 700 : 400} ${s2}px "${d.F.body}"`, '#FFFFFF', '#FFFFFF', 1.42, { align: 'center' }); }
+    footer(ctx, d.B, d.F, '', d.n, d.total, '#FFFFFF', 0.7);
+    grain(ctx, 0.14);
+  },
+  cta(ctx, d) {
+    MA.base(ctx, d, 0.45);
+    let y = MA.draw(ctx, d, d.title, H * 0.42, 480, 180);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2) => `400 ${s2}px "${d.F.body}"`, W - 240, 160, 38, 28, 1.4); y = drawRich(ctx, f, W / 2, y + 50 + f.size, (s2) => `400 ${s2}px "${d.F.body}"`, '#FFFFFF', '#FFFFFF', 1.4, { align: 'center' }); }
+    const label = d.button || 'SALVE ESTE POST'; ctx.font = `400 38px "Anton"`; const bw = ctx.measureText(label).width + 80;
+    pill(ctx, label, W / 2 - bw / 2, y + 40, `400 38px "Anton"`, '#FFFFFF', '#1D1A1A', 40, 86);
+    grain(ctx, 0.14);
+  },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -638,7 +716,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const B = brandColors(client?.brand_kit?.colors);
   const F = brandFonts(client?.brand_kit?.fonts);
   const R = (STYLES[style] || STYLES.editorial)[1];
-  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, R === PO ? 'Anton' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
+  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
   const pages = piece.format === 'IMAGE'
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
