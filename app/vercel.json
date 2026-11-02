@@ -72,6 +72,15 @@
           "value": "application/manifest+json"
         }
       ]
+    },
+    {
+      "source": "/(app\\.js|shared\\.js|styles\\.css|js/(.*)|[a-z-]+\\.js)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
   ],
   "rewrites": [
