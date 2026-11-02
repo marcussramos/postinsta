@@ -463,7 +463,7 @@ const PF = {
     }
   },
   header(ctx, d, y = 96) {
-    const { B, F, photo, name, handle } = d;
+    const { B, F, name, handle } = d; const photo = d.avatar || d.photo;
     const r = 38, cx = 80 + r;
     if (photo) clipped(ctx, () => circle(ctx, cx, y, r), () => cover(ctx, photo, cx - r, y - r, r * 2, r * 2, 0.2));
     else { ctx.fillStyle = B.emph; ctx.beginPath(); circle(ctx, cx, y, r); ctx.fill(); ctx.fillStyle = B.paper; ctx.font = `800 28px "${F.body}"`; const t = (name || '?').slice(0, 1).toUpperCase(); ctx.fillText(t, cx - ctx.measureText(t).width / 2, y + 10); }
@@ -645,7 +645,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   for (const [i, p] of pages.entries()) {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); ctx.textBaseline = 'alphabetic';
-    const d = { B, F, handle, name: client?.name || '', total, n: i + 1, eyebrow, button: piece.button || '' };
+    const d = { B, F, handle, name: client?.name || '', avatar: photos[0] || null, total, n: i + 1, eyebrow, button: piece.button || '' };
     if (p.kind === 'cover') R.cover(ctx, { ...d, hook: p.hook, sub: p.sub, photo: pick(0) });
     else if (p.kind === 'cta') R.cta(ctx, { ...d, title: p.title, text: p.text, photo: pick(0) });
     else R.inner(ctx, { ...d, title: p.title, text: p.text, photo: photos.length > 1 ? pick(k++) : (style === 'editorial' && i % 2 ? null : pick(0)) });
