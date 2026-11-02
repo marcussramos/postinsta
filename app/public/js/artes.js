@@ -178,7 +178,7 @@ const ED = {
     if (d.eyebrow) spaced(ctx, d.eyebrow.toUpperCase(), 84, 112, 6);
     const tf = fitRich(ctx, tokens(d.hook, true), ED.title(F), W - 168, 520, 124, 64, 1.04);
     const h = tf.lines.length * tf.size * 1.04;
-    let y = H - 210 - h - (d.sub ? 90 : 0);
+    let y = H - 200 - h - (d.sub ? 100 : 0);
     y = drawRich(ctx, tf, 84, y + tf.size, ED.title(F), '#FFFFFF', lum(B.deco) > 0.25 ? B.deco : '#F4E6D0', 1.04);
     if (d.sub) { ctx.globalAlpha = 0.88; paragraph(ctx, d.sub, 84, y + 6, W - 168, 110, F.body, 34, 26, '#FFFFFF', 1.35, 400); ctx.globalAlpha = 1; }
     ctx.fillStyle = '#FFFFFF'; ctx.font = `700 22px "${F.body}"`; ctx.globalAlpha = 0.9;
@@ -238,22 +238,30 @@ const RV = {
     const { B, F, photo } = d;
     ctx.fillStyle = B.paper; ctx.fillRect(0, 0, W, H);
     RV.frame(ctx, B);
+    // monta de baixo para cima: rodapé → apoio → título → foto em arco no espaço que sobrar
+    const maxW = W - 192;
+    const tf = fitRich(ctx, tokens(d.hook, true), RV.title(F), maxW, photo ? 330 : 520, photo ? 92 : 116, 56, 1.04);
+    let sub = null;
+    if (d.sub) { sub = fitRich(ctx, tokens(d.sub), (s2) => `400 ${s2}px "${F.body}"`, maxW, 90, 32, 24, 1.35); }
+    const subH = sub ? sub.lines.length * sub.size * 1.35 : 0;
+    const subTop = H - 160 - subH;
+    const titleH = tf.lines.length * tf.size * 1.04;
+    const titleTop = subTop - (sub ? 34 : 0) - titleH;
     if (photo) {
-      clipped(ctx, () => arch(ctx, 430, 120, 560, 720), () => cover(ctx, photo, 430, 120, 560, 720, 0.25));
-      ctx.strokeStyle = B.deco; ctx.lineWidth = 3; ctx.beginPath(); arch(ctx, 410, 100, 600, 760); ctx.stroke();
+      const top = 210, bottom = titleTop - 50, h = Math.max(380, bottom - top), w = Math.min(600, h * 0.78);
+      clipped(ctx, () => arch(ctx, W - 96 - w, top, w, h), () => cover(ctx, photo, W - 96 - w, top, w, h, 0.25));
+      ctx.strokeStyle = B.deco; ctx.lineWidth = 3; ctx.beginPath(); arch(ctx, W - 96 - w - 18, top - 18, w + 36, h + 18); ctx.stroke();
     } else {
-      ctx.fillStyle = rgba(B.deco, 0.18); ctx.font = `italic 400 900px "${F.title}"`; ctx.fillText('“', 420, 980);
+      ctx.fillStyle = rgba(B.deco, 0.16); ctx.font = `italic 400 900px "${F.title}"`; ctx.fillText('“', 460, 900);
     }
     ctx.fillStyle = B.emph; ctx.font = `700 22px "${F.body}"`;
     spaced(ctx, (d.eyebrow || 'GUIA').toUpperCase(), 96, 150, 7);
     ctx.fillRect(96, 172, 60, 3);
-    const tf = fitRich(ctx, tokens(d.hook, true), RV.title(F), photo ? 860 : W - 192, 470, 112, 60, 1.04);
-    const top = H - 200 - tf.lines.length * tf.size * 1.04 - (d.sub ? 80 : 0);
-    let y = drawRich(ctx, tf, 96, Math.max(photo ? 760 : 380, top) + tf.size, RV.title(F), B.ink, B.emph, 1.04);
-    if (d.sub) paragraph(ctx, d.sub, 96, y + 4, W - 192, 100, F.body, 32, 24, rgba(B.ink, 0.8), 1.35);
-    ctx.fillStyle = B.ink; ctx.globalAlpha = 0.75; ctx.font = `600 22px "${F.body}"`;
-    if (d.handle) spaced(ctx, d.handle.toUpperCase(), 96, H - 96, 4);
-    if (d.total > 1) spaced(ctx, 'ARRASTE  →', W - 96, H - 96, 5, 'right');
+    drawRich(ctx, tf, 96, titleTop + tf.size * 0.9, RV.title(F), B.ink, B.emph, 1.04);
+    if (sub) drawRich(ctx, sub, 96, subTop + sub.size, (s2) => `400 ${s2}px "${F.body}"`, rgba(B.ink, 0.8), rgba(B.ink, 0.8), 1.35);
+    ctx.fillStyle = B.ink; ctx.globalAlpha = 0.7; ctx.font = `600 22px "${F.body}"`;
+    if (d.handle) spaced(ctx, d.handle.toUpperCase(), 96, H - 92, 4);
+    if (d.total > 1) spaced(ctx, 'ARRASTE  →', W - 96, H - 92, 5, 'right');
     ctx.globalAlpha = 1; grain(ctx, 0.06);
   },
   inner(ctx, d) {
@@ -261,8 +269,8 @@ const RV = {
     ctx.fillStyle = B.paper; ctx.fillRect(0, 0, W, H);
     RV.frame(ctx, B);
     const num = String(d.n).padStart(2, '0');
-    ctx.fillStyle = rgba(B.deco, 0.22); ctx.font = `${SERIFS.includes(F.title) ? 'italic 400' : '800'} 520px "${F.title}"`;
-    ctx.fillText(num, W - ctx.measureText(num).width - 40, 470);
+    ctx.fillStyle = rgba(B.deco, 0.13); ctx.font = `${SERIFS.includes(F.title) ? 'italic 400' : '800'} 560px "${F.title}"`;
+    ctx.fillText(num, W - ctx.measureText(num).width - 30, H - 120);
     ctx.fillStyle = B.emph; ctx.font = `700 22px "${F.body}"`;
     spaced(ctx, `${(d.label || 'PASSO')} ${num}`.toUpperCase(), 96, 180, 7);
     ctx.fillRect(96, 202, 60, 3);
