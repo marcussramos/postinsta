@@ -73,7 +73,12 @@ function tokens(text, autoEmph = false) {
   const s = String(text || '').trim();
   const out = [];
   let em = false;
-  for (const part of s.split('*')) { for (const w of part.split(/\s+/).filter(Boolean)) out.push({ w, em }); em = !em; }
+  for (const part of s.split('*')) {
+    for (const w of part.split(/\s+/).filter(Boolean)) {
+      if (/^[.,;:!?…)]+$/.test(w) && out.length) out[out.length - 1].w += w; else out.push({ w, em });
+    }
+    em = !em;
+  }
   if (autoEmph && !s.includes('*') && out.length > 3) { // sem marcação: destaca as 2 últimas palavras
     out.slice(-2).forEach((t) => { t.em = true; });
   }
@@ -409,11 +414,16 @@ const PO = {
   cover(ctx, d) {
     PO.bg(ctx, d.B, d.photo);
     PO.micro(ctx, d.F, d.handle || '', 92);
-    const top = H * 0.5;
-    let y = PO.script(ctx, d, d.eyebrow ? d.eyebrow.toLowerCase() : '', top - 10);
+    // mede antes: o bloco (chamada + título + etiqueta) termina acima do "arrasta"
+    const tf = fitRich(ctx, tokens(String(d.hook).toUpperCase(), true), PO.title, W - 200, 360, 190, 70, 0.98);
+    let labelH = 0;
+    if (d.sub) { const f = fitRich(ctx, tokens(d.sub), (s2, em) => `${em ? 800 : 500} ${s2}px "${d.F.body}"`, W - 320, 130, 36, 26, 1.25); labelH = f.lines.length * f.size * 1.25 + 40 + 34; }
+    const block = (d.eyebrow ? 70 : 0) + tf.lines.length * tf.size * 0.98 + labelH;
+    let y = H - 140 - block + (d.eyebrow ? 50 : 0);
+    if (d.eyebrow) y = PO.script(ctx, d, d.eyebrow.toLowerCase(), y);
     y = PO.stack(ctx, d, d.hook, y + 10, 360, 190);
-    y = PO.label(ctx, d, d.sub, y + 34);
-    if (d.total > 1) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `700 22px "${d.F.body}"`; spaced(ctx, 'ARRASTA PRO LADO  →', W / 2, H - 70, 6, 'center'); }
+    PO.label(ctx, d, d.sub, y + 34);
+    if (d.total > 1) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `700 22px "${d.F.body}"`; spaced(ctx, 'ARRASTA PRO LADO  →', W / 2, H - 64, 6, 'center'); }
     grain(ctx, 0.12);
   },
   inner(ctx, d) {
