@@ -450,7 +450,170 @@ const PO = {
   },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO] };
+// ───────────────────────── direção 5: PERFIL (referência: guias educativos com cabeçalho de perfil)
+// Receita: fundo claro com manchas de cor desfocadas; cabeçalho de perfil (foto, nome, selo, @);
+// título forte com a palavra-chave na cor da marca; foto em cartão branco levemente inclinado com sombra.
+const PF = {
+  title: (F) => (s, em) => `${SERIFS.includes(F.title) ? 700 : 800} ${s}px "${F.title}"`,
+  bg(ctx, B) {
+    ctx.fillStyle = B.paper; ctx.fillRect(0, 0, W, H);
+    for (const [x, y, r, c, a] of [[W + 40, 120, 360, B.deco, 0.35], [-80, H - 200, 420, B.emph, 0.18]]) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(c, a)); g.addColorStop(1, rgba(c, 0));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+  },
+  header(ctx, d, y = 96) {
+    const { B, F, photo, name, handle } = d;
+    const r = 38, cx = 80 + r;
+    if (photo) clipped(ctx, () => circle(ctx, cx, y, r), () => cover(ctx, photo, cx - r, y - r, r * 2, r * 2, 0.2));
+    else { ctx.fillStyle = B.emph; ctx.beginPath(); circle(ctx, cx, y, r); ctx.fill(); ctx.fillStyle = B.paper; ctx.font = `800 28px "${F.body}"`; const t = (name || '?').slice(0, 1).toUpperCase(); ctx.fillText(t, cx - ctx.measureText(t).width / 2, y + 10); }
+    ctx.strokeStyle = B.deco; ctx.lineWidth = 3; ctx.beginPath(); circle(ctx, cx, y, r + 6); ctx.stroke();
+    ctx.fillStyle = B.ink; ctx.font = `800 28px "${F.body}"`; const nm = name || ''; ctx.fillText(nm, cx + r + 22, y - 2);
+    const nw = ctx.measureText(nm).width; // selo
+    ctx.fillStyle = B.emph; ctx.beginPath(); circle(ctx, cx + r + 22 + nw + 20, y - 11, 13); ctx.fill();
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 3.5; ctx.beginPath(); const sx = cx + r + 22 + nw + 20; ctx.moveTo(sx - 6, y - 11); ctx.lineTo(sx - 1, y - 6); ctx.lineTo(sx + 7, y - 16); ctx.stroke();
+    ctx.fillStyle = rgba(B.ink, 0.6); ctx.font = `500 22px "${F.body}"`; if (handle) ctx.fillText(handle, cx + r + 22, y + 28);
+  },
+  card(ctx, photo, x, y, w, h, rot, B) {
+    ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(rot);
+    ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 24;
+    ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); rounded(ctx, -w / 2, -h / 2, w, h, 30); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    clipped(ctx, () => rounded(ctx, -w / 2 + 14, -h / 2 + 14, w - 28, h - 28, 20), () => cover(ctx, photo, -w / 2 + 14, -h / 2 + 14, w - 28, h - 28, 0.3));
+    ctx.restore();
+  },
+  cover(ctx, d) {
+    const { B, F, photo } = d;
+    PF.bg(ctx, B); PF.header(ctx, d);
+    let y = 230;
+    if (d.eyebrow) { ctx.fillStyle = B.emph; ctx.font = `700 26px "${F.body}"`; spaced(ctx, d.eyebrow.toUpperCase(), 80, y, 5); y += 30; }
+    const tf = fitRich(ctx, tokens(d.hook, true), PF.title(F), W - 160, photo ? 330 : 600, photo ? 104 : 130, 60, 1.02);
+    y = drawRich(ctx, tf, 80, y + tf.size, PF.title(F), B.ink, B.emph, 1.02);
+    if (d.sub) y = paragraph(ctx, d.sub, 80, y + 10, W - 160, 90, F.body, 34, 26, rgba(B.ink, 0.75), 1.35, 500);
+    if (photo) { const top = Math.max(y + 50, 640); PF.card(ctx, photo, 150, top, W - 300, H - top - 110, -0.035, B); }
+    if (d.total > 1) pill(ctx, 'ARRASTA →', W - 80 - 250, H - 110, `800 24px "${F.body}"`, B.ink, B.paper, 30, 66);
+  },
+  inner(ctx, d) {
+    const { B, F, photo } = d;
+    PF.bg(ctx, B); PF.header(ctx, d);
+    const num = `${String(d.n).padStart(2, '0')}.`;
+    ctx.fillStyle = B.emph; ctx.font = `${SERIFS.includes(F.title) ? 700 : 900} 120px "${F.title}"`; ctx.fillText(num, 80, 320);
+    const tf = fitRich(ctx, tokens(d.title), PF.title(F), W - 160, 300, 84, 50, 1.06);
+    let y = drawRich(ctx, tf, 80, 370 + tf.size, PF.title(F), B.ink, B.emph, 1.06);
+    if (d.text) { // texto em cartão branco com barra de cor
+      const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 400} ${s2}px "${F.body}"`, W - 160 - 90, photo ? 260 : 480, 40, 28, 1.45);
+      const h = f.lines.length * f.size * 1.45 + 70;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.08)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+      ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); rounded(ctx, 80, y + 40, W - 160, h, 24); ctx.fill(); ctx.restore();
+      ctx.fillStyle = B.emph; ctx.fillRect(80, y + 40 + 24, 8, h - 48);
+      drawRich(ctx, f, 80 + 50, y + 40 + 35 + f.size * 0.85, (s2, em) => `${em ? 700 : 400} ${s2}px "${F.body}"`, rgba(B.ink, 0.88), B.emph, 1.45);
+      y += 40 + h;
+    }
+    if (photo && H - y - 140 > 260) PF.card(ctx, photo, 260, y + 40, W - 520, H - y - 150, 0.03, B);
+    footer(ctx, B, F, '', d.n, d.total, B.ink, 0.5);
+  },
+  cta(ctx, d) {
+    const { B, F } = d;
+    PF.bg(ctx, B); PF.header(ctx, d);
+    const tf = fitRich(ctx, tokens(d.title, true), PF.title(F), W - 160, 420, 110, 60, 1.04);
+    let y = drawRich(ctx, tf, 80, 330 + tf.size, PF.title(F), B.ink, B.emph, 1.04);
+    if (d.text) y = paragraph(ctx, d.text, 80, y + 20, W - 160, 180, F.body, 38, 28, rgba(B.ink, 0.8), 1.4, 500);
+    pill(ctx, d.button || 'SALVE ESTE POST', 80, y + 60, `800 30px "${F.body}"`, B.emph, '#FFFFFF', 44, 92);
+    // ícone de salvar
+    const bx = W - 80 - 90, by = y + 56;
+    ctx.fillStyle = B.ink; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 70, by); ctx.lineTo(bx + 70, by + 96); ctx.lineTo(bx + 35, by + 70); ctx.lineTo(bx, by + 96); ctx.closePath(); ctx.fill();
+  },
+};
+
+// ───────────────────────── direção 6: NEON (referência: perfis de design com fundo escuro e brilho)
+// Receita: fundo quase preto com brilhos da cor da marca; abas de navegação no topo; texto leve + palavra-chave
+// grande e brilhante; cartão translúcido com lista de tópicos (setas); botão de destaque.
+const NE = {
+  glow(B) { return lum(B.deco) > 0.12 ? B.deco : lum(B.emph) > 0.12 ? B.emph : '#C084FC'; },
+  bg(ctx, B) {
+    const base = '#0D0B10'; ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+    const c = NE.glow(B);
+    for (const [x, y, r, a] of [[W * 0.85, H * 0.15, 620, 0.5], [W * 0.05, H * 0.95, 560, 0.35]]) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(c, a)); g.addColorStop(1, rgba(c, 0));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    grain(ctx, 0.1);
+  },
+  tabs(ctx, d) {
+    const labels = [d.eyebrow || 'Conteúdo', 'Dicas', (d.name || '').split(' ')[0] || 'Perfil'].map((t) => t.slice(0, 16));
+    ctx.font = `500 22px "${d.F.body}"`;
+    const ws = labels.map((t) => ctx.measureText(t).width + 56); const total = ws.reduce((a, b) => a + b, 0) + 24;
+    let x = (W - total) / 2;
+    labels.forEach((t, i) => {
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2; ctx.beginPath(); rounded(ctx, x, 70, ws[i], 50, 25); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(t, x + 28, 103); x += ws[i] + 12;
+    });
+  },
+  // palavras normais finas; destaque grande na fonte de título e com brilho
+  rich(ctx, d, text, x, y, maxW, maxH, from) {
+    const fam = d.F.title, body = d.F.body, c = NE.glow(d.B);
+    const font = (s, em) => (em ? `${SERIFS.includes(fam) ? 'italic 600' : 800} ${Math.round(s * 1.25)}px "${fam}"` : `300 ${s}px "${body}"`);
+    const f = fitRich(ctx, tokens(text, true), font, maxW, maxH, from, 44, 1.18);
+    ctx.save(); ctx.shadowColor = rgba(c, 0.8); ctx.shadowBlur = 0;
+    const out = drawRich(ctx, f, x, y + f.size, (s, em) => { ctx.shadowBlur = em ? 30 : 0; return font(s, em); }, '#FFFFFF', c, 1.18);
+    ctx.restore();
+    return out;
+  },
+  cover(ctx, d) {
+    const { B, F, photo } = d;
+    NE.bg(ctx, B); NE.tabs(ctx, d);
+    if (photo) {
+      clipped(ctx, () => rounded(ctx, W - 80 - 430, 200, 430, 560, 40), () => cover(ctx, photo, W - 510, 200, 430, 560, 0.25));
+      ctx.strokeStyle = rgba(NE.glow(B), 0.9); ctx.lineWidth = 3; ctx.shadowColor = NE.glow(B); ctx.shadowBlur = 30; ctx.beginPath(); rounded(ctx, W - 80 - 430, 200, 430, 560, 40); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    PO.sparkle(ctx, 110, photo ? 830 : 330, 22, NE.glow(B));
+    let y = NE.rich(ctx, d, d.hook, 80, photo ? 860 : 380, W - 160, photo ? 280 : 560, 78);
+    if (d.sub) {
+      ctx.font = `500 26px "${F.body}"`; const f = fitRich(ctx, tokens(d.sub), (s2) => `500 ${s2}px "${F.body}"`, W - 260, 80, 28, 22, 1.3);
+      const lw = Math.max(...f.lines.map((l) => l.reduce((a, t) => a + t.width, 0) + (l.length - 1) * f.space)); const h = f.lines.length * f.size * 1.3 + 36;
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.beginPath(); rounded(ctx, 80, y + 30, lw + 60, h, h / 2); ctx.stroke();
+      drawRich(ctx, f, 110, y + 30 + 18 + f.size * 0.85, (s2) => `500 ${s2}px "${F.body}"`, '#FFFFFF', '#FFFFFF', 1.3);
+    }
+    if (d.total > 1) { ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = `600 22px "${F.body}"`; spaced(ctx, 'ARRASTA  →', W - 80, H - 70, 5, 'right'); }
+  },
+  inner(ctx, d) {
+    const { B, F } = d;
+    NE.bg(ctx, B); NE.tabs(ctx, d);
+    const x = 80, w = W - 160, top = 200;
+    // cartão translúcido
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.strokeStyle = rgba(NE.glow(B), 0.5); ctx.lineWidth = 2;
+    ctx.beginPath(); rounded(ctx, x, top, w, H - top - 150, 36); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = NE.glow(B); ctx.font = `600 24px "${F.body}"`; spaced(ctx, `PASSO ${String(d.n).padStart(2, '0')}`, x + 60, top + 80, 6);
+    let y = NE.rich(ctx, d, d.title, x + 60, top + 110, w - 120, 300, 66);
+    // tópicos: cada frase do texto vira um item com seta
+    const items = String(d.text || '').split(/(?<=[.!?])\s+/).map((t) => t.trim()).filter(Boolean).slice(0, 4);
+    y += 30;
+    for (const it of items) {
+      if (y > H - 300) break;
+      ctx.fillStyle = NE.glow(B); ctx.font = `800 34px "${F.body}"`; ctx.fillText('›', x + 60, y + 34);
+      y = paragraph(ctx, it, x + 110, y, w - 170, 160, F.body, 34, 26, 'rgba(255,255,255,.88)', 1.35, 400) + 26;
+    }
+    footer(ctx, B, F, d.handle, d.n, d.total, '#FFFFFF', 0.6);
+  },
+  cta(ctx, d) {
+    const { B, F, photo } = d;
+    NE.bg(ctx, B); NE.tabs(ctx, d);
+    if (photo) {
+      clipped(ctx, () => circle(ctx, W / 2, 400, 170), () => cover(ctx, photo, W / 2 - 170, 230, 340, 340, 0.25));
+      ctx.strokeStyle = NE.glow(B); ctx.lineWidth = 5; ctx.shadowColor = NE.glow(B); ctx.shadowBlur = 40; ctx.beginPath(); circle(ctx, W / 2, 400, 182); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    let y = NE.rich(ctx, d, d.title, 80, photo ? 640 : 380, W - 160, 300, 80);
+    if (d.text) y = paragraph(ctx, d.text, 80, y + 10, W - 160, 150, F.body, 34, 26, 'rgba(255,255,255,.8)', 1.4, 300);
+    const label = d.button || 'Salve este post';
+    ctx.font = `700 30px "${F.body}"`; const bw = ctx.measureText(label).width + 100;
+    const g = ctx.createLinearGradient(80, 0, 80 + bw, 0); g.addColorStop(0, NE.glow(B)); g.addColorStop(1, rgba(NE.glow(B), 0.6));
+    ctx.fillStyle = g; ctx.shadowColor = NE.glow(B); ctx.shadowBlur = 30; ctx.beginPath(); rounded(ctx, 80, y + 50, bw, 90, 45); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0D0B10'; ctx.fillText(label, 130, y + 50 + 56);
+    footer(ctx, B, F, d.handle, d.n, d.total, '#FFFFFF', 0.6);
+  },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -482,7 +645,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   for (const [i, p] of pages.entries()) {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); ctx.textBaseline = 'alphabetic';
-    const d = { B, F, handle, total, n: i + 1, eyebrow, button: piece.button || '' };
+    const d = { B, F, handle, name: client?.name || '', total, n: i + 1, eyebrow, button: piece.button || '' };
     if (p.kind === 'cover') R.cover(ctx, { ...d, hook: p.hook, sub: p.sub, photo: pick(0) });
     else if (p.kind === 'cta') R.cta(ctx, { ...d, title: p.title, text: p.text, photo: pick(0) });
     else R.inner(ctx, { ...d, title: p.title, text: p.text, photo: photos.length > 1 ? pick(k++) : (style === 'editorial' && i % 2 ? null : pick(0)) });
