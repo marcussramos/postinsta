@@ -19,8 +19,9 @@ import { approvalReminders, requestsInbox, todayLocal, viewFolder } from './past
 import { openPost } from './post.js';
 import { viewProposals, viewSales } from './vendas.js';
 import { openAssistById, loadBehind } from './postar.js';
+import { viewStudio } from './estudio.js';
 
-const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'clientes', 'vendas', 'propostas', 'ajustes'];
+const VIEWS = ['inicio', 'agenda', 'calendario', 'fluxo', 'estudio', 'clientes', 'vendas', 'propostas', 'ajustes'];
 const S = {
   admin: false, tz: 'America/Cuiaba', setup: null, clients: [], posts: [], view: 'agenda', fClient: '', fStatus: '',
   payments: [], folderId: null, folder: { id: null, files: [], preview: null, loading: false, error: null, tab: 'contract' }, settings: undefined,
@@ -88,7 +89,7 @@ async function refresh() {
     S.clients = clients; S.posts = posts;
     await loadExtras();
     if (S.view === 'calendario') await loadMonth(S.cal.month, true);
-    if (changed) render();
+    if (changed && S.view !== 'estudio') render(); // no Estúdio não redesenha (perderia o foco de quem está digitando)
   } catch { /* tenta de novo na próxima */ }
 }
 document.addEventListener('visibilitychange', refresh);
@@ -169,18 +170,18 @@ function render() {
   const tab = (id, label) => h('a', { class: 'tab', href: `#${id}`, 'aria-current': S.view === id || (id === 'clientes' && S.view === 'pasta') ? 'page' : null }, label);
   const top = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
     brand(),
-    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), tab('clientes', 'Clientes'), can('vendas') ? tab('vendas', 'Vendas') : null, can('vendas') ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
+    h('nav', { class: 'tabs' }, tab('inicio', 'Início'), tab('agenda', 'Agenda'), tab('calendario', 'Calendário'), tab('fluxo', 'Fluxo'), can('conteudo') ? tab('estudio', 'Estúdio') : null, tab('clientes', 'Clientes'), can('vendas') ? tab('vendas', 'Vendas') : null, can('vendas') ? tab('propostas', 'Propostas') : null, S.role === 'admin' ? tab('ajustes', 'Ajustes') : null),
     h('div', { class: 'spacer' }),
     can('conteudo') ? h('button', { class: 'btn primary sm', onclick: () => openPost() }, '+ Novo post') : null,
     can('financeiro') ? moneyButton() : null,
     themeButton(),
     h('button', { class: 'btn ghost sm', onclick: logout, title: S.userName ? `Sair (${S.userName})` : 'Sair' }, 'Sair'),
   ));
-  const page = h('main', { class: `page${['fluxo', 'vendas'].includes(S.view) ? ' wide' : ''}` });
+  const page = h('main', { class: `page${['fluxo', 'vendas', 'estudio'].includes(S.view) ? ' wide' : ''}` });
   if ((S.view === 'ajustes' && S.role !== 'admin') || (['propostas', 'vendas'].includes(S.view) && !can('vendas'))) S.view = 'inicio';
   const pend = S.role === 'admin' ? setupPending() : [];
   if (pend.length && S.view !== 'ajustes') page.append(h('div', { class: 'banner' }, h('b', {}, 'Falta configurar: '), pend.join(' · '), ' — ', h('a', { href: '#ajustes' }, 'ver em Ajustes')));
-  const views = { inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals, vendas: viewSales };
+  const views = { estudio: viewStudio, inicio: viewHome, clientes: viewClients, ajustes: viewSettings, calendario: viewCalendar, fluxo: viewBoard, agenda: viewAgenda, pasta: viewFolder, propostas: viewProposals, vendas: viewSales };
   const main = views[S.view]().filter(Boolean);
   if (S.view === 'agenda' && S.clients.length) main.splice(1, 0, ...[approvalReminders(), requestsInbox()].filter(Boolean));
   page.append(...main);
