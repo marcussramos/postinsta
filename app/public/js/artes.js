@@ -391,7 +391,7 @@ const PO = {
     const lw = Math.max(...tf.lines.map((l) => l.reduce((a, t) => a + t.width, 0) + (l.length - 1) * tf.space));
     PO.sparkle(ctx, W / 2 - lw / 2 - 46, top + tf.size * 0.35, 20, '#FFFFFF');
     PO.sparkle(ctx, W / 2 + lw / 2 + 46, y - tf.size * 0.9, 14, '#FFFFFF');
-    return y;
+    return top + tf.lines.length * tf.size * 0.98; // base real do bloco (não a linha de base seguinte)
   },
   script(ctx, d, text, y, size = 92) {
     if (!text) return y;
@@ -522,6 +522,7 @@ const PF = {
     // ícone de salvar
     const bx = W - 80 - 90, by = y + 56;
     ctx.fillStyle = B.ink; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 70, by); ctx.lineTo(bx + 70, by + 96); ctx.lineTo(bx + 35, by + 70); ctx.lineTo(bx, by + 96); ctx.closePath(); ctx.fill();
+    if (d.photo && H - (y + 200) > 300) PF.card(ctx, d.photo, 220, y + 200, W - 440, H - y - 300, -0.03, B);
   },
 };
 
@@ -579,20 +580,24 @@ const NE = {
   inner(ctx, d) {
     const { B, F } = d;
     NE.bg(ctx, B); NE.tabs(ctx, d);
-    const x = 80, w = W - 160, top = 200;
-    // cartão translúcido
-    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.strokeStyle = rgba(NE.glow(B), 0.5); ctx.lineWidth = 2;
-    ctx.beginPath(); rounded(ctx, x, top, w, H - top - 150, 36); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = NE.glow(B); ctx.font = `600 24px "${F.body}"`; spaced(ctx, `PASSO ${String(d.n).padStart(2, '0')}`, x + 60, top + 80, 6);
-    let y = NE.rich(ctx, d, d.title, x + 60, top + 110, w - 120, 300, 66);
-    // tópicos: cada frase do texto vira um item com seta
-    const items = String(d.text || '').split(/(?<=[.!?])\s+/).map((t) => t.trim()).filter(Boolean).slice(0, 4);
-    y += 30;
+    const x = 80, w = W - 160, top = 220;
+    // conteúdo numa camada à parte: o cartão fica do tamanho do texto e centralizado na altura
+    const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+    const lc = layer.getContext('2d'); lc.textBaseline = 'alphabetic';
+    lc.fillStyle = NE.glow(B); lc.font = `600 24px "${F.body}"`; spaced(lc, `PASSO ${String(d.n).padStart(2, '0')}`, x + 60, top + 80, 6);
+    let y = NE.rich(lc, d, d.title, x + 60, top + 110, w - 120, 300, 70);
+    const items = String(d.text || '').split(/(?<=[.!?])\s+/).map((t) => t.trim()).filter(Boolean).slice(0, 5);
+    y += 40;
     for (const it of items) {
-      if (y > H - 300) break;
-      ctx.fillStyle = NE.glow(B); ctx.font = `800 34px "${F.body}"`; ctx.fillText('›', x + 60, y + 34);
-      y = paragraph(ctx, it, x + 110, y, w - 170, 160, F.body, 34, 26, 'rgba(255,255,255,.88)', 1.35, 400) + 26;
+      if (y > H - 340) break;
+      lc.fillStyle = NE.glow(B); lc.font = `800 40px "${F.body}"`; lc.fillText('›', x + 60, y + 38);
+      y = paragraph(lc, it, x + 110, y, w - 170, 170, F.body, 38, 28, 'rgba(255,255,255,.9)', 1.38, 400) + 30;
     }
+    const ch = y - top + 40;
+    const off = Math.max(0, (H - 150 - top - ch) / 2);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.strokeStyle = rgba(NE.glow(B), 0.55); ctx.lineWidth = 2;
+    ctx.beginPath(); rounded(ctx, x, top + off, w, ch, 36); ctx.fill(); ctx.stroke();
+    ctx.drawImage(layer, 0, off);
     footer(ctx, B, F, d.handle, d.n, d.total, '#FFFFFF', 0.6);
   },
   cta(ctx, d) {
