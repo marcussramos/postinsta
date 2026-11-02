@@ -138,10 +138,12 @@ function paragraph(ctx, text, x, y, maxW, maxH, family, from, to, color, lh = 1.
 }
 
 // ───────────────────────── imagem
-function cover(ctx, img, x, y, w, h, focusY = 0.35) {
+function cover(ctx, img, x, y, w, h, focusY = 0.35) { // preenche a caixa e corta o que sobra (nunca vaza)
   const r = Math.max(w / img.width, h / img.height);
   const iw = img.width * r, ih = img.height * r;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) * focusY, iw, ih);
+  ctx.restore();
 }
 function clipped(ctx, path, fn) { ctx.save(); ctx.beginPath(); path(); ctx.clip(); fn(); ctx.restore(); }
 const arch = (ctx, x, y, w, h) => { const r = w / 2; ctx.moveTo(x, y + h); ctx.lineTo(x, y + r); ctx.arc(x + r, y + r, r, Math.PI, 0); ctx.lineTo(x + w, y + h); ctx.closePath(); };
@@ -950,8 +952,10 @@ const CO = {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(0.2); ctx.fillStyle = color; ctx.beginPath();
     for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; const rr = i % 2 ? r * 0.78 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#FFFFFF'; ctx.font = `900 ${Math.round(r * 0.3)}px "Montserrat"`;
     const lines = String(text).toUpperCase().split(' ').slice(0, 3);
+    let fs = Math.round(r * 0.3); ctx.font = `900 ${fs}px "Montserrat"`;
+    while (fs > 14 && Math.max(...lines.map((l) => ctx.measureText(l).width)) > r * 1.35) { fs -= 2; ctx.font = `900 ${fs}px "Montserrat"`; }
+    ctx.fillStyle = '#FFFFFF';
     lines.forEach((l, i) => { const w = ctx.measureText(l).width; ctx.fillText(l, -w / 2, (i - (lines.length - 1) / 2) * r * 0.32 + r * 0.1); });
     ctx.restore();
   },
