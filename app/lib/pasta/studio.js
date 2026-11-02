@@ -81,7 +81,7 @@ function prompt({ c, b, bank, samples }) {
   const shape = {
     CAROUSEL: `CARROSSEL de ${b.slides} lâminas (1080×1350).
 - Lâmina 1 = capa: o "title" dela fica VAZIO (o gancho escolhido entra ali); no "text" um apoio de até 8 palavras ou vazio.
-- Lâminas do meio: cada uma com UMA ideia. "title" curto (até 7 palavras, forte, sem ponto final) e "text" com até 30 palavras, frases curtas, fácil de ler no celular.
+- Lâminas do meio: cada uma com UMA ideia. "title" curto (até 6 palavras, forte, sem ponto final) e "text" com NO MÁXIMO 22 palavras, frases curtas, fácil de ler no celular. O detalhe vai na legenda, não na arte.
 - Lâmina final = CTA: "title" com o convite e "text" com o reforço (até 15 palavras).
 - A sequência precisa prender: cada lâmina dá motivo para passar para a próxima.`,
     IMAGE: `POST ESTÁTICO (1 imagem 1080×1350).
@@ -111,7 +111,7 @@ Formato: ${shape}
 ${samples.length ? `\nCOMO ESTE CLIENTE ESCREVE — legendas reais já aprovadas. Imite a voz: pessoa do discurso (eu/nós/a marca), vocabulário, tamanho das frases, uso de emojis, nível de formalidade e jeito de chamar o público. O texto novo precisa parecer escrito pela mesma pessoa:\n${samples.map((t, i) => `--- exemplo ${i + 1} ---\n${t}`).join('\n')}\n---\n` : ''}${worked.length ? `\nGanchos deste cliente que já funcionaram (referência de estilo, não copie):\n${worked.map((x) => `- "${x.hook}" (${x.views != null ? `${x.views} visualizações` : `${x.reach} de alcance`})`).join('\n')}\n` : ''}${rules ? `\nREGRAS OBRIGATÓRIAS — ${rules.name} (${rules.summary}):\n${rules.rules.map((r) => `- ${r}`).join('\n')}\nSe o tema pedir algo proibido, adapte para uma versão permitida e explique em "warnings".\n` : ''}
 Como escrever:
 - DESTAQUE: nos ganchos e nos "title" das lâminas, marque com *asteriscos* a palavra (ou duas) mais forte, a que deve aparecer em destaque na arte. Ex.: "Seu sorriso *amarelou?*". Só uma marcação por frase; nunca na legenda.
-- 3 GANCHOS bem diferentes (até 12 palavras cada): um de curiosidade, um de dor/problema do público, um direto ou contraintuitivo. É a frase que para o scroll.
+- 3 GANCHOS bem diferentes, CURTOS: de 4 a 8 palavras (cabem grandes na capa): um de curiosidade, um de dor/problema do público, um direto ou contraintuitivo. É a frase que para o scroll.
 - "cta": uma frase de chamada clara e permitida, coerente com o objetivo.
 - "caption": legenda de 3 a 6 parágrafos curtos, a 1ª linha forte (não repita o gancho igual), termina com o CTA. Sem hashtags dentro dela.
 - "hashtags": de 5 a 10, específicas do nicho e da cidade quando fizer sentido (sem #fyp, #viral).

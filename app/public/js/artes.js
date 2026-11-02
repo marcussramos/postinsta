@@ -783,9 +783,9 @@ const CR = {
     return y;
   },
   button(ctx, d, label, y) {
-    const { B, F } = d; const font = `800 22px "${CR.sans(F)}"`; ctx.font = font;
-    const w = ctx.measureText(label).width + 56;
-    pill(ctx, label, W / 2 - w / 2, y, font, contrast(B.deco, '#FFFFFF') >= 2 ? B.deco : B.emph, '#FFFFFF', 28, 52);
+    const { B, F } = d; const font = `800 28px "${CR.sans(F)}"`; ctx.font = font;
+    const w = ctx.measureText(label).width + 72;
+    pill(ctx, label, W / 2 - w / 2, y, font, contrast(B.deco, '#FFFFFF') >= 2 ? B.deco : B.emph, '#FFFFFF', 36, 68);
   },
   cover(ctx, d) {
     CR.base(ctx, d);
@@ -796,14 +796,14 @@ const CR = {
   inner(ctx, d) {
     CR.base(ctx, d, 0.35);
     let y = CR.head(ctx, d, d.title, String(d.n).padStart(2, '0'), H * 0.45, 380, 130);
-    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 400} ${s2}px "${CR.sans(d.F)}"`, W - 220, H - y - 220, 38, 28, 1.4); drawRich(ctx, f, W / 2, y + 50 + f.size, (s2, em) => `${em ? 700 : 400} ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.4, { align: 'center' }); }
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 500} ${s2}px "${CR.sans(d.F)}"`, W - 200, H - y - 170, 46, 34, 1.38); drawRich(ctx, f, W / 2, y + 44 + f.size, (s2, em) => `${em ? 700 : 500} ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.38, { align: 'center' }); }
     footer(ctx, d.B, { body: CR.sans(d.F) }, '', d.n, d.total, '#FFFFFF', 0.7);
     grain(ctx, 0.06);
   },
   cta(ctx, d) {
     CR.base(ctx, d, 0.3);
     let y = CR.head(ctx, d, d.title, '', H * 0.5, 420, 150);
-    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2) => `400 ${s2}px "${CR.sans(d.F)}"`, W - 240, 150, 36, 28, 1.4); y = drawRich(ctx, f, W / 2, y + 40 + f.size, (s2) => `400 ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.4, { align: 'center' }); }
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2) => `500 ${s2}px "${CR.sans(d.F)}"`, W - 220, 200, 42, 32, 1.38); y = drawRich(ctx, f, W / 2, y + 40 + f.size, (s2) => `500 ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.38, { align: 'center' }); }
     CR.button(ctx, d, (d.button || 'SALVE ESTE POST').toUpperCase() + ' →', y + 50);
     grain(ctx, 0.06);
   },
