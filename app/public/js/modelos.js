@@ -39,8 +39,19 @@ export const MODELOS = [
     receita: 'Foto real em tela cheia com tom quente de filme; selo do perfil no topo; manchete condensada enorme com as palavras de ligação (que, de, pra) pequenas e em itálico, "penduradas" na linha.',
     serve: 'Bastidores, rotina, opinião e storytelling com foto da pessoa.',
   },
+  {
+    key: 'tweet', nome: 'Post de rede', origem: '@kevynieduardo',
+    receita: 'Cada lâmina parece uma postagem do X/Twitter: fundo branco, foto e nome do perfil com selo azul, @, texto corrido grande e imagem com cantos arredondados.',
+    serve: 'Opinião, antes e depois, curiosidades e "thread" de dicas. Muito compartilhável para qualquer cliente.',
+  },
+  {
+    key: 'capa', nome: 'Capa de revista', origem: '@mobileeditingclub',
+    receita: 'Retrato em tela cheia; nome da marca empilhado no canto; chamada curta minúscula; manchete sem serifa pesadíssima e apertada, com a palavra-chave em itálico serifado; botão pequeno colorido "arrasta →".',
+    serve: 'Beleza, moda, estética e lançamentos com fotos de impacto (Maison K., Annielly).',
+  },
 ];
 // Perfis estudados que não viraram modelo próprio (a receita já está coberta por outro):
 //   @maarcelodsgn — pessoa recortada sobre cor sólida + título 3D/metálico + faixa com o nome → coberto pelo Pôster
 //     (o recorte da pessoa exige remover o fundo da foto, que o gerador ainda não faz).
+//   @kevynieduardo — também usa frase serifada branca sobre foto + paleta de cores em círculos (coberto pelo Editorial).
 export const MODELO_PADRAO = 'editorial';

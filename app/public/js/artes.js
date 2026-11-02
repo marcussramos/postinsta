@@ -53,7 +53,7 @@ export function brandColors(list) {
 
 // ───────────────────────── fontes (Google) sob demanda
 const loaded = new Set();
-const FAMILY_AXES = { 'Anton': '', 'Yellowtail': '', 'Allura': '', 'Great Vibes': '', 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
+const FAMILY_AXES = { 'Inter': 'ital,wght@0,400;0,700;0,800;0,900;1,400', 'Anton': '', 'Yellowtail': '', 'Allura': '', 'Great Vibes': '', 'Cormorant Garamond': 'ital,wght@0,400;0,500;0,600;0,700;1,400;1,500', 'Playfair Display': 'ital,wght@0,400;0,600;0,700;0,800;1,400;1,600', 'Montserrat': 'ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400', 'Lato': 'ital,wght@0,300;0,400;0,700;0,900;1,400' };
 async function loadFonts(names) {
   for (const n of names.filter((x) => x && !loaded.has(x))) {
     const axes = n in FAMILY_AXES ? FAMILY_AXES[n] : (SCRIPTS.includes(n) ? '' : 'ital,wght@0,400;0,700;1,400');
@@ -696,7 +696,115 @@ const MA = {
   },
 };
 
-export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA] };
+// ───────────────────────── direção 8: POST DE REDE (referência: carrosséis em formato de post do X/Twitter)
+// Receita: fundo branco limpo; cabeçalho de perfil (foto, nome, selo azul, @ e "···"); texto corrido grande,
+// como uma postagem; imagem com cantos arredondados; rodapé discreto. Lê como conversa, gera muito compartilhamento.
+const TW = {
+  font: (F) => (SERIFS.includes(F.body) ? 'Inter' : F.body === 'Montserrat' ? 'Inter' : F.body),
+  head(ctx, d, y = 120) {
+    const { B } = d; const f = TW.font(d.F); const av = d.avatar; const r = 46, x = 90;
+    if (av) clipped(ctx, () => circle(ctx, x + r, y, r), () => cover(ctx, av, x, y - r, r * 2, r * 2, 0.2));
+    else { ctx.fillStyle = B.emph; ctx.beginPath(); circle(ctx, x + r, y, r); ctx.fill(); }
+    ctx.fillStyle = '#0F1419'; ctx.font = `700 34px "${f}"`; const nm = d.name || ''; ctx.fillText(nm, x + r * 2 + 24, y - 6);
+    const nw = ctx.measureText(nm).width; const bx = x + r * 2 + 24 + nw + 22;
+    ctx.fillStyle = '#1D9BF0'; ctx.beginPath(); circle(ctx, bx, y - 17, 15); ctx.fill();
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(bx - 7, y - 17); ctx.lineTo(bx - 1, y - 11); ctx.lineTo(bx + 8, y - 23); ctx.stroke();
+    ctx.fillStyle = '#536471'; ctx.font = `400 28px "${f}"`; ctx.fillText(d.handle || '', x + r * 2 + 24, y + 32);
+    ctx.fillStyle = '#536471'; for (let i = 0; i < 3; i++) { ctx.beginPath(); circle(ctx, W - 110 + i * 16, y - 4, 4); ctx.fill(); }
+  },
+  body(ctx, d, text, y, maxH, from = 52) {
+    const f = TW.font(d.F);
+    const fit = fitRich(ctx, tokens(text), (s2, em) => `${em ? 700 : 400} ${s2}px "${f}"`, W - 180, maxH, from, 34, 1.36);
+    return drawRich(ctx, fit, 90, y + fit.size, (s2, em) => `${em ? 700 : 400} ${s2}px "${f}"`, '#0F1419', '#0F1419', 1.36);
+  },
+  photo(ctx, photo, y, h) {
+    if (!photo || h < 220) return y;
+    clipped(ctx, () => rounded(ctx, 90, y, W - 180, h, 32), () => cover(ctx, photo, 90, y, W - 180, h, 0.3));
+    ctx.strokeStyle = '#CFD9DE'; ctx.lineWidth = 2; ctx.beginPath(); rounded(ctx, 90, y, W - 180, h, 32); ctx.stroke();
+    return y + h;
+  },
+  base(ctx, d) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); TW.head(ctx, d); },
+  foot(ctx, d) { ctx.fillStyle = '#536471'; ctx.font = `400 24px "${TW.font(d.F)}"`; if (d.total > 1) spaced(ctx, `${d.n}/${d.total}`, W - 90, H - 70, 2, 'right'); },
+  cover(ctx, d) {
+    TW.base(ctx, d);
+    let y = TW.body(ctx, d, `${plain(d.hook)}${d.sub ? `\n\n${d.sub}` : ''}`, 210, d.photo ? 420 : 900, 64);
+    TW.photo(ctx, d.photo, y + 40, H - y - 180);
+    TW.foot(ctx, d);
+  },
+  inner(ctx, d) {
+    TW.base(ctx, d);
+    let y = TW.body(ctx, d, `*${plain(d.title)}*${d.text ? `\n\n${d.text}` : ''}`, 210, d.photo ? 520 : 900, 52);
+    TW.photo(ctx, d.photo, y + 40, H - y - 180);
+    TW.foot(ctx, d);
+  },
+  cta(ctx, d) {
+    TW.base(ctx, d);
+    let y = TW.body(ctx, d, `*${plain(d.title)}*${d.text ? `\n\n${d.text}` : ''}`, 210, 600, 60);
+    const f = TW.font(d.F);
+    pill(ctx, d.button ? d.button : 'Salvar este post', 90, y + 60, `700 30px "${f}"`, '#0F1419', '#FFFFFF', 44, 88);
+    TW.foot(ctx, d);
+  },
+};
+
+// ───────────────────────── direção 9: CAPA DE REVISTA (referência: capas editoriais de perfis de criação)
+// Receita: retrato em tela cheia; logotipo empilhado no canto; chamada curta minúscula; manchete sem serifa
+// pesadíssima e apertada, centralizada, com a palavra-chave em itálico serifado; botão pequeno "veja →" colorido.
+const CR = {
+  sans: (F) => (['Inter', 'Montserrat', 'Poppins', 'DM Sans'].includes(F.body) ? F.body : 'Inter'),
+  serif: (F) => (SERIFS.includes(F.title) ? F.title : 'Playfair Display'),
+  font: (F) => (s, em) => (em ? `italic 500 ${s}px "${CR.serif(F)}"` : `800 ${s}px "${CR.sans(F)}"`),
+  base(ctx, d, dim = 0) {
+    const { B, photo, F } = d;
+    ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
+    if (photo) cover(ctx, photo, 0, 0, W, H, 0.25);
+    const g = ctx.createLinearGradient(0, H * 0.35, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${0.55 + dim})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (dim) { ctx.fillStyle = `rgba(0,0,0,${dim})`; ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = '#FFFFFF'; ctx.font = `800 20px "${CR.sans(F)}"`;
+    const words = (d.name || '').toUpperCase().split(/\s+/).slice(0, 3);
+    words.forEach((w, i) => ctx.fillText(w, 70, 90 + i * 22));
+  },
+  head(ctx, d, text, kicker, cy, maxH, from) {
+    const { F } = d;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 30;
+    const tf = fitRich(ctx, tokens(text, true), CR.font(F), W - 140, maxH, from, 64, 0.92);
+    const h = tf.lines.length * tf.size * 0.92 + (kicker ? 60 : 0);
+    let y = cy - h / 2;
+    if (kicker) { ctx.fillStyle = '#FFFFFF'; ctx.font = `700 44px "${CR.sans(F)}"`; const kw = ctx.measureText(kicker).width; ctx.fillText(kicker, W / 2 - kw / 2, y + 40); y += 60; }
+    if ('letterSpacing' in ctx) ctx.letterSpacing = `${-Math.round(tf.size * 0.03)}px`;
+    y = drawRich(ctx, tf, W / 2, y + tf.size * 0.82, CR.font(F), '#FFFFFF', '#FFFFFF', 0.92, { align: 'center' });
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    ctx.restore();
+    return y;
+  },
+  button(ctx, d, label, y) {
+    const { B, F } = d; const font = `800 22px "${CR.sans(F)}"`; ctx.font = font;
+    const w = ctx.measureText(label).width + 56;
+    pill(ctx, label, W / 2 - w / 2, y, font, contrast(B.deco, '#FFFFFF') >= 2 ? B.deco : B.emph, '#FFFFFF', 28, 52);
+  },
+  cover(ctx, d) {
+    CR.base(ctx, d);
+    const y = CR.head(ctx, d, d.hook, d.eyebrow ? d.eyebrow.toLowerCase() : '', H * 0.66, 420, 170);
+    if (d.total > 1) CR.button(ctx, d, 'ARRASTA PRO LADO →', Math.min(y + 40, H - 120));
+    grain(ctx, 0.06);
+  },
+  inner(ctx, d) {
+    CR.base(ctx, d, 0.35);
+    let y = CR.head(ctx, d, d.title, String(d.n).padStart(2, '0'), H * 0.45, 380, 130);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2, em) => `${em ? 700 : 400} ${s2}px "${CR.sans(d.F)}"`, W - 220, H - y - 220, 38, 28, 1.4); drawRich(ctx, f, W / 2, y + 50 + f.size, (s2, em) => `${em ? 700 : 400} ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.4, { align: 'center' }); }
+    footer(ctx, d.B, { body: CR.sans(d.F) }, '', d.n, d.total, '#FFFFFF', 0.7);
+    grain(ctx, 0.06);
+  },
+  cta(ctx, d) {
+    CR.base(ctx, d, 0.3);
+    let y = CR.head(ctx, d, d.title, '', H * 0.5, 420, 150);
+    if (d.text) { const f = fitRich(ctx, tokens(d.text), (s2) => `400 ${s2}px "${CR.sans(d.F)}"`, W - 240, 150, 36, 28, 1.4); y = drawRich(ctx, f, W / 2, y + 40 + f.size, (s2) => `400 ${s2}px "${CR.sans(d.F)}"`, '#FFFFFF', '#FFFFFF', 1.4, { align: 'center' }); }
+    CR.button(ctx, d, (d.button || 'SALVE ESTE POST').toUpperCase() + ' →', y + 50);
+    grain(ctx, 0.06);
+  },
+};
+
+export const STYLES = { editorial: ['Editorial', ED], revista: ['Revista', RV], impacto: ['Impacto', IM], poster: ['Pôster', PO], perfil: ['Perfil', PF], neon: ['Neon', NE], manchete: ['Manchete', MA], tweet: ['Post de rede', TW], capa: ['Capa de revista', CR] };
 
 const toBlob = (cv) => new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.92));
 
@@ -716,7 +824,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const B = brandColors(client?.brand_kit?.colors);
   const F = brandFonts(client?.brand_kit?.fonts);
   const R = (STYLES[style] || STYLES.editorial)[1];
-  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
+  await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR].includes(R) ? 'Inter' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
   const pages = piece.format === 'IMAGE'
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
