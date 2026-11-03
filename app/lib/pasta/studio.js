@@ -1,5 +1,6 @@
 // Estúdio: a IA escreve a peça inteira (3 ganchos, texto de cada lâmina, CTA e legenda) no tom do cliente.
 //   studio POST {client_id, format, goal, topic, slides, duration, template, extra}  →  { piece, warnings, checks }
+//   Cliente avulso (de fora do app): client_id "avulso" + client {name, ig_username, brand_voice, niche}.
 // Não salva nada: o painel mostra, a equipe ajusta e cria o post no Fluxo pelo /api/posts (e o roteiro pelo ?r=script).
 import { route, send, readJson, need } from '../http.js';
 import { requirePerm, needClient } from '../auth.js';
@@ -9,7 +10,7 @@ import { brandBrief } from '../onboarding.js';
 import { hookBank } from './script.js';
 import { TEMPLATES, NICHE_RULES, DURATIONS, cleanScript, checkScript } from '../../public/roteiro.js';
 
-export const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Post estático', REELS: 'Reels' };
+export const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Post estático', REELS: 'Reels', COVER: 'Capa de vídeo' };
 export const GOALS = {
   educar: { label: 'Educar', cta: 'salvar ou compartilhar (conteúdo que a pessoa quer guardar)' },
   engajar: { label: 'Engajar', cta: 'comentar ou responder uma pergunta simples' },
@@ -46,7 +47,7 @@ export function cleanPiece(r = {}, format) {
     piece.slides = (Array.isArray(r.slides) ? r.slides : []).slice(0, 20)
       .map((s) => ({ title: str(s?.title, 120).trim(), text: str(s?.text, 400).trim() })).filter((s) => s.title || s.text);
   }
-  if (format === 'IMAGE') { piece.headline = str(r.headline, 120).trim(); piece.support = str(r.support, 300).trim(); }
+  if (format === 'IMAGE' || format === 'COVER') { piece.headline = str(r.headline, 120).trim(); piece.support = str(r.support, 300).trim(); }
   if (format === 'REELS') {
     const s = cleanScript({ ...r, hooks: piece.hooks, cta: piece.cta, caption: piece.caption });
     Object.assign(piece, { scenes: s.scenes, audio: s.audio, cover: s.cover });
@@ -88,6 +89,10 @@ function prompt({ c, b, bank, samples }) {
 - "headline": frase principal da arte, até 9 palavras (o gancho escolhido pode virar a headline; escreva uma versão própria).
 - "support": apoio na arte, até 20 palavras.
 - O conteúdo de verdade vai na legenda.`,
+    COVER: `CAPA DE VÍDEO (Reels/TikTok, 1080×1920; no perfil aparece o centro 4:5).
+- "headline": o texto grande da capa, de 2 a 6 palavras, que faz a pessoa abrir o vídeo (marque com *asteriscos* a palavra mais forte).
+- "support": frase curta de apoio, até 8 palavras, ou vazio.
+- "caption": legenda curta para o vídeo, com CTA.`,
     REELS: `REELS de ${b.duration}s (vertical 9:16) para gravar com celular. Modelo: ${TEMPLATES[b.template].label} — ${TEMPLATES[b.template].beats}
 - Cenas numeradas: "show" (o que aparece, simples de gravar), "say" (fala exata, como a pessoa fala de verdade), "text" (texto na tela até 6 palavras ou vazio), "secs".
 - A 1ª cena é a do gancho ("say" pode ficar vazio). A soma dos "secs" ≈ ${b.duration}s (±5s).
@@ -96,6 +101,7 @@ function prompt({ c, b, bank, samples }) {
   const json = {
     CAROUSEL: '{"hooks":["","",""],"slides":[{"title":"","text":""}],"cta":"","caption":"","hashtags":[""],"warnings":[]}',
     IMAGE: '{"hooks":["","",""],"headline":"","support":"","cta":"","caption":"","hashtags":[""],"warnings":[]}',
+    COVER: '{"hooks":["","",""],"headline":"","support":"","cta":"","caption":"","hashtags":[""],"warnings":[]}',
     REELS: '{"hooks":["","",""],"scenes":[{"show":"","say":"","text":"","secs":3}],"audio":"","cover":"","cta":"","caption":"","hashtags":[""],"warnings":[]}',
   }[b.format];
   return `ESTÚDIO DE CONTEÚDO
@@ -122,17 +128,24 @@ Responda SOMENTE com JSON válido:
 ${json}`;
 }
 
+// cliente de fora do app: só o que a equipe digitou no Estúdio (nada é salvo)
+export function avulsoClient(x = {}) {
+  return { id: null, name: str(x.name, 80).trim() || 'Cliente avulso', ig_username: str(x.ig_username, 40).replace(/^@/, '').trim() || null,
+    brand_voice: str(x.brand_voice, 600).trim(), brand_kit: { niche: str(x.niche, 40).trim() || null } };
+}
+
 export const studioRoute = route({
   POST: async (req, res) => {
     const u = await requirePerm(req, 'ia');
     const body = await readJson(req);
-    need(isUuid(body.client_id), 400, 'Escolha o cliente.');
-    needClient(u, body.client_id);
+    const avulso = body.client_id === 'avulso';
+    need(avulso || isUuid(body.client_id), 400, 'Escolha o cliente.');
+    if (!avulso) needClient(u, body.client_id);
     const b = cleanStudioInput(body);
     need(b.topic.length >= 3, 400, 'Escreva o tema da peça.');
-    const c = await db.one('clients', { select: '*', id: `eq.${body.client_id}` });
+    const c = avulso ? avulsoClient(body.client) : await db.one('clients', { select: '*', id: `eq.${body.client_id}` });
     need(c, 404, 'Cliente não encontrado.');
-    const [bank, samples] = await Promise.all([hookBank(c.id, 10).catch(() => []), voiceSamples(c.id)]);
+    const [bank, samples] = avulso ? [[], []] : await Promise.all([hookBank(c.id, 10).catch(() => []), voiceSamples(c.id)]);
     const r = jsonFrom(await askClaude([{ type: 'text', text: prompt({ c, b, bank, samples }) }], { maxTokens: 5000 }));
     const piece = cleanPiece(r, b.format);
     if (b.format === 'CAROUSEL' && piece.slides?.length) piece.slides[0].title = ''; // a capa recebe o gancho escolhido

@@ -58,3 +58,16 @@ test('sem a chave da IA avisa; formato inválido vira carrossel; Reels normaliza
   assert.equal(reels.scenes.length, 1);
   assert.equal(reels.cover, 'e');
 });
+
+test('cliente avulso e capa de vídeo: gera sem cliente cadastrado', async () => {
+  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  const r = await call('/api/pasta?r=studio', { method: 'POST', body: { client_id: 'avulso', client: { name: 'Pet Shop do Zé', ig_username: '@petze', brand_voice: 'divertido' }, format: 'COVER', topic: 'Banho e tosa em 30 minutos' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.piece.format, 'COVER');
+  const prompt = S.fakes.ig.aiCalls.at(-1).messages[0].content[0].text;
+  assert.match(prompt, /Cliente: Pet Shop do Zé \(@petze\)/);
+  assert.match(prompt, /CAPA DE VÍDEO/);
+  assert.match(prompt, /Tom de voz: divertido/);
+  assert.equal((await call('/api/pasta?r=studio', { method: 'POST', body: { client_id: 'qualquer', topic: 'x y z' } })).status, 400);
+});
+
