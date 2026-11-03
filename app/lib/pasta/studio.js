@@ -10,7 +10,7 @@ import { brandBrief } from '../onboarding.js';
 import { hookBank } from './script.js';
 import { TEMPLATES, NICHE_RULES, DURATIONS, cleanScript, checkScript } from '../../public/roteiro.js';
 
-export const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Post estático', REELS: 'Reels', COVER: 'Capa de vídeo' };
+export const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Post estático', REELS: 'Reels', COVER: 'Capa de Reels' };
 export const GOALS = {
   educar: { label: 'Educar', cta: 'salvar ou compartilhar (conteúdo que a pessoa quer guardar)' },
   engajar: { label: 'Engajar', cta: 'comentar ou responder uma pergunta simples' },
