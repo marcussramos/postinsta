@@ -10,9 +10,11 @@ import { openPost, upsert } from './post.js';
 import { renderPiece, brandFonts, loadPhotos } from './artes.js';
 import { MODELOS, MODELO_PADRAO } from './modelos.js';
 
-const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels' };
+const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels', COVER: 'Capa de vídeo' };
+const SINGLE = ['IMAGE', 'COVER']; // peças de uma arte só (dá para escrever o texto sem IA)
+const FONT_CHOICES = ['Playfair Display', 'Cormorant Garamond', 'DM Serif Display', 'Montserrat', 'Poppins', 'Inter', 'Lato', 'Anton'];
 const GOALS = { educar: 'Educar', engajar: 'Engajar', autoridade: 'Autoridade', vender: 'Vender' };
-const st = () => (S.studio ||= { client: '', format: 'CAROUSEL', goal: 'educar', topic: '', slides: 7, duration: 30, template: 'livre', extra: '', busy: false, res: null, hook: 0 });
+const st = () => (S.studio ||= { avulso: { name: '', handle: '', voice: '', colors: ['#1D1A1A', '#F3EFEA', '#7B1F31'], font: 'Playfair Display' }, client: '', format: 'CAROUSEL', goal: 'educar', topic: '', slides: 7, duration: 30, template: 'livre', extra: '', busy: false, res: null, hook: 0 });
 
 function seg(label, options, value, onPick) {
   return h('div', { class: 'field' }, h('span', { class: 'label' }, label),
@@ -23,7 +25,7 @@ function seg(label, options, value, onPick) {
 function viewStudio() {
   const s = st();
   const clients = S.clients;
-  if ((!s.client || !clients.some((c) => c.id === s.client)) && clients.length) s.client = clients[0].id;
+  if (s.client !== 'avulso' && (!s.client || !clients.some((c) => c.id === s.client)) && clients.length) s.client = clients[0].id;
   const head = h('div', { class: 'page-head' }, h('div', {},
     h('div', { class: 'eyebrow' }, 'Produção'),
     h('h1', {}, 'Estúdio ', h('i', {}, 'de criação'))));
@@ -31,8 +33,9 @@ function viewStudio() {
 }
 
 function briefCard(s, clients) {
-  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; } },
-    ...clients.map((c) => h('option', { value: c.id, selected: c.id === s.client }, c.name)));
+  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; render(); } },
+    ...clients.map((c) => h('option', { value: c.id, selected: c.id === s.client }, c.name)),
+    h('option', { value: 'avulso', selected: s.client === 'avulso' }, '✦ Avulso (cliente de fora do app)'));
   const topic = h('textarea', { id: 'st-topic', rows: 3, placeholder: 'Ex.: 5 sinais de que está na hora de clarear os dentes', oninput: (e) => { s.topic = e.target.value; } }, s.topic);
   const extra = h('textarea', { id: 'st-extra', rows: 2, placeholder: 'Opcional: público, oferta, referência, o que evitar…', oninput: (e) => { s.extra = e.target.value; } }, s.extra);
   const rerender = () => render();
@@ -47,17 +50,45 @@ function briefCard(s, clients) {
           h('select', { id: 'st-tpl', onchange: (e) => { s.template = e.target.value; } }, ...Object.entries(TEMPLATES).map(([k, t]) => h('option', { value: k, selected: k === s.template }, t.label)))))
       : null;
   const go = h('button', { class: 'btn primary studio-go', type: 'button', disabled: s.busy || !can('ia'), onclick: generate }, s.busy ? 'Escrevendo…' : s.res ? '✨ Gerar de novo' : '✨ Criar com IA');
+  const manual = SINGLE.includes(s.format) ? h('button', { class: 'btn ghost studio-go', type: 'button', onclick: () => useOwnText(s) }, '✍️ Usar meu texto (sem IA)') : null;
   return h('section', { class: 'card studio-brief' },
     h('h3', {}, 'Briefing'),
-    h('div', { class: 'field' }, h('label', { for: 'st-client' }, 'Cliente'), sel, voiceHint(clients.find((c) => c.id === s.client))),
+    h('div', { class: 'field' }, h('label', { for: 'st-client' }, 'Cliente'), sel, s.client === 'avulso' ? avulsoFields(s) : voiceHint(clients.find((c) => c.id === s.client))),
     seg('Formato', FORMATS, s.format, (k) => { s.format = k; rerender(); }),
     seg('Objetivo', GOALS, s.goal, (k) => { s.goal = k; rerender(); }),
-    h('div', { class: 'field' }, h('label', { for: 'st-topic' }, 'Tema'), topic),
+    h('div', { class: 'field' }, h('label', { for: 'st-topic' }, SINGLE.includes(s.format) ? 'Tema ou o texto da capa' : 'Tema'), topic),
     byFormat,
     h('div', { class: 'field' }, h('label', { for: 'st-extra' }, 'Pedido extra'), extra),
-    go,
+    go, manual,
     can('ia') ? h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'A IA usa o tom de voz, o kit da marca, as regras do nicho e os ganchos que já funcionaram para este cliente.')
       : h('p', { class: 'hint muted', style: 'margin:0' }, 'Sem permissão para usar a IA.'));
+}
+
+// cliente avulso: nome, @, cores e fonte digitados na hora (nada é salvo no app)
+function avulsoFields(s) {
+  const a = s.avulso;
+  const inp = (key, ph) => h('input', { value: a[key] || '', placeholder: ph, oninput: (e) => { a[key] = e.target.value; } });
+  return h('div', { class: 'studio-avulso' },
+    h('div', { class: 'studio-2col' }, inp('name', 'Nome (ex.: Clínica Sorriso)'), inp('handle', '@ do Instagram (opcional)')),
+    h('textarea', { rows: 2, placeholder: 'Tom de voz em 1 frase (opcional): "descontraído, fala com mães de pet"', oninput: (e) => { a.voice = e.target.value; } }, a.voice || ''),
+    h('div', { class: 'studio-avulso-row' },
+      h('span', { class: 'label' }, 'Cores'),
+      ...a.colors.map((c, i) => h('input', { type: 'color', value: c, 'aria-label': ['Cor escura', 'Cor clara', 'Cor de destaque'][i], title: ['Escura (texto/fundo)', 'Clara (papel)', 'Destaque'][i], oninput: (e) => { a.colors[i] = e.target.value; } })),
+      h('select', { 'aria-label': 'Fonte dos títulos', onchange: (e) => { a.font = e.target.value; } }, ...FONT_CHOICES.map((f) => h('option', { value: f, selected: f === a.font }, f)))),
+    h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'Avulso não fica salvo e não vai para o Fluxo: você gera e baixa. Escolha as fotos no passo das artes.'));
+}
+function avulsoClient(s) {
+  const a = s.avulso;
+  return { id: 'avulso', name: a.name || 'Cliente avulso', ig_username: (a.handle || '').replace(/^@/, '') || null, brand_voice: a.voice || '', brand_kit: { colors: a.colors, fonts: `Títulos: ${a.font}. Corpo: ${['Anton', 'Playfair Display', 'Cormorant Garamond', 'DM Serif Display'].includes(a.font) ? 'Montserrat' : a.font}` } };
+}
+const studioClient = (s) => (s.client === 'avulso' ? avulsoClient(s) : clientById(s.client) || {});
+
+// capa/estático sem IA: o tema vira o texto da arte
+function useOwnText(s) {
+  const t = (s.topic || '').trim();
+  if (!t) return toast('Escreva o texto da capa no campo Tema.', true);
+  s.res = { piece: { format: s.format, hooks: [t], headline: t, support: (s.extra || '').trim(), cta: '', caption: '', hashtags: [] }, input: { topic: t, goal: s.goal }, warnings: [], voice: null, manual: true, client_id: s.client };
+  s.hook = 0; s.arts = null; render();
 }
 
 // sem tom de voz cadastrado a IA não tem de onde tirar o jeito do cliente falar
@@ -72,7 +103,8 @@ async function generate() {
   if ((s.topic || '').trim().length < 3) return toast('Escreva o tema da peça.', true);
   s.busy = true; render();
   try {
-    s.res = await api('/api/pasta?r=studio', { method: 'POST', body: { client_id: s.client, format: s.format, goal: s.goal, topic: s.topic, slides: s.slides, duration: s.duration, template: s.template, extra: s.extra } });
+    const extraClient = s.client === 'avulso' ? { client: { name: s.avulso.name, ig_username: s.avulso.handle, brand_voice: s.avulso.voice } } : {};
+    s.res = await api('/api/pasta?r=studio', { method: 'POST', body: { ...extraClient, client_id: s.client, format: s.format, goal: s.goal, topic: s.topic, slides: s.slides, duration: s.duration, template: s.template, extra: s.extra } });
     s.res.client_id = s.client; s.hook = 0; s.arts = null; if (s.artPhotosClient !== s.client) { s.artPhotos = null; s.artPhotosClient = null; }
   } catch (e) { toast(e.message, true); }
   s.busy = false; render();
@@ -90,7 +122,7 @@ function resultArea(s) {
         h('li', {}, 'Ajuste aqui, copie ou baixe o CSV para o seu modelo no Canva.'),
         h('li', {}, 'Crie o post no Fluxo: legenda pronta, só falta subir a arte.'))));
   const p = s.res.piece;
-  const c = clientById(s.res.client_id || s.client) || {};
+  const c = s.res.client_id === 'avulso' ? avulsoClient(s) : clientById(s.res.client_id || s.client) || {};
   const hookBox = h('div', { class: 'studio-hooks' }, ...p.hooks.map((t, i) => h('button', {
     type: 'button', class: 'studio-hook', 'aria-pressed': String(s.hook === i),
     onclick: () => { s.hook = i; render(); },
@@ -99,15 +131,18 @@ function resultArea(s) {
 
   const v = s.res.voice;
   const parts = [
-    v && !v.described && !v.samples ? h('p', { class: 'studio-voice-warn' }, '⚠️ Este texto saiu no tom genérico: o cliente não tem tom de voz cadastrado nem legendas aprovadas no app. Cadastre o tom (ou cole 2 ou 3 legendas que ele gosta no "Pedido extra") e gere de novo.')
+    v && !v.described && !v.samples && c.id !== 'avulso' ? h('p', { class: 'studio-voice-warn' }, '⚠️ Este texto saiu no tom genérico: o cliente não tem tom de voz cadastrado nem legendas aprovadas no app. Cadastre o tom (ou cole 2 ou 3 legendas que ele gosta no "Pedido extra") e gere de novo.')
       : v ? h('p', { class: 'studio-ok' }, `✓ Escrito no tom ${v.described ? 'cadastrado' : ''}${v.described && v.samples ? ' e ' : ''}${v.samples ? `de ${v.samples} legenda${v.samples > 1 ? 's' : ''} já aprovada${v.samples > 1 ? 's' : ''}` : ''} do cliente.`) : null,
-    h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, '1 · Gancho'), h('span', { class: 'muted' }, 'A frase que para o scroll')), hookBox, hookEdit),
+    s.res.manual ? null : h('section', { class: 'card' }, h('div', { class: 'home-card-head' }, h('h3', {}, '1 · Gancho'), h('span', { class: 'muted' }, 'A frase que para o scroll')), hookBox, hookEdit),
   ];
   if (p.format === 'CAROUSEL') parts.push(slidesCard(s, p));
-  if (p.format === 'IMAGE') parts.push(imageCard(p));
+  if (SINGLE.includes(p.format)) parts.push(imageCard(p));
   if (p.format === 'REELS') parts.push(reelsCard(p));
   if (p.format !== 'REELS') parts.push(artsCard(s, p, c));
-  parts.push(captionCard(p), checksCard(s, c), actionsCard(s, p, c));
+  if (p.format !== 'COVER' && !s.res.manual) parts.push(captionCard(p));
+  parts.push(checksCard(s, c));
+  if (c.id === 'avulso' || p.format === 'COVER') parts.push(h('p', { class: 'studio-ok' }, c.id === 'avulso' ? 'Cliente avulso: baixe as artes acima (⬇). Elas não vão para o Fluxo.' : 'Capa de vídeo: baixe a arte e use como capa no Instagram (Editar capa → Adicionar do rolo) ou no CapCut.'));
+  else parts.push(actionsCard(s, p, c));
   return h('div', { class: 'studio-result' }, ...parts.filter(Boolean));
 }
 
@@ -169,7 +204,7 @@ function canvaText(s, p) {
 function canvaText0(s, p) {
   const hook = p.hooks[s.hook] || '';
   if (p.format === 'CAROUSEL') return p.slides.map((sl, i) => `LÂMINA ${i + 1}${i === 0 ? ' (CAPA)' : i === p.slides.length - 1 ? ' (CTA)' : ''}\n${[i === 0 ? hook : sl.title, sl.text].filter(Boolean).join('\n')}`).join('\n\n');
-  if (p.format === 'IMAGE') return [p.headline || hook, p.support].filter(Boolean).join('\n');
+  if (SINGLE.includes(p.format)) return [p.headline || hook, p.support].filter(Boolean).join('\n');
   return [`GANCHO: ${hook}`, p.cover ? `CAPA: ${p.cover}` : '', ...(p.scenes || []).map((sc, i) => `CENA ${i + 1} (${sc.secs || 0}s)\n🎥 ${sc.show || ''}\n🗣 ${i === 0 && !sc.say ? hook : sc.say || ''}${sc.text ? `\n🔤 ${sc.text}` : ''}`), `CTA: ${p.cta || ''}`].filter(Boolean).join('\n\n');
 }
 
@@ -221,7 +256,7 @@ function artsCard(s, p, c) {
   const photoIn = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: async (e) => {
     const files = [...(e.target.files || [])].slice(0, 10); if (!files.length) return;
     s.artPhotos = (await Promise.all(files.map(async (f) => { const img = new Image(); img.src = URL.createObjectURL(f); await img.decode().catch(() => null); return img; }))).filter((i) => i.width);
-    s.artPhotosFrom = 'escolhidas'; await makeArts(s, p, c);
+    s.artPhotosFrom = 'escolhidas'; s.artPhotosClient = c.id; await makeArts(s, p, c);
   } });
   const cards = h('div', { class: 'studio-models' }, ...MODELOS.map((m) => h('button', {
     type: 'button', class: 'studio-model', 'aria-pressed': String(s.artStyle === m.key), title: m.receita,
@@ -229,7 +264,7 @@ function artsCard(s, p, c) {
   }, h('b', {}, m.nome), h('span', {}, m.serve))));
   const eyebrow = h('input', { value: s.artEyebrow ?? '', placeholder: 'Chamada (opcional): "coisas que", "guia", "passo a passo"', 'aria-label': 'Chamada da capa', oninput: (e) => { s.artEyebrow = e.target.value; } });
   const gen = h('button', { class: 'btn primary', type: 'button', disabled: s.artBusy, onclick: () => makeArts(s, p, c) }, s.artBusy ? 'Montando…' : s.arts?.length ? '↻ Refazer' : '🎨 Gerar artes');
-  const grid = s.arts?.length ? h('div', { class: 'studio-arts' }, ...s.arts.map((a, i) => h('a', { class: 'studio-art', href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg`, title: 'Baixar' },
+  const grid = s.arts?.length ? h('div', { class: `studio-arts${p.format === 'COVER' ? ' cover' : ''}` }, ...s.arts.map((a, i) => h('a', { class: 'studio-art', href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg`, title: 'Baixar' },
     h('img', { src: a.url, alt: `Lâmina ${i + 1}` }), h('span', {}, `${i + 1} ⬇`)))) : null;
   const nPh = s.artPhotos?.length || 0;
   return h('section', { class: 'card' },
@@ -239,7 +274,8 @@ function artsCard(s, p, c) {
     h('div', { class: 'studio-art-tools' }, eyebrow, photoIn,
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => photoIn.click() }, nPh && s.artPhotosFrom === 'escolhidas' ? `${nPh} foto(s) escolhida(s) · trocar` : 'Escolher fotos'),
       gen),
-    s.arts?.length && !nPh ? h('p', { class: 'studio-voice-warn' }, 'Não achei fotos deste cliente no banco de mídia: as artes saíram só com tipografia. Suba fotos dele no banco (pasta → Banco de mídia) ou toque em "Escolher fotos".') : null,
+    s.arts?.length && !nPh ? h('p', { class: 'studio-voice-warn' }, c.id === 'avulso' ? 'Toque em "Escolher fotos" para colocar as fotos do cliente avulso.' : 'Não achei fotos deste cliente no banco de mídia: as artes saíram só com tipografia. Suba fotos dele no banco (pasta → Banco de mídia) ou toque em "Escolher fotos".') : null,
+    p.format === 'COVER' && s.arts?.length ? h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'A faixa tracejada mostra o que aparece na grade do perfil (4:5). Deixe o texto principal dentro dela.') : null,
     grid,
     s.arts?.length ? h('div', { class: 'actions' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => s.arts.forEach((a, i) => setTimeout(() => { const l = h('a', { href: a.url, download: `${(c.name || 'arte').replace(/\s+/g, '-').toLowerCase()}-${i + 1}.jpg` }); document.body.append(l); l.click(); l.remove(); }, i * 250)) }, '⬇ Baixar todas'),
@@ -248,6 +284,7 @@ function artsCard(s, p, c) {
 
 // fotos do cliente: banco de mídia + posts aprovados/publicados (carrega uma vez por cliente)
 async function clientPhotos(s, c) {
+  if (c.id === 'avulso') return s.artPhotosFrom === 'escolhidas' && s.artPhotosClient === 'avulso' ? s.artPhotos : [];
   if (s.artPhotosFrom === 'escolhidas' && s.artPhotosClient === c.id) return s.artPhotos;
   if (s.artPhotosClient === c.id && s.artPhotos) return s.artPhotos;
   const [bank, posts] = await Promise.all([
@@ -262,7 +299,7 @@ async function clientPhotos(s, c) {
 async function makeArts(s, p, c) {
   s.artBusy = true; render();
   try {
-    if (s.artPhotosClient !== c.id) s.artPhotosFrom = null;
+    if (s.artPhotosClient !== c.id) { s.artPhotosFrom = null; s.artPhotos = null; }
     const photos = await clientPhotos(s, c);
     s.artPhotosClient = c.id;
     const { arts } = await renderPiece({ piece: p, hook: p.hooks[s.hook] || '', client: c, style: s.artStyle, photos, eyebrow: s.artEyebrow || '' });

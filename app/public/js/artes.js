@@ -6,6 +6,10 @@
 // Fotos: do banco de mídia / posts do cliente (ou escolhidas na hora). Palavras entre *asteriscos* viram destaque.
 
 const W = 1080, H = 1350;
+// Capa de vídeo (1080×1920): a arte é desenhada na faixa central 4:5 (o que aparece na grade do perfil) e
+// os fundos de tela cheia (cor, foto, degradês, textura) se estendem EXT px para cima e para baixo.
+let EXT = 0;
+const full = (x, y, w, h) => EXT && x === 0 && y === 0 && w === W && h === H;
 
 // ───────────────────────── marca
 const FONT_MAP = [
@@ -139,6 +143,14 @@ function paragraph(ctx, text, x, y, maxW, maxH, family, from, to, color, lh = 1.
 
 // ───────────────────────── imagem
 function cover(ctx, img, x, y, w, h, focusY = 0.35) { // preenche a caixa e corta o que sobra (nunca vaza)
+  const r = Math.max(w / img.width, h / img.height);
+  const iw = img.width * r, ih = img.height * r;
+  if (full(x, y, w, h)) { y = -EXT; h = H + 2 * EXT; return cover0(ctx, img, x, y, w, h, focusY); }
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) * focusY, iw, ih);
+  ctx.restore();
+}
+function cover0(ctx, img, x, y, w, h, focusY) {
   const r = Math.max(w / img.width, h / img.height);
   const iw = img.width * r, ih = img.height * r;
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -821,7 +833,7 @@ const NO = {
     const { B, F, photo } = d; const sans = NO.sans(F);
     const ph = photo ? Math.round(H * ratio) : 0;
     ctx.fillStyle = photo ? NO.block(B, n) : B.deep; ctx.fillRect(0, 0, W, H);
-    if (photo) cover(ctx, photo, 0, 0, W, ph, 0.3);
+    if (photo) cover0(ctx, photo, 0, -EXT, W, ph + EXT, 0.3); // na capa de vídeo a foto sobe até o topo
     const ink = photo ? B.ink : '#FFFFFF';
     const top = photo ? ph + 70 : 260;
     const em = photo ? (contrast(B.deco, NO.block(B, n)) >= 2 ? B.deco : B.emph) : (lum(B.deco) > 0.2 ? B.deco : '#FFFFFF');
@@ -918,10 +930,11 @@ const AD = {
   split(ctx, d, a, b, labels) {
     const { B } = d; const half = W / 2;
     ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
-    if (a) cover(ctx, a, 0, 0, half, H, 0.3);
-    if (b) { ctx.save(); ctx.beginPath(); ctx.rect(half, 0, half, H); ctx.clip(); cover(ctx, b, half, 0, half, H, 0.3); ctx.restore(); }
-    if (!b && a) { ctx.save(); ctx.beginPath(); ctx.rect(half, 0, half, H); ctx.clip(); ctx.filter = 'grayscale(1) brightness(.7)'; cover(ctx, a, 0, 0, W, H, 0.3); ctx.filter = 'none'; ctx.restore(); }
-    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(half - 3, 0, 6, H);
+    const T = -EXT, HH = H + 2 * EXT;
+    if (a) cover0(ctx, a, 0, T, half, HH, 0.3);
+    if (b) cover0(ctx, b, half, T, half, HH, 0.3);
+    if (!b && a) { ctx.save(); ctx.beginPath(); ctx.rect(half, T, half, HH); ctx.clip(); ctx.filter = 'grayscale(1) brightness(.7)'; cover0(ctx, a, 0, T, W, HH, 0.3); ctx.filter = 'none'; ctx.restore(); }
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(half - 3, T, 6, HH);
     const g = ctx.createLinearGradient(0, H * 0.55, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.8)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     AD.tag(ctx, d, labels[0], 50, 70, true); ctx.font = `900 30px "${AD.sans(d.F)}"`;
@@ -1014,8 +1027,8 @@ const CO = {
 const MO = {
   grid(ctx, d, photos) {
     const { B } = d; ctx.fillStyle = B.deep; ctx.fillRect(0, 0, W, H);
-    const g = 8, cw = (W - g) / 2, ch = (H - 2 * g) / 3;
-    for (let i = 0; i < 6; i++) { const p = photos.length ? photos[i % photos.length] : null; const x = (i % 2) * (cw + g), y = Math.floor(i / 2) * (ch + g); if (p) cover(ctx, p, x, y, cw, ch, 0.3); else { ctx.fillStyle = rgba(B.paper, 0.1 + (i % 3) * 0.05); ctx.fillRect(x, y, cw, ch); } }
+    const g = 8, cw = (W - g) / 2, ch = (H + 2 * EXT - 2 * g) / 3;
+    for (let i = 0; i < 6; i++) { const p = photos.length ? photos[i % photos.length] : null; const x = (i % 2) * (cw + g), y = -EXT + Math.floor(i / 2) * (ch + g); if (p) cover0(ctx, p, x, y, cw, ch, 0.3); else { ctx.fillStyle = rgba(B.paper, 0.1 + (i % 3) * 0.05); ctx.fillRect(x, y, cw, ch); } }
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, W, H);
   },
   band(ctx, d, text, sub) {
@@ -1109,7 +1122,7 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const R = (STYLES[style] || STYLES.editorial)[1];
   await loadFonts([...new Set([F.title, F.body, R === IM ? IM.font(F) : null, [PO, MA].includes(R) ? 'Anton' : null, R === MA && !SERIFS.includes(F.title) ? 'Playfair Display' : null, [TW, CR, NO, LI, AD].includes(R) ? 'Inter' : null, [CO, MO].includes(R) ? 'Montserrat' : null, R === VI ? 'Poppins' : null, R === VI ? (F.script || 'Yellowtail') : null, [AD, MO].includes(R) ? 'Playfair Display' : null, R === CR && !SERIFS.includes(F.title) ? 'Playfair Display' : null, R === PO ? (F.script || 'Yellowtail') : null])]);
   const handle = client?.ig_username ? `@${client.ig_username}` : (client?.name || '');
-  const pages = piece.format === 'IMAGE'
+  const pages = ['IMAGE', 'COVER'].includes(piece.format)
     ? [{ kind: 'cover', hook: piece.headline || hook, sub: piece.support }]
     : piece.slides.map((sl, i, a) => (i === 0 ? { kind: 'cover', hook, sub: sl.text } : i === a.length - 1 && a.length > 2 ? { kind: 'cta', title: sl.title, text: sl.text } : { kind: 'inner', title: sl.title, text: sl.text }));
   const total = pages.length;
@@ -1117,12 +1130,20 @@ export async function renderPiece({ piece, hook, client, style = 'editorial', ph
   const out = [];
   let k = 1; // as lâminas internas usam as fotos seguintes, sem repetir a da capa enquanto houver
   for (const [i, p] of pages.entries()) {
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const isCover = piece.format === 'COVER';
+    EXT = isCover ? 285 : 0;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H + 2 * EXT;
     const ctx = cv.getContext('2d'); ctx.textBaseline = 'alphabetic';
+    if (isCover) {
+      ctx.translate(0, EXT);
+      const fr = ctx.fillRect.bind(ctx);
+      ctx.fillRect = (x, y, w, h) => (full(x, y, w, h) ? fr(x, -EXT, w, h + 2 * EXT) : fr(x, y, w, h));
+    }
     const d = { B, F, handle, name: client?.name || '', avatar: photos[0] || null, photos, total, n: i + 1, eyebrow, button: piece.button || '' };
     if (p.kind === 'cover') R.cover(ctx, { ...d, hook: p.hook, sub: p.sub, photo: pick(0) });
     else if (p.kind === 'cta') R.cta(ctx, { ...d, title: p.title, text: p.text, photo: pick(0) });
     else R.inner(ctx, { ...d, title: p.title, text: p.text, photo: photos.length > 1 ? pick(k++) : (style === 'editorial' && i % 2 ? null : pick(0)) });
+    EXT = 0;
     const blob = await toBlob(cv);
     out.push({ blob, url: URL.createObjectURL(blob) });
   }
