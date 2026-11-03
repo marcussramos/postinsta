@@ -1209,3 +1209,47 @@ input:not([type]), input[type=number], input[type=month], input[type=text], inpu
 .studio-arts.cover { grid-template-columns: repeat(auto-fill, minmax(180px, 220px)); }
 .studio-arts.cover .studio-art img { aspect-ratio: 9 / 16; }
 .studio-arts.cover .studio-art::after { content: ""; position: absolute; left: 0; right: 0; top: 14.84%; bottom: 14.84%; border-top: 2px dashed rgba(255,255,255,.85); border-bottom: 2px dashed rgba(255,255,255,.85); pointer-events: none; }
+
+/* ── Capa de Reels */
+.studio-modes { margin-bottom: 16px; }
+.capa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 20px; align-items: start; }
+.capa-left { display: grid; gap: 14px; min-width: 0; }
+.capa-who { display: grid; gap: 8px; }
+.capa-step { display: grid; gap: 12px; }
+.capa-step-h { display: flex; align-items: center; gap: 10px; }
+.capa-step-h > b { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 14px; flex: 0 0 auto; }
+.capa-step-h h3 { margin: 0; }
+.capa-photo-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.capa-bank { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.capa-bank-it { flex: 0 0 auto; width: 72px; height: 96px; padding: 0; border: 2px solid transparent; border-radius: 12px; overflow: hidden; background: none; cursor: pointer; }
+.capa-bank-it.on { border-color: var(--accent); }
+.capa-bank-it img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.capa-adjust { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.capa-adjust label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+.capa-videobox { display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.capa-video { width: 100%; max-height: 420px; border-radius: 12px; background: #000; }
+.capa-text { font-size: 18px; font-weight: 700; }
+.capa-ideas { display: flex; flex-wrap: wrap; gap: 8px; }
+.capa-idea { border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--ink); border-radius: 12px; padding: 8px 12px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; text-align: left; }
+.capa-words { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+.capa-word { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+.capa-word.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.capa-thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.capa-thumb { flex: 0 0 auto; width: 104px; display: grid; gap: 4px; padding: 0; border: 0; background: none; font: inherit; cursor: pointer; scroll-snap-align: start; }
+.capa-thumb img { width: 104px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 12px; background: var(--surface-2); border: 3px solid transparent; display: block; }
+.capa-thumb.on img { border-color: var(--accent); }
+.capa-thumb span { font-size: 12px; font-weight: 700; text-align: center; }
+.capa-preview { position: sticky; top: 84px; display: grid; gap: 14px; }
+.capa-phones { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; align-items: start; }
+.capa-phones figure { margin: 0; display: grid; gap: 6px; }
+.capa-phones figcaption { font-size: 12px; font-weight: 700; color: var(--muted); text-align: center; }
+.capa-phone { border-radius: 26px; padding: 8px; background: #111; box-shadow: var(--shadow); }
+.capa-phone img { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 18px; background: #222; }
+.capa-grid { border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); }
+.capa-grid img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; object-position: center; background: var(--surface-2); }
+.capa-actions { display: grid; gap: 8px; }
+@media (max-width: 900px) {
+  .capa { grid-template-columns: minmax(0, 1fr); }
+  .capa-preview { position: static; order: -1; }
+  .capa-phones { max-width: 330px; margin: 0 auto; }
+}

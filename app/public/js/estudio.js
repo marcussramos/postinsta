@@ -5,12 +5,13 @@
 //   • "Criar post no Fluxo": post com pauta, legenda, hashtags e o texto das lâminas nas notas (Reels: roteiro anexado)
 import { h, api, toast, copyText, zonedToISO } from '/shared.js';
 import { TEMPLATES, DURATIONS, checkScript } from '/roteiro.js';
-import { S, can, clientById, render } from './core.js';
+import { S, can, clientById, render, savedPref, savePref } from './core.js';
 import { openPost, upsert } from './post.js';
 import { renderPiece, brandFonts, loadPhotos } from './artes.js';
 import { MODELOS, MODELO_PADRAO } from './modelos.js';
+import { viewCapa, capaBoot } from './capa.js';
 
-const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels', COVER: 'Capa de Reels' };
+const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels' }; // capa de Reels tem tela própria (capa.js)
 const SINGLE = ['IMAGE', 'COVER']; // peças de uma arte só (dá para escrever o texto sem IA)
 const FONT_CHOICES = ['Playfair Display', 'Cormorant Garamond', 'DM Serif Display', 'Montserrat', 'Poppins', 'Inter', 'Lato', 'Anton'];
 const GOALS = { educar: 'Educar', engajar: 'Engajar', autoridade: 'Autoridade', vender: 'Vender' };
@@ -25,17 +26,22 @@ function seg(label, options, value, onPick) {
 function viewStudio() {
   const s = st();
   const clients = S.clients;
-  if (s.client !== 'avulso' && (!s.client || !clients.some((c) => c.id === s.client)) && clients.length) s.client = clients[0].id;
+  if ((!s.client || s.client === 'avulso' || !clients.some((c) => c.id === s.client)) && clients.length) s.client = clients[0].id;
+  if (s.format === 'COVER') s.format = 'CAROUSEL';
+  const mode = savedPref('mc_studio_mode', 'posts');
   const head = h('div', { class: 'page-head' }, h('div', {},
     h('div', { class: 'eyebrow' }, 'Produção'),
     h('h1', {}, 'Estúdio ', h('i', {}, 'de criação'))));
-  return [head, h('div', { class: 'studio' }, briefCard(s, clients), resultArea(s))];
+  const tabs = h('div', { class: 'seg studio-modes', role: 'tablist' },
+    h('button', { type: 'button', class: 'seg-btn', role: 'tab', 'aria-pressed': String(mode !== 'capa'), onclick: () => { savePref('mc_studio_mode', 'posts'); render(); } }, '✨ Carrossel e posts'),
+    h('button', { type: 'button', class: 'seg-btn', role: 'tab', 'aria-pressed': String(mode === 'capa'), onclick: () => { savePref('mc_studio_mode', 'capa'); render(); } }, '🎬 Capa de Reels'));
+  if (mode === 'capa') { capaBoot(); return [head, tabs, viewCapa()]; }
+  return [head, tabs, h('div', { class: 'studio' }, briefCard(s, clients), resultArea(s))];
 }
 
 function briefCard(s, clients) {
-  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; if (s.client === 'avulso') s.format = 'COVER'; render(); } },
-    ...clients.map((c) => h('option', { value: c.id, selected: c.id === s.client }, c.name)),
-    h('option', { value: 'avulso', selected: s.client === 'avulso' }, '🎬 Capa de Reels (cliente de fora do app)'));
+  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; render(); } },
+    ...clients.map((c) => h('option', { value: c.id, selected: c.id === s.client }, c.name)));
   const topic = h('textarea', { id: 'st-topic', rows: 3, placeholder: 'Ex.: 5 sinais de que está na hora de clarear os dentes', oninput: (e) => { s.topic = e.target.value; } }, s.topic);
   const extra = h('textarea', { id: 'st-extra', rows: 2, placeholder: 'Opcional: público, oferta, referência, o que evitar…', oninput: (e) => { s.extra = e.target.value; } }, s.extra);
   const rerender = () => render();
