@@ -10,7 +10,7 @@ import { openPost, upsert } from './post.js';
 import { renderPiece, brandFonts, loadPhotos } from './artes.js';
 import { MODELOS, MODELO_PADRAO } from './modelos.js';
 
-const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels', COVER: 'Capa de vídeo' };
+const FORMATS = { CAROUSEL: 'Carrossel', IMAGE: 'Estático', REELS: 'Reels', COVER: 'Capa de Reels' };
 const SINGLE = ['IMAGE', 'COVER']; // peças de uma arte só (dá para escrever o texto sem IA)
 const FONT_CHOICES = ['Playfair Display', 'Cormorant Garamond', 'DM Serif Display', 'Montserrat', 'Poppins', 'Inter', 'Lato', 'Anton'];
 const GOALS = { educar: 'Educar', engajar: 'Engajar', autoridade: 'Autoridade', vender: 'Vender' };
@@ -33,9 +33,9 @@ function viewStudio() {
 }
 
 function briefCard(s, clients) {
-  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; render(); } },
+  const sel = h('select', { id: 'st-client', onchange: (e) => { s.client = e.target.value; if (s.client === 'avulso') s.format = 'COVER'; render(); } },
     ...clients.map((c) => h('option', { value: c.id, selected: c.id === s.client }, c.name)),
-    h('option', { value: 'avulso', selected: s.client === 'avulso' }, '✦ Avulso (cliente de fora do app)'));
+    h('option', { value: 'avulso', selected: s.client === 'avulso' }, '🎬 Capa de Reels (cliente de fora do app)'));
   const topic = h('textarea', { id: 'st-topic', rows: 3, placeholder: 'Ex.: 5 sinais de que está na hora de clarear os dentes', oninput: (e) => { s.topic = e.target.value; } }, s.topic);
   const extra = h('textarea', { id: 'st-extra', rows: 2, placeholder: 'Opcional: público, oferta, referência, o que evitar…', oninput: (e) => { s.extra = e.target.value; } }, s.extra);
   const rerender = () => render();
@@ -75,7 +75,7 @@ function avulsoFields(s) {
       h('span', { class: 'label' }, 'Cores'),
       ...a.colors.map((c, i) => h('input', { type: 'color', value: c, 'aria-label': ['Cor escura', 'Cor clara', 'Cor de destaque'][i], title: ['Escura (texto/fundo)', 'Clara (papel)', 'Destaque'][i], oninput: (e) => { a.colors[i] = e.target.value; } })),
       h('select', { 'aria-label': 'Fonte dos títulos', onchange: (e) => { a.font = e.target.value; } }, ...FONT_CHOICES.map((f) => h('option', { value: f, selected: f === a.font }, f)))),
-    h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'Avulso não fica salvo e não vai para o Fluxo: você gera e baixa. Escolha as fotos no passo das artes.'));
+    h('p', { class: 'hint muted', style: 'margin:0;font-size:12.5px' }, 'Para capa de Reels de quem não está cadastrado: nada fica salvo nem vai para o Fluxo, você gera e baixa. Escolha a foto no passo das artes.'));
 }
 function avulsoClient(s) {
   const a = s.avulso;
@@ -141,7 +141,7 @@ function resultArea(s) {
   if (p.format !== 'REELS') parts.push(artsCard(s, p, c));
   if (p.format !== 'COVER' && !s.res.manual) parts.push(captionCard(p));
   parts.push(checksCard(s, c));
-  if (c.id === 'avulso' || p.format === 'COVER') parts.push(h('p', { class: 'studio-ok' }, c.id === 'avulso' ? 'Cliente avulso: baixe as artes acima (⬇). Elas não vão para o Fluxo.' : 'Capa de vídeo: baixe a arte e use como capa no Instagram (Editar capa → Adicionar do rolo) ou no CapCut.'));
+  if (c.id === 'avulso' || p.format === 'COVER') parts.push(h('p', { class: 'studio-ok' }, c.id === 'avulso' ? 'Baixe a arte acima (⬇) e use como capa no Instagram (Editar capa → Adicionar do rolo) ou no CapCut. Ela não vai para o Fluxo.' : 'Capa de Reels: baixe a arte e use como capa no Instagram (Editar capa → Adicionar do rolo) ou no CapCut.'));
   else parts.push(actionsCard(s, p, c));
   return h('div', { class: 'studio-result' }, ...parts.filter(Boolean));
 }
