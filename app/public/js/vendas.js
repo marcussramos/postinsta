@@ -129,7 +129,11 @@ const SRC_LABEL = { diagnostico: 'Diagnóstico', manual: 'Manual', indicacao: 'I
 // Sempre o endereço oficial (APP_URL), mesmo abrindo o painel por um link de teste da Vercel.
 const diagUrl = () => `${S.setup?.app_url || location.origin}/diagnostico`;
 const daysTo = (d) => daysBetween(todayLocal(), d);
+// 1ª coleta do diagnóstico: deixou o @ no passo 1, mas ainda não o nome e o WhatsApp.
+const isPartial = (l) => l.source === 'diagnostico' && !l.whatsapp && l.stage === 'novo';
+const partialMessage = () => `Oi! Aqui é da MC Digital 🙂 Vi que você começou o diagnóstico gratuito do seu Instagram. Falta pouquinho pra ver a sua nota e as 3 ações pro seu perfil, leva 2 minutos: ${diagUrl()}`;
 function leadMessage(l) {
+  if (isPartial(l)) return partialMessage();
   const first = (l.name || '').split(' ')[0];
   if (l.stage === 'novo' && l.diagnosis) return `Oi, ${first}! Aqui é da MC Digital 🙂 Vi o diagnóstico que você fez do @${l.instagram} (nota ${l.diagnosis.score}/100). Separei algumas ideias práticas para o seu perfil, posso te mostrar em uma conversa rápida de 15 minutos?`;
   if (l.stage === 'proposta') return `Oi, ${first}! Conseguiu dar uma olhada na proposta? Fico à disposição para ajustar o que precisar 🙂`;
@@ -146,20 +150,25 @@ function viewSales() {
   if (S.leads === false) return [head, h('div', { class: 'banner' }, 'O funil de vendas precisa da atualização do banco. ', h('a', { href: '#ajustes' }, 'Ver em Ajustes'), '.')];
   if (!S.leads) return [head, h('p', { class: 'muted' }, 'Carregando…')];
   const L = S.leads;
-  const open = L.filter((l) => !['fechado', 'perdido'].includes(l.stage));
+  const open = L.filter((l) => !['fechado', 'perdido'].includes(l.stage) && !isPartial(l));
+  const partials = L.filter(isPartial);
   const month = todayLocal().slice(0, 7);
   const wonMonth = L.filter((l) => l.stage === 'fechado' && (l.updated_at || '').slice(0, 7) === month);
   const decided = L.filter((l) => ['fechado', 'perdido'].includes(l.stage));
   const stats = h('div', { class: 'stats' },
     stat('Em negociação', String(open.length), `${brl(open.reduce((s, l) => s + (l.value_cents || 0), 0))} / mês em propostas`),
     stat('Fechados no mês', String(wonMonth.length), `${brl(wonMonth.reduce((s, l) => s + (l.value_cents || 0), 0))} / mês`, 'good'),
-    stat('Conversão', decided.length ? `${Math.round((100 * L.filter((l) => l.stage === 'fechado').length) / decided.length)}%` : '—', `${L.filter((l) => l.source === 'diagnostico').length} vieram do diagnóstico`));
-  const board = h('div', { class: 'tboard' }, ...STAGES.map(([st, label]) => {
-    const items = L.filter((l) => l.stage === st).sort((a, b) => (b.wants_contact - a.wants_contact) || String(a.next_action_at || '9').localeCompare(String(b.next_action_at || '9')));
-    const col = h('section', { class: 'tlist droppable', 'data-col': st },
+    stat('Conversão', decided.length ? `${Math.round((100 * L.filter((l) => l.stage === 'fechado').length) / decided.length)}%` : '—', `${L.filter((l) => l.source === 'diagnostico' && l.whatsapp).length} completaram o diagnóstico · ${partials.length} só deixaram o @`));
+  // A 1ª coluna é a 1ª coleta do diagnóstico (só o @); "Novo lead" recebe quem já deixou o WhatsApp.
+  const COLS = [['arroba', 'Só deixaram o @', 'novo', isPartial], ...STAGES.map(([st, label]) => [st, label, st, (l) => l.stage === st && !isPartial(l)])];
+  const board = h('div', { class: 'tboard' }, ...COLS.map(([key, label, st, match]) => {
+    const items = L.filter(match).sort(key === 'arroba' ? (a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
+      : (a, b) => (b.wants_contact - a.wants_contact) || String(a.next_action_at || '9').localeCompare(String(b.next_action_at || '9')));
+    const col = h('section', { class: 'tlist droppable', 'data-col': key },
       h('header', { class: 'tlist-head' }, h('h2', {}, label), h('span', { class: 'tlist-n' }, String(items.length))),
+      key === 'arroba' ? h('p', { class: 'muted', style: 'margin:0 4px 6px;font-size:12.5px' }, 'Colocaram o @ no passo 1 e não terminaram. Chame no direct.') : null,
       h('div', { class: 'tlist-cards' }, ...items.map(leadCard)),
-      st === 'novo' ? h('div', { class: 'tadd' }, h('button', { class: 'tadd-btn', type: 'button', onclick: () => openLead() }, '+ Adicionar lead')) : null);
+      key === 'novo' ? h('div', { class: 'tadd' }, h('button', { class: 'tadd-btn', type: 'button', onclick: () => openLead() }, '+ Adicionar lead')) : null);
     col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
     col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('over'); });
     col.addEventListener('drop', async (e) => {
@@ -172,7 +181,7 @@ function viewSales() {
     return col;
   }));
   return [head, stats, h('div', { class: 'tboard-wrap' }, board),
-    h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Arraste os cartões entre as etapas. Quem faz o diagnóstico grátis entra sozinho em "Novo lead"; quando a proposta é aceita, o lead vai para "Fechado".')];
+    h('p', { class: 'muted', style: 'margin:0;font-size:13px' }, 'Arraste os cartões entre as etapas. Quem coloca o @ no diagnóstico aparece em "Só deixaram o @"; quando termina e deixa o WhatsApp, passa sozinho para "Novo lead". Quando a proposta é aceita, o lead vai para "Fechado".')];
 }
 function leadCard(l) {
   const d = l.next_action_at ? daysTo(l.next_action_at) : null;
@@ -181,9 +190,12 @@ function leadCard(l) {
       h('div', { class: 'tlabels' },
         l.wants_contact && !['fechado', 'perdido'].includes(l.stage) ? h('span', { class: 'tlabel', style: '--lc:#F87168' }, '🔥 quer conversar') : null,
         h('span', { class: 'tlabel fmt' }, SRC_LABEL[l.source] || l.source),
+        isPartial(l) ? h('span', { class: 'tlabel', style: '--lc:#F5CD47' }, 'parou no passo 1') : null,
+        isPartial(l) && l.niche ? h('span', { class: 'tlabel fmt' }, l.niche) : null,
         l.diagnosis?.score != null ? h('span', { class: 'tlabel', style: `--lc:${l.diagnosis.score >= 70 ? '#4BCE97' : l.diagnosis.score >= 45 ? '#F5CD47' : '#FEA362'}` }, `nota ${l.diagnosis.score}`) : null),
       h('div', { class: 'ttitle' }, h('b', {}, l.name), l.company ? ` · ${l.company}` : ''),
-      l.instagram ? h('div', { class: 'muted', style: 'font-size:13px' }, `@${l.instagram}`) : null,
+      l.instagram && l.name !== `@${l.instagram}` ? h('div', { class: 'muted', style: 'font-size:13px' }, `@${l.instagram}`) : null,
+      isPartial(l) ? h('div', { class: 'muted', style: 'font-size:12.5px' }, `começou em ${fmtDate(l.created_at, S.tz)}`) : null,
       h('div', { class: 'tbadges' },
         l.value_cents ? h('span', { class: 'tbadge' }, `${brl(l.value_cents)}/mês`) : null,
         d != null && !['fechado', 'perdido'].includes(l.stage) ? h('span', { class: `tbadge${d < 0 ? ' late' : d === 0 ? ' soon' : ''}`, title: l.next_action || 'Próximo contato' }, `📅 ${d < 0 ? `atrasado ${-d}d` : d === 0 ? 'hoje' : fmtDay(l.next_action_at).slice(0, 5)}`) : null,
@@ -227,6 +239,13 @@ function openLead(l = null, { lose = false } = {}) {
   body.push(h('div', { class: 'grid-2 tight' }, fName, fCo), h('div', { class: 'grid-2 tight' }, fIg, fWa), h('div', { class: 'grid-2 tight' }, fEm, fVal),
     h('div', { class: 'grid-2 tight' }, h('div', { class: 'field' }, h('label', { for: 'ld-stage' }, 'Etapa'), stage), h('div', { class: 'field' }, h('label', { for: 'ld-src' }, 'Origem'), src)),
     fLost, fNext, fNextAt, quick, fNotes);
+  if (l && isPartial(l) && l.instagram) body.unshift(h('div', { class: 'card' },
+    h('div', { class: 'eyebrow' }, '1ª coleta do diagnóstico'),
+    h('span', { style: 'font-size:14px' }, `@${l.instagram} colocou o @${l.niche ? ` (${l.niche})` : ''} no passo 1, mas ainda não deixou nome e WhatsApp. Mande um direct convidando a terminar.`),
+    h('div', { class: 'actions' },
+      h('a', { class: 'btn primary sm', href: `https://ig.me/m/${l.instagram}`, target: '_blank', rel: 'noopener' }, 'Abrir direct'),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => copyText(partialMessage(), 'Mensagem copiada. Cole no direct.') }, 'Copiar mensagem pronta'),
+      h('a', { class: 'btn ghost sm', href: `https://instagram.com/${l.instagram}`, target: '_blank', rel: 'noopener' }, 'Ver perfil'))));
   if (l && l.whatsapp) body.push(h('div', { class: 'actions' },
     h('a', { class: 'btn wa sm', href: waLink(l.whatsapp, leadMessage(l)), target: '_blank', rel: 'noopener' }, 'WhatsApp com mensagem pronta'),
     l.instagram ? h('a', { class: 'btn sm', href: `https://instagram.com/${l.instagram}`, target: '_blank', rel: 'noopener' }, 'Ver Instagram') : null));
@@ -301,7 +320,7 @@ function settingsDiag() {
   const connected = S.clients.filter((c) => c.ig_connected);
   const acc = h('select', { id: 'dg-acc' }, h('option', { value: '' }, '— sem consulta de dados (só as respostas) —'), ...connected.map((c) => h('option', { value: c.id, selected: D.lookup_client_id === c.id }, `@${c.ig_username || c.name}`)));
   return [head, h('article', { class: 'card' },
-    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Uma página pública onde a pessoa coloca o @ e recebe na hora uma análise do perfil feita pela IA (nota, o que está bom e 3 ações). Para ver, ela deixa nome e WhatsApp, e vira lead em Vendas, com aviso no seu celular. Coloque o link na bio, nos Stories e nos anúncios.'),
+    h('span', { class: 'muted', style: 'font-size:13.5px' }, 'Uma página pública onde a pessoa coloca o @ e recebe na hora uma análise do perfil feita pela IA (nota, o que está bom e 3 ações). Assim que ela coloca o @, já aparece em Vendas ("Só deixaram o @"); para ver o resultado, deixa nome e WhatsApp e vira lead completo, com aviso no seu celular. Coloque o link na bio, nos Stories e nos anúncios.'),
     h('div', { class: 'linkbox' }, h('code', { translate: 'no' }, diagUrl()), h('button', { class: 'btn sm', onclick: () => copyText(diagUrl(), 'Link copiado.') }, 'Copiar')),
     S.setup?.ai_ready ? null : h('div', { class: 'errorbox' }, S.setup?.app_url && !S.setup.app_url.endsWith(location.host)
       ? `Você está num endereço de teste (${location.host}), onde a IA não está ligada. O diagnóstico oficial em ${S.setup.app_url.replace(/^https?:\/\//, '')} não é afetado. Para ligar aqui também: Vercel → Settings → Environment Variables → ANTHROPIC_API_KEY → marque "Preview".`
@@ -319,4 +338,4 @@ function settingsDiag() {
     } }, 'Salvar'))];
 }
 
-export { PROP_LABEL, viewProposals, DEFAULT_ITEMS, openProposal, STAGES, SRC_LABEL, diagUrl, daysTo, leadMessage, viewSales, leadCard, openLead, settingsPrivacy, diagLookupBox, settingsDiag };
+export { PROP_LABEL, viewProposals, DEFAULT_ITEMS, openProposal, STAGES, SRC_LABEL, diagUrl, daysTo, isPartial, partialMessage, leadMessage, viewSales, leadCard, openLead, settingsPrivacy, diagLookupBox, settingsDiag };
