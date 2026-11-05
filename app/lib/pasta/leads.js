@@ -1,6 +1,7 @@
 // Funil de vendas e diagnóstico grátis.
 //   leads       (admin)  GET | POST | PATCH {id,...} | DELETE ?id=
-//   diagnostico (público) GET textos | POST {handle, name, whatsapp, answers} → análise | POST ?want=1 {id, key} quer conversa
+//   diagnostico (público) GET textos | POST ?step=1 {handle, nicho} → {id, key} (1ª coleta, só o @)
+//                         | POST {handle, name, whatsapp, answers, lead_id?, lead_key?} → análise (2ª coleta) | POST ?want=1 {id, key} quer conversa
 //   diagcfg     (admin)  GET | PUT configuração do diagnóstico
 import crypto from 'node:crypto';
 import { route, send, readJson, query, need } from '../http.js';
@@ -77,12 +78,28 @@ export const diagnosticoRoute = route({
     need(!b.website, 400, 'Não foi possível enviar.'); // campo-isca contra robôs
     const handle = cleanHandle(b.handle);
     need(validHandle(handle), 400, 'Digite o @ do seu Instagram (só letras, números, ponto e _).');
-    const name = txt(b.name, 120); need(name, 400, 'Digite o seu nome.');
-    const whatsapp = phone(b.whatsapp); need(whatsapp && whatsapp.length >= 12, 400, 'Digite o seu WhatsApp com DDD.');
-    const answers = Object.fromEntries(Object.keys(DIAG_QUESTIONS).map((k) => [k, txt(Array.isArray(b.answers?.[k]) ? b.answers[k].join(', ') : b.answers?.[k], 400)]).filter(([, v]) => v));
     const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
     const ip_hash = crypto.createHmac('sha256', sessionSecret()).update(`ip:${ip}`).digest('hex').slice(0, 24);
     const since = new Date(Date.now() - 864e5).toISOString();
+    const todayDay = new Date().toISOString().slice(0, 10);
+    // 1ª coleta: a pessoa colocou o @ e o segmento no passo 1. Já entra em Vendas, sem WhatsApp ainda.
+    if (query(req).step === '1') {
+      const niche = txt(b.nicho ?? b.answers?.nicho, 60);
+      const old = await db.one('leads', { select: 'id,whatsapp', instagram: `eq.${handle}`, source: 'eq.diagnostico' });
+      if (old) {
+        if (!old.whatsapp) await db.update('leads', { id: `eq.${old.id}` }, { ...(niche ? { niche } : {}), updated_at: new Date().toISOString() });
+        return send(res, 200, { id: old.id, key: keyOf(old.id) });
+      }
+      const mine = await db.select('leads', { select: 'id', ip_hash: `eq.${ip_hash}`, created_at: `gte.${since}` });
+      need(mine.length < 10, 429, 'Muitas tentativas hoje. Tente amanhã ou fale com a gente no WhatsApp.');
+      const row = await db.insert('leads', { name: `@${handle}`, instagram: handle, niche, source: 'diagnostico', stage: 'novo', ip_hash,
+        next_action: 'Mandar direct: parou no 1º passo do diagnóstico', next_action_at: todayDay });
+      return send(res, 200, { id: row.id, key: keyOf(row.id) });
+    }
+    // 2ª coleta: nome, WhatsApp e respostas. Completa o mesmo lead da 1ª coleta.
+    const name = txt(b.name, 120); need(name, 400, 'Digite o seu nome.');
+    const whatsapp = phone(b.whatsapp); need(whatsapp && whatsapp.length >= 12, 400, 'Digite o seu WhatsApp com DDD.');
+    const answers = Object.fromEntries(Object.keys(DIAG_QUESTIONS).map((k) => [k, txt(Array.isArray(b.answers?.[k]) ? b.answers[k].join(', ') : b.answers?.[k], 400)]).filter(([, v]) => v));
     const [mine, today] = await Promise.all([
       db.select('leads', { select: 'id', ip_hash: `eq.${ip_hash}`, created_at: `gte.${since}` }),
       db.select('leads', { select: 'id', source: 'eq.diagnostico', created_at: `gte.${since}`, limit: 400 }),
@@ -91,9 +108,12 @@ export const diagnosticoRoute = route({
     need(today.length < 300, 429, 'Muitos diagnósticos hoje. Tente de novo amanhã.');
     const result = await runDiagnosis({ handle, company: txt(b.company, 120), answers });
     const base = { name, company: txt(b.company, 120), instagram: handle, whatsapp, email: txt(b.email, 160), niche: answers.nicho || null, diagnosis: { ...result, answers }, updated_at: new Date().toISOString() };
-    const old = await db.one('leads', { select: 'id,stage', instagram: `eq.${handle}`, source: 'eq.diagnostico' });
-    const row = old ? (await db.update('leads', { id: `eq.${old.id}` }, base))[0]
-      : await db.insert('leads', { ...base, source: 'diagnostico', stage: 'novo', ip_hash, next_action: 'Chamar no WhatsApp e comentar o diagnóstico', next_action_at: new Date().toISOString().slice(0, 10) });
+    const first = b.lead_id && b.lead_key && b.lead_key === keyOf(b.lead_id)
+      ? await db.one('leads', { select: 'id,stage,whatsapp', id: `eq.${b.lead_id}` }) : null;
+    const old = first || await db.one('leads', { select: 'id,stage,whatsapp', instagram: `eq.${handle}`, source: 'eq.diagnostico' });
+    const nextStep = { next_action: 'Chamar no WhatsApp e comentar o diagnóstico', next_action_at: todayDay };
+    const row = old ? (await db.update('leads', { id: `eq.${old.id}` }, { ...base, ...(old.whatsapp ? {} : nextStep) }))[0]
+      : await db.insert('leads', { ...base, source: 'diagnostico', stage: 'novo', ip_hash, ...nextStep });
     await notify({ title: `🎯 Novo lead: @${handle}`, body: `${name} fez o diagnóstico (nota ${result.score}/100). Está no funil de vendas.`, url: '/equipe#vendas' }, { adminOnly: true });
     send(res, 200, { id: row.id, key: keyOf(row.id), result, whatsapp: cfg.whatsapp || null, cta: cfg.cta });
   },

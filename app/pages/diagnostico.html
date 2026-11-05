@@ -167,11 +167,14 @@ function form() {
     h('form', { class: 'card', onsubmit: async (e) => {
       e.preventDefault();
       if (next() !== true) return;
+      // 1ª coleta: guarda o @ e o segmento já no passo 1 (em segundo plano; se falhar, segue normal)
+      if (step === 1) api('/api/pasta?r=diagnostico&step=1', { method: 'POST', body: { handle: V.handle, nicho: V.nicho } })
+        .then((r) => { V.lid = r.id; V.lkey = r.key; }).catch(() => {});
       if (step < 3) { step += 1; form(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
       go.disabled = true;
       waiting();
       try {
-        const r = await api('/api/pasta?r=diagnostico', { method: 'POST', body: { handle: V.handle, name: V.name, whatsapp: V.wa, company: V.company, email: V.email, website: V.hp,
+        const r = await api('/api/pasta?r=diagnostico', { method: 'POST', body: { handle: V.handle, name: V.name, whatsapp: V.wa, company: V.company, email: V.email, website: V.hp, lead_id: V.lid, lead_key: V.lkey,
           answers: { nicho: V.nicho, objetivo: A.objetivo, seguidores: A.seguidores, frequencia: A.frequencia, formatos: A.formatos, quem_faz: A.quem_faz, dificuldade: V.dif } } });
         result(r, V.handle.replace(/^@/, ''), V.name);
       } catch (err) { form(); toast(err.message); }

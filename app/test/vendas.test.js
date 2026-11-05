@@ -72,6 +72,35 @@ test('diagnóstico: teste de leitura no painel explica o motivo quando a Meta ne
   S.fakes.ig.discoveryDenied = false;
 });
 
+test('diagnóstico em 2 coletas: o @ no passo 1, nome e WhatsApp no final, no mesmo lead', async () => {
+  const step1 = (body, ip = '7.7.7.7') => call('/api/pasta?r=diagnostico&step=1', { method: 'POST', cookie: '', headers: { 'x-forwarded-for': ip }, body });
+  assert.equal((await step1({ handle: 'com espaço' })).status, 400);
+  assert.equal((await step1({ handle: '@Loja', website: 'spam' })).status, 400, 'campo-isca');
+  const a = (await step1({ handle: '@Studio.Bela', nicho: 'Estética e beleza' })).data;
+  let row = S.fakes.tables.leads.find((x) => x.id === a.id);
+  assert.equal(row.instagram, 'studio.bela'); assert.equal(row.name, '@studio.bela'); assert.equal(row.whatsapp ?? null, null);
+  assert.equal(row.source, 'diagnostico'); assert.equal(row.stage, 'novo'); assert.equal(row.niche, 'Estética e beleza');
+  assert.match(row.next_action, /direct/);
+  // voltou e passou do passo 1 de novo: não duplica
+  assert.equal((await step1({ handle: 'studio.bela', nicho: 'Estética e beleza' })).data.id, a.id);
+  const n = S.fakes.tables.leads.length;
+  // 2ª coleta, trocando o @ no meio do caminho: completa o mesmo lead
+  const r = (await diag({ ip: '7.7.7.7', handle: 'studiobela.oficial', name: 'Bela Costa', whatsapp: '65 98888-2222', lead_id: a.id, lead_key: a.key })).data;
+  assert.equal(r.id, a.id); assert.equal(S.fakes.tables.leads.length, n);
+  row = S.fakes.tables.leads.find((x) => x.id === a.id);
+  assert.equal(row.name, 'Bela Costa'); assert.equal(row.whatsapp, '5565988882222'); assert.equal(row.instagram, 'studiobela.oficial');
+  assert.ok(row.diagnosis.score >= 0); assert.match(row.next_action, /WhatsApp/);
+  // chave errada não deixa mexer no lead de outra pessoa
+  const b = (await step1({ handle: 'outra.loja' }, '8.8.8.8')).data;
+  await diag({ ip: '8.8.8.8', handle: 'mais.uma', lead_id: b.id, lead_key: 'errada' });
+  assert.equal(S.fakes.tables.leads.find((x) => x.id === b.id).whatsapp ?? null, null);
+  // depois de completo, o passo 1 do mesmo @ não apaga nada
+  const before = { ...S.fakes.tables.leads.find((x) => x.id === a.id) };
+  assert.equal((await step1({ handle: 'studiobela.oficial', nicho: 'Outro' })).data.id, a.id);
+  const after_ = S.fakes.tables.leads.find((x) => x.id === a.id);
+  assert.equal(after_.niche, before.niche); assert.equal(after_.whatsapp, before.whatsapp); assert.equal(after_.name, 'Bela Costa');
+});
+
 test('funil: lead manual, proposta ligada ao lead e fechamento automático no aceite', async () => {
   const l = (await call('/api/pasta?r=leads', { method: 'POST', body: { name: 'Ana', instagram: 'https://instagram.com/ana.doces/', whatsapp: '65988887777', value: '1.200,00' } })).data;
   assert.equal(l.instagram, 'ana.doces'); assert.equal(l.value_cents, 120000);
